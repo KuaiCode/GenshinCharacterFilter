@@ -1,17 +1,18 @@
 # Roadmap
 
-## Current Milestone: v0.3 Window Capture Prototype
+## Current Milestone: v0.4 OCR Text Extraction Prototype
 
 Status: in progress.
 
-The v0.1 Audio MVP and v0.2 Local JSON Configuration milestones have been manually verified. The v0.3 milestone is limited to:
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, and v0.3 Window Capture Prototype milestones have been manually verified. The v0.4 milestone is limited to:
 
 - console app only;
-- finding a target process/window;
-- capturing the target window or configured screen region;
-- saving a debug screenshot to a local debug folder;
+- explicitly triggered OCR raw text extraction;
+- using an existing screenshot or captured image as OCR input;
+- printing raw OCR text to the console;
+- isolating OCR behind `IOcrService`;
 - preserving existing simulated and opt-in real audio behavior;
-- no OCR, speaker recognition from image, GUI, overlay, or masking.
+- no speaker detection from OCR text, automatic mute/restore from OCR, GUI, overlay, or masking.
 
 ## Phase Order
 
@@ -26,12 +27,14 @@ The v0.1 Audio MVP and v0.2 Local JSON Configuration milestones have been manual
 9. Minimal UI.
 10. Optional masking.
 
-## Out of Scope for v0.3
+## Out of Scope for v0.4
 
-- OCR.
 - Speaker recognition from image.
+- Speaker detection from OCR text.
+- Automatic mute/restore based on OCR.
 - WPF or WinUI.
 - Overlay masking.
+- ONNX or OpenCV unless explicitly justified.
 - Gameplay automation.
 - Game memory access or modification.
 - Hooking or injection.

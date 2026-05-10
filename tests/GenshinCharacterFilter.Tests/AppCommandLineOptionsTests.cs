@@ -59,6 +59,29 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
+    public void Parse_ReadsOcrOptions()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--ocr-once", "--ocr-input", "debug-captures/capture-latest.png", "--ocr-lang", "chi_sim+eng", "--tesseract-path", "C:\\Tools\\tesseract.exe", "--ocr-psm", "7"]);
+
+        Assert.True(options.OcrOnce);
+        Assert.Equal("debug-captures/capture-latest.png", options.OcrInputPath);
+        Assert.Equal("chi_sim+eng", options.OcrLanguage);
+        Assert.Equal("C:\\Tools\\tesseract.exe", options.TesseractExecutablePath);
+        Assert.Equal(7, options.OcrPageSegmentationMode);
+        Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
+    public void Parse_OcrOnceRequiresInput()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--ocr-once"]));
+
+        Assert.Contains("--ocr-input", exception.Message);
+    }
+
+    [Fact]
     public void Parse_ReadsMuteAudioMode()
     {
         AppCommandLineOptions options = AppCommandLineOptions.Parse(["--audio-mode", "mute"]);
@@ -90,6 +113,10 @@ public sealed class AppCommandLineOptionsTests
     [InlineData("--volume-percent")]
     [InlineData("--capture-output")]
     [InlineData("--capture-delay-ms")]
+    [InlineData("--ocr-input")]
+    [InlineData("--ocr-lang")]
+    [InlineData("--tesseract-path")]
+    [InlineData("--ocr-psm")]
     public void Parse_RejectsMissingOptionValue(string optionName)
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
@@ -105,6 +132,24 @@ public sealed class AppCommandLineOptionsTests
             () => AppCommandLineOptions.Parse(["--capture-delay-ms", "abc"]));
 
         Assert.Contains("Capture delay", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_RejectsNonNumericOcrPsm()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--ocr-psm", "abc"]));
+
+        Assert.Contains("OCR page segmentation", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("14")]
+    public void Parse_RejectsOcrPsmOutsideRange(string pageSegmentationMode)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => AppCommandLineOptions.Parse(["--ocr-psm", pageSegmentationMode]));
     }
 
     [Theory]

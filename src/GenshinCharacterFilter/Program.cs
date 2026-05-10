@@ -2,6 +2,7 @@ using GenshinCharacterFilter;
 using GenshinCharacterFilter.Audio;
 using GenshinCharacterFilter.Capture;
 using GenshinCharacterFilter.Coordination;
+using GenshinCharacterFilter.Ocr;
 using GenshinCharacterFilter.Speakers;
 
 AppSettings settings;
@@ -20,6 +21,12 @@ try
 catch (Exception exception) when (exception is AppSettingsException or ArgumentException)
 {
     Console.Error.WriteLine($"Configuration error: {exception.Message}");
+    return;
+}
+
+if (commandLineOptions.OcrOnce)
+{
+    await OcrOnceAsync(commandLineOptions);
     return;
 }
 
@@ -43,7 +50,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.3 Window Capture Prototype");
+Console.WriteLine("GenshinCharacterFilter v0.4 OCR Text Extraction Prototype");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");
@@ -99,6 +106,35 @@ static async Task CaptureOnceAsync(AppSettings settings, AppCommandLineOptions c
     catch (Exception exception) when (exception is WindowCaptureException or PlatformNotSupportedException)
     {
         Console.Error.WriteLine($"Capture error: {exception.Message}");
+    }
+}
+
+static async Task OcrOnceAsync(AppCommandLineOptions commandLineOptions)
+{
+    OcrOptions ocrOptions = new()
+    {
+        InputImagePath = commandLineOptions.OcrInputPath,
+        Language = commandLineOptions.OcrLanguage,
+        TesseractExecutablePath = commandLineOptions.TesseractExecutablePath,
+        PageSegmentationMode = commandLineOptions.OcrPageSegmentationMode
+    };
+
+    IOcrService ocrService = new TesseractCliOcrService();
+    Console.WriteLine("OCR mode; this run does not control real system audio.");
+    Console.WriteLine($"OCR input: {ocrOptions.InputImagePath}");
+    Console.WriteLine($"OCR language: {ocrOptions.Language}, psm: {ocrOptions.PageSegmentationMode}");
+
+    try
+    {
+        OcrResult result = await ocrService.ExtractTextAsync(ocrOptions, CancellationToken.None);
+        Console.WriteLine($"OCR engine: {result.EngineName}");
+        Console.WriteLine($"OCR input path: {result.InputImagePath}");
+        Console.WriteLine("OCR raw text:");
+        Console.WriteLine(result.RawText);
+    }
+    catch (Exception exception) when (exception is OcrException or ArgumentException or FileNotFoundException)
+    {
+        Console.Error.WriteLine($"OCR error: {exception.Message}");
     }
 }
 

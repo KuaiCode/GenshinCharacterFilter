@@ -1,5 +1,6 @@
 using GenshinCharacterFilter.Audio;
 using GenshinCharacterFilter.Capture;
+using GenshinCharacterFilter.Ocr;
 
 namespace GenshinCharacterFilter;
 
@@ -19,6 +20,8 @@ public sealed class AppCommandLineOptions
 
     public bool CaptureOnce { get; private init; }
 
+    public bool OcrOnce { get; private init; }
+
     public string TargetProcessName { get; private init; } = "GenshinImpact";
 
     public AudioFilterOptions AudioFilter { get; private init; } = new();
@@ -26,6 +29,14 @@ public sealed class AppCommandLineOptions
     public string CaptureOutputDirectory { get; private init; } = WindowCaptureOptions.DefaultOutputDirectory;
 
     public int CaptureDelayMs { get; private init; } = WindowCaptureOptions.DefaultCaptureDelayMs;
+
+    public string? OcrInputPath { get; private init; }
+
+    public string OcrLanguage { get; private init; } = OcrOptions.DefaultLanguage;
+
+    public string TesseractExecutablePath { get; private init; } = OcrOptions.DefaultTesseractExecutablePath;
+
+    public int OcrPageSegmentationMode { get; private init; } = OcrOptions.DefaultPageSegmentationMode;
 
     /// <summary>
     /// Parses command-line arguments into application options.
@@ -67,15 +78,44 @@ public sealed class AppCommandLineOptions
 
         WindowCaptureOptions.ValidateCaptureDelayMs(captureDelayMs);
 
+        bool ocrOnce = HasFlag(arguments, "--ocr-once");
+        string? ocrInputPath = GetOptionValue(arguments, "--ocr-input");
+        if (ocrOnce && ocrInputPath is null)
+        {
+            throw new ArgumentException("--ocr-once requires --ocr-input <imagePath>.", nameof(arguments));
+        }
+
+        string? ocrLanguage = GetOptionValue(arguments, "--ocr-lang");
+        string? tesseractExecutablePath = GetOptionValue(arguments, "--tesseract-path");
+        string? ocrPsmValue = GetOptionValue(arguments, "--ocr-psm");
+        int ocrPageSegmentationMode = OcrOptions.DefaultPageSegmentationMode;
+        if (ocrPsmValue is not null &&
+            !int.TryParse(ocrPsmValue, out ocrPageSegmentationMode))
+        {
+            throw new ArgumentException("OCR page segmentation mode must be a number.", nameof(arguments));
+        }
+
+        if (ocrPageSegmentationMode is < OcrOptions.MinPageSegmentationMode or > OcrOptions.MaxPageSegmentationMode)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(arguments),
+                $"OCR page segmentation mode must be between {OcrOptions.MinPageSegmentationMode} and {OcrOptions.MaxPageSegmentationMode}.");
+        }
+
         return new AppCommandLineOptions
         {
             ConfigPath = GetOptionValue(arguments, "--config"),
             UseRealAudio = HasFlag(arguments, "--real-audio"),
             CaptureOnce = HasFlag(arguments, "--capture-once"),
+            OcrOnce = ocrOnce,
             TargetProcessName = processName ?? "GenshinImpact",
             AudioFilter = audioFilterOptions,
             CaptureOutputDirectory = captureOutputDirectory ?? WindowCaptureOptions.DefaultOutputDirectory,
             CaptureDelayMs = captureDelayMs,
+            OcrInputPath = ocrInputPath,
+            OcrLanguage = ocrLanguage ?? OcrOptions.DefaultLanguage,
+            TesseractExecutablePath = tesseractExecutablePath ?? OcrOptions.DefaultTesseractExecutablePath,
+            OcrPageSegmentationMode = ocrPageSegmentationMode,
             _realAudioSpecified = HasFlag(arguments, "--real-audio"),
             _targetProcessSpecified = processName is not null,
             _audioModeSpecified = audioModeSpecified,

@@ -93,3 +93,17 @@ Reasoning:
 - Background DirectX capture, window-content capture, hooks, and process injection are intentionally out of scope.
 - Win32 capture details stay isolated in `WindowsGameWindowCapture` instead of `Program.cs`.
 - The milestone does not add OCR, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, or input automation.
+
+## 2026-05-10: v0.4 Tesseract CLI OCR Prototype
+
+Decision: add OCR raw text extraction behind `IOcrService`, with the first provider implemented by invoking an external Tesseract CLI process.
+
+Reasoning:
+
+- OCR must be explicitly triggered through `--ocr-once`; default startup remains the existing simulated audio flow.
+- The provider abstraction keeps OCR replaceable and prevents Tesseract details from leaking into coordination logic.
+- Tesseract CLI is used without adding a NuGet OCR dependency and without vendoring Tesseract binaries or traineddata files.
+- OCR reads local image files and does not send screenshots to cloud OCR services.
+- Missing Tesseract, missing language data, missing input files, and non-zero Tesseract exit codes should produce clear user-facing errors.
+- OCR output is printed as raw text only and is not connected to speaker detection, `MuteCoordinator`, or automatic mute/restore behavior.
+- The milestone does not add WPF, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, or input automation.
