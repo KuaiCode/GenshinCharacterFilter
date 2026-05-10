@@ -10,10 +10,10 @@ public sealed class SimulationServiceTests
     {
         ManualSpeakerDetector detector = new();
 
-        detector.SetSpeaker("  派蒙  ");
+        detector.SetSpeaker("  \u6D41\u6D6A\u8005  ");
         string? speaker = await detector.DetectSpeakerAsync(CancellationToken.None);
 
-        Assert.Equal("派蒙", speaker);
+        Assert.Equal("\u6D41\u6D6A\u8005", speaker);
     }
 
     [Theory]

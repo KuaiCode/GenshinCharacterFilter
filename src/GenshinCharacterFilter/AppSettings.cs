@@ -15,7 +15,7 @@ public sealed class AppSettings
     /// <summary>
     /// Gets or sets speaker names that should trigger audio filtering.
     /// </summary>
-    public List<string> TargetSpeakers { get; set; } = ["流浪者", "Wanderer"];
+    public List<string> TargetSpeakers { get; set; } = ["\u6D41\u6D6A\u8005", "Wanderer"];
 
     /// <summary>
     /// Gets or sets whether real Windows audio mode is enabled.

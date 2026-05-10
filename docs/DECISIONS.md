@@ -88,6 +88,8 @@ Reasoning:
 - Screenshot mode is explicit through `--capture-once` and does not control real system audio.
 - Full-window capture uses DWM extended frame bounds first, then falls back to `GetWindowRect`, so the default debug screenshot includes the title bar and visible frame.
 - v0.3 uses visible-window screen capture; it first attempts foreground activation plus a short delay to reduce accidental capture of the terminal covering the target.
+- The main project and test project target `net8.0-windows`, and the main project references `Microsoft.WindowsDesktop.App`, because the prototype uses Windows-only capture, drawing, and PNG debug output APIs.
+- The Windows Desktop framework reference is a build/runtime boundary for capture support only; it does not move the project into WPF, WinUI, or GUI work.
 - Background DirectX capture, window-content capture, hooks, and process injection are intentionally out of scope.
 - Win32 capture details stay isolated in `WindowsGameWindowCapture` instead of `Program.cs`.
 - The milestone does not add OCR, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, or input automation.

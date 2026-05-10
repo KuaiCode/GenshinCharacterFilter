@@ -5,6 +5,8 @@ namespace GenshinCharacterFilter.Tests;
 
 public sealed class AppSettingsLoaderTests
 {
+    private const string DefaultChineseSpeaker = "\u6D41\u6D6A\u8005";
+
     [Fact]
     public void LoadDefault_ReturnsSafeDefaults()
     {
@@ -12,7 +14,7 @@ public sealed class AppSettingsLoaderTests
 
         Assert.False(settings.RealAudioEnabled);
         Assert.Equal("GenshinImpact", settings.TargetProcessName);
-        Assert.Equal(["流浪者", "Wanderer"], settings.TargetSpeakers);
+        Assert.Equal([DefaultChineseSpeaker, "Wanderer"], settings.TargetSpeakers);
         Assert.Equal(AudioFilterMode.Mute, settings.AudioFilter.Mode);
         Assert.Equal(30, settings.AudioFilter.VolumePercent);
     }
@@ -24,7 +26,7 @@ public sealed class AppSettingsLoaderTests
             """
             {
               "TargetProcessName": "chrome",
-              "TargetSpeakers": [ "Furina", "Paimon" ],
+              "TargetSpeakers": [ "Furina", "Wanderer" ],
               "RealAudioEnabled": true,
               "AudioFilter": {
                 "Mode": "ReduceVolume",
@@ -37,7 +39,7 @@ public sealed class AppSettingsLoaderTests
 
         Assert.True(settings.RealAudioEnabled);
         Assert.Equal("chrome", settings.TargetProcessName);
-        Assert.Equal(["Furina", "Paimon"], settings.TargetSpeakers);
+        Assert.Equal(["Furina", "Wanderer"], settings.TargetSpeakers);
         Assert.Equal(AudioFilterMode.ReduceVolume, settings.AudioFilter.Mode);
         Assert.Equal(25, settings.AudioFilter.VolumePercent);
     }
@@ -71,7 +73,7 @@ public sealed class AppSettingsLoaderTests
             """
             {
               "TargetProcessName": " ",
-              "TargetSpeakers": [ "Paimon" ],
+              "TargetSpeakers": [ "Wanderer" ],
               "RealAudioEnabled": false,
               "AudioFilter": { "Mode": "Mute", "VolumePercent": 30 }
             }
@@ -109,7 +111,7 @@ public sealed class AppSettingsLoaderTests
             """
             {
               "TargetProcessName": "GenshinImpact",
-              "TargetSpeakers": [ "Paimon", " " ],
+              "TargetSpeakers": [ "Wanderer", " " ],
               "RealAudioEnabled": false,
               "AudioFilter": { "Mode": "Mute", "VolumePercent": 30 }
             }
@@ -128,7 +130,7 @@ public sealed class AppSettingsLoaderTests
             """
             {
               "TargetProcessName": "GenshinImpact",
-              "TargetSpeakers": [ "Paimon" ],
+              "TargetSpeakers": [ "Wanderer" ],
               "RealAudioEnabled": false,
               "AudioFilter": { "Mode": "NotAMode", "VolumePercent": 30 }
             }
@@ -149,7 +151,7 @@ public sealed class AppSettingsLoaderTests
             $$"""
             {
               "TargetProcessName": "GenshinImpact",
-              "TargetSpeakers": [ "Paimon" ],
+              "TargetSpeakers": [ "Wanderer" ],
               "RealAudioEnabled": false,
               "AudioFilter": { "Mode": "ReduceVolume", "VolumePercent": {{volumePercent}} }
             }
@@ -169,7 +171,7 @@ public sealed class AppSettingsLoaderTests
         AppSettings settings = new AppSettingsLoader().LoadFromFile(configPath);
 
         Assert.False(settings.RealAudioEnabled);
-        Assert.Equal(["流浪者", "Wanderer"], settings.TargetSpeakers);
+        Assert.Equal([DefaultChineseSpeaker, "Wanderer"], settings.TargetSpeakers);
     }
 
     private static string FindRepositoryRoot()

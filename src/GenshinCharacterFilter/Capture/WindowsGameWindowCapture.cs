@@ -85,7 +85,7 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture
     {
         try
         {
-            // 截图坐标来自 Win32/DWM，进程需使用真实像素坐标以避免 DPI 缩放导致偏移。
+            // Win32/DWM 返回物理像素坐标，先设置 DPI awareness 以避免缩放偏移。
             SetProcessDpiAwarenessContext(DpiAwarenessContextPerMonitorAwareV2);
         }
         catch (EntryPointNotFoundException)

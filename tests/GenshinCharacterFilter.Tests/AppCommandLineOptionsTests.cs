@@ -131,7 +131,7 @@ public sealed class AppCommandLineOptionsTests
         AppSettings settings = new()
         {
             TargetProcessName = "chrome",
-            TargetSpeakers = ["Paimon"],
+            TargetSpeakers = ["Wanderer"],
             RealAudioEnabled = false,
             AudioFilter = new AudioFilterOptions()
         };
@@ -149,7 +149,7 @@ public sealed class AppCommandLineOptionsTests
         AppSettings settings = new()
         {
             TargetProcessName = "chrome",
-            TargetSpeakers = ["Paimon"],
+            TargetSpeakers = ["Wanderer"],
             RealAudioEnabled = false,
             AudioFilter = new AudioFilterOptions
             {
@@ -171,7 +171,7 @@ public sealed class AppCommandLineOptionsTests
         AppSettings settings = new()
         {
             TargetProcessName = "chrome",
-            TargetSpeakers = ["Paimon"],
+            TargetSpeakers = ["Wanderer"],
             RealAudioEnabled = false,
             AudioFilter = new AudioFilterOptions()
         };
@@ -188,7 +188,7 @@ public sealed class AppCommandLineOptionsTests
         AppSettings settings = new()
         {
             TargetProcessName = "chrome",
-            TargetSpeakers = ["Paimon"],
+            TargetSpeakers = ["Wanderer"],
             RealAudioEnabled = true,
             AudioFilter = new AudioFilterOptions()
         };

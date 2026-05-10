@@ -9,7 +9,7 @@ public sealed class MuteCoordinatorTests
     [Fact]
     public async Task TargetSpeakerStartsSpeaking_MuteCalledOnce()
     {
-        FakeSpeakerDetector detector = new("Paimon");
+        FakeSpeakerDetector detector = new("Wanderer");
         FakeAudioMuteService audio = new();
         MuteCoordinator coordinator = CreateCoordinator(detector, audio);
 
@@ -23,7 +23,7 @@ public sealed class MuteCoordinatorTests
     [Fact]
     public async Task RepeatedTargetSpeaker_MuteNotCalledRepeatedly()
     {
-        FakeSpeakerDetector detector = new("Paimon", "Paimon", "paimon");
+        FakeSpeakerDetector detector = new("Wanderer", "Wanderer", "wanderer");
         FakeAudioMuteService audio = new();
         MuteCoordinator coordinator = CreateCoordinator(detector, audio);
 
@@ -55,7 +55,7 @@ public sealed class MuteCoordinatorTests
     [Fact]
     public async Task TargetThenNonTarget_MuteOnceAndRestoreOnce()
     {
-        FakeSpeakerDetector detector = new("Paimon", "Traveler");
+        FakeSpeakerDetector detector = new("Wanderer", "Traveler");
         FakeAudioMuteService audio = new();
         MuteCoordinator coordinator = CreateCoordinator(detector, audio);
 
@@ -73,7 +73,7 @@ public sealed class MuteCoordinatorTests
     [InlineData("   ")]
     public async Task NullOrEmptySpeakerWhileMuted_RestoreOnce(string? speaker)
     {
-        FakeSpeakerDetector detector = new("Paimon", speaker, speaker);
+        FakeSpeakerDetector detector = new("Wanderer", speaker, speaker);
         FakeAudioMuteService audio = new();
         MuteCoordinator coordinator = CreateCoordinator(detector, audio);
 
@@ -89,7 +89,7 @@ public sealed class MuteCoordinatorTests
     [Fact]
     public async Task DetectorExceptionWhileMuted_RestoreAttemptedOnce()
     {
-        FakeSpeakerDetector detector = new("Paimon");
+        FakeSpeakerDetector detector = new("Wanderer");
         detector.EnqueueError(new InvalidOperationException("Simulated detection failure."));
         FakeAudioMuteService audio = new();
         MuteCoordinator coordinator = CreateCoordinator(detector, audio);
@@ -120,7 +120,7 @@ public sealed class MuteCoordinatorTests
     [Fact]
     public async Task CancellationDuringDetectionWhileMuted_AttemptsShutdownRestoreAndRethrows()
     {
-        FakeSpeakerDetector detector = new("Paimon", "Paimon");
+        FakeSpeakerDetector detector = new("Wanderer", "Wanderer");
         FakeAudioMuteService audio = new();
         MuteCoordinator coordinator = CreateCoordinator(detector, audio);
 
@@ -139,7 +139,7 @@ public sealed class MuteCoordinatorTests
     [Fact]
     public async Task RestoreForShutdownWithCanceledToken_CanRestoreWhileMuted()
     {
-        FakeSpeakerDetector detector = new("Paimon");
+        FakeSpeakerDetector detector = new("Wanderer");
         FakeAudioMuteService audio = new();
         MuteCoordinator coordinator = CreateCoordinator(detector, audio);
 
@@ -157,7 +157,7 @@ public sealed class MuteCoordinatorTests
     [Fact]
     public async Task RestoreAsyncThrows_StateFaultedAndShutdownRestoreCanRetry()
     {
-        FakeSpeakerDetector detector = new("Paimon", "Traveler");
+        FakeSpeakerDetector detector = new("Wanderer", "Traveler");
         FakeAudioMuteService audio = new()
         {
             RestoreFailuresRemaining = 1
@@ -180,7 +180,7 @@ public sealed class MuteCoordinatorTests
     [Fact]
     public async Task RepeatedRestoreAfterFailureRemainsSafe()
     {
-        FakeSpeakerDetector detector = new("Paimon", "Traveler");
+        FakeSpeakerDetector detector = new("Wanderer", "Traveler");
         FakeAudioMuteService audio = new()
         {
             RestoreFailuresRemaining = 2
@@ -206,7 +206,7 @@ public sealed class MuteCoordinatorTests
     [Fact]
     public async Task RestoreIsIdempotent()
     {
-        FakeSpeakerDetector detector = new("Paimon", "Traveler", "Traveler");
+        FakeSpeakerDetector detector = new("Wanderer", "Traveler", "Traveler");
         FakeAudioMuteService audio = new();
         MuteCoordinator coordinator = CreateCoordinator(detector, audio);
 
@@ -221,7 +221,7 @@ public sealed class MuteCoordinatorTests
     [Fact]
     public async Task MuteIsIdempotent()
     {
-        FakeSpeakerDetector detector = new("Paimon", "Paimon");
+        FakeSpeakerDetector detector = new("Wanderer", "Wanderer");
         FakeAudioMuteService audio = new();
         MuteCoordinator coordinator = CreateCoordinator(detector, audio);
 
@@ -241,7 +241,7 @@ public sealed class MuteCoordinatorTests
             audioMuteService,
             new MuteCoordinatorOptions
             {
-                TargetSpeakers = new HashSet<string> { "Paimon" }
+                TargetSpeakers = new HashSet<string> { "Wanderer" }
             });
     }
 
