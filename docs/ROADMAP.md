@@ -1,16 +1,17 @@
 # Roadmap
 
-## Current Milestone: v0.2 Local JSON Configuration
+## Current Milestone: v0.3 Window Capture Prototype
 
 Status: in progress.
 
-The v0.1 Audio MVP has been manually verified. The v0.2 milestone is limited to:
+The v0.1 Audio MVP and v0.2 Local JSON Configuration milestones have been manually verified. The v0.3 milestone is limited to:
 
 - console app only;
-- local JSON configuration;
-- safe defaults when no config is supplied;
-- CLI overrides for supported settings;
-- preserving existing simulated and opt-in real audio behavior.
+- finding a target process/window;
+- capturing the target window or configured screen region;
+- saving a debug screenshot to a local debug folder;
+- preserving existing simulated and opt-in real audio behavior;
+- no OCR, speaker recognition from image, GUI, overlay, or masking.
 
 ## Phase Order
 
@@ -23,14 +24,14 @@ The v0.1 Audio MVP has been manually verified. The v0.2 milestone is limited to:
 7. Speaker detection from OCR text.
 8. Stable mute/unmute coordination with debounce and recovery.
 9. Minimal UI.
-10. Optional screen-region masking prototype.
-11. Optional dynamic mask or model-based detection prototype.
+10. Optional masking.
 
-## Out of Scope for v0.2
+## Out of Scope for v0.3
 
 - OCR.
-- Screen capture.
+- Speaker recognition from image.
 - WPF or WinUI.
 - Overlay masking.
 - Gameplay automation.
 - Game memory access or modification.
+- Hooking or injection.

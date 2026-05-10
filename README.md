@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.2 Local JSON Configuration**.
+Current milestone: **v0.3 Window Capture Prototype**.
 
-The v0.1 Audio MVP has been manually verified with simulated input and opt-in real Windows audio. v0.2 adds local JSON configuration while preserving the safe default simulated run.
+The v0.1 Audio MVP and v0.2 Local JSON Configuration are implemented. v0.3 adds a debug window screenshot path while preserving the safe default simulated run.
 
 ## Current Scope
 
@@ -14,8 +14,9 @@ The v0.1 Audio MVP has been manually verified with simulated input and opt-in re
 - Audio modes: `Mute` and `ReduceVolume`.
 - Local JSON configuration.
 - CLI arguments can override JSON configuration.
+- Explicit one-shot debug screenshot capture.
 
-Out of scope: OCR, screenshot/capture, WPF, WinUI, overlay, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
+Out of scope: OCR, speaker recognition from image, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
 
 ## Commands
 
@@ -41,6 +42,18 @@ dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj
 ```
 
 Default mode is simulated and does not change real system audio.
+
+## Debug Screenshot Capture
+
+Screenshot mode only runs when `--capture-once` is supplied. It does not control real system audio.
+
+Verify with a normal desktop app such as Notepad before trying a game window:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --capture-once --process notepad --capture-output debug-captures --capture-delay-ms 500
+```
+
+The app looks for the target process main window, attempts to restore and activate it, waits briefly, then saves `capture-latest.png` under the output directory. The target window should be restored, visible, and not covered by other windows. If Windows blocks foreground activation, manually bring the target window to the front before capturing. The expected v0.3 output is a full-window debug screenshot including the title bar and visible frame. This is visible-window screen capture, not background window capture, so covered windows may still capture the covering pixels.
 
 ## Configuration File
 
@@ -95,6 +108,9 @@ Supported overrides:
 - `--audio-mode mute`
 - `--audio-mode reduce`
 - `--volume-percent <number>`
+- `--capture-once`
+- `--capture-output <directory>`
+- `--capture-delay-ms <number>`
 
 `--real-audio` only enables real audio. To keep real audio disabled, omit `--real-audio` and set `RealAudioEnabled` to `false` in config or use the safe defaults.
 
@@ -121,7 +137,8 @@ Real mode uses Windows Core Audio sessions through `WindowsAudioMuteService`. It
 - Enter another name, blank input, or `unknown` to request restore when filtered.
 - Enter another non-target value to confirm repeated non-target input does not request restore again.
 - Enter `q`, `quit`, or `exit` to leave; shutdown attempts restore.
+- Run `--capture-once` against Notepad and confirm a full-window debug screenshot is written without enabling real audio. If activation is blocked, manually put Notepad in front and rerun the command.
 
 ## Dependency Policy
 
-NAudio is included only for Windows Core Audio session access in explicit real audio mode. It affects deployment by adding managed NuGet assemblies and Windows audio API access, but it does not add game integration, injection, memory reading, hooks, OCR, image-processing, model-inference, capture, UI, or overlay features.
+NAudio is included only for Windows Core Audio session access in explicit real audio mode. It affects deployment by adding managed NuGet assemblies and Windows audio API access, but it does not add game integration, injection, memory reading, hooks, OCR, image-processing, model-inference, UI, or overlay features.

@@ -1,4 +1,5 @@
 using GenshinCharacterFilter.Audio;
+using GenshinCharacterFilter.Capture;
 
 namespace GenshinCharacterFilter;
 
@@ -16,9 +17,15 @@ public sealed class AppCommandLineOptions
 
     public bool UseRealAudio { get; private init; }
 
+    public bool CaptureOnce { get; private init; }
+
     public string TargetProcessName { get; private init; } = "GenshinImpact";
 
     public AudioFilterOptions AudioFilter { get; private init; } = new();
+
+    public string CaptureOutputDirectory { get; private init; } = WindowCaptureOptions.DefaultOutputDirectory;
+
+    public int CaptureDelayMs { get; private init; } = WindowCaptureOptions.DefaultCaptureDelayMs;
 
     /// <summary>
     /// Parses command-line arguments into application options.
@@ -49,14 +56,27 @@ public sealed class AppCommandLineOptions
         audioFilterOptions.Validate();
 
         string? processName = GetOptionValue(arguments, "--process");
+        string? captureOutputDirectory = GetOptionValue(arguments, "--capture-output");
+        string? captureDelayValue = GetOptionValue(arguments, "--capture-delay-ms");
+        int captureDelayMs = WindowCaptureOptions.DefaultCaptureDelayMs;
+        if (captureDelayValue is not null &&
+            !int.TryParse(captureDelayValue, out captureDelayMs))
+        {
+            throw new ArgumentException("Capture delay ms must be a number.", nameof(arguments));
+        }
+
+        WindowCaptureOptions.ValidateCaptureDelayMs(captureDelayMs);
 
         return new AppCommandLineOptions
         {
             ConfigPath = GetOptionValue(arguments, "--config"),
-            UseRealAudio = arguments.Any(argument => string.Equals(argument, "--real-audio", StringComparison.OrdinalIgnoreCase)),
+            UseRealAudio = HasFlag(arguments, "--real-audio"),
+            CaptureOnce = HasFlag(arguments, "--capture-once"),
             TargetProcessName = processName ?? "GenshinImpact",
             AudioFilter = audioFilterOptions,
-            _realAudioSpecified = arguments.Any(argument => string.Equals(argument, "--real-audio", StringComparison.OrdinalIgnoreCase)),
+            CaptureOutputDirectory = captureOutputDirectory ?? WindowCaptureOptions.DefaultOutputDirectory,
+            CaptureDelayMs = captureDelayMs,
+            _realAudioSpecified = HasFlag(arguments, "--real-audio"),
             _targetProcessSpecified = processName is not null,
             _audioModeSpecified = audioModeSpecified,
             _volumePercentSpecified = volumePercentSpecified
@@ -70,7 +90,7 @@ public sealed class AppCommandLineOptions
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        // CLI 只覆盖用户明确传入的字段；未传入的值保留 JSON 或安全默认配置。
+        // CLI only overrides explicitly supplied values; missing arguments preserve JSON or safe defaults.
         AppSettings merged = new()
         {
             TargetProcessName = _targetProcessSpecified ? TargetProcessName : settings.TargetProcessName,
@@ -118,6 +138,11 @@ public sealed class AppCommandLineOptions
         }
 
         return null;
+    }
+
+    private static bool HasFlag(string[] arguments, string optionName)
+    {
+        return arguments.Any(argument => string.Equals(argument, optionName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsOptionName(string value)

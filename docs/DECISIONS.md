@@ -77,3 +77,17 @@ Reasoning:
 - CLI overrides allow quick manual verification without editing config files.
 - Invalid or missing config files should produce clear errors instead of silent fallback.
 - Configuration stays separate from `Program.cs`, which only performs light loading, merging, and service wiring.
+
+## 2026-05-10: v0.3 Debug Window Screenshot First
+
+Decision: add a one-shot window capture prototype behind `IGameWindowCapture`, saving debug screenshots locally before adding OCR or image-based speaker recognition.
+
+Reasoning:
+
+- Debug screenshots make the capture boundary manually verifiable before OCR exists.
+- Screenshot mode is explicit through `--capture-once` and does not control real system audio.
+- Full-window capture uses DWM extended frame bounds first, then falls back to `GetWindowRect`, so the default debug screenshot includes the title bar and visible frame.
+- v0.3 uses visible-window screen capture; it first attempts foreground activation plus a short delay to reduce accidental capture of the terminal covering the target.
+- Background DirectX capture, window-content capture, hooks, and process injection are intentionally out of scope.
+- Win32 capture details stay isolated in `WindowsGameWindowCapture` instead of `Program.cs`.
+- The milestone does not add OCR, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, or input automation.

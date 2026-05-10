@@ -36,6 +36,29 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
+    public void Parse_ReadsCaptureOnceAndOutputDirectory()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--capture-once", "--process", "chrome", "--capture-output", "debug-captures"]);
+
+        Assert.True(options.CaptureOnce);
+        Assert.Equal("chrome", options.TargetProcessName);
+        Assert.Equal("debug-captures", options.CaptureOutputDirectory);
+        Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
+    public void Parse_ReadsCaptureDelayMs()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--capture-once", "--capture-delay-ms", "500"]);
+
+        Assert.True(options.CaptureOnce);
+        Assert.Equal(500, options.CaptureDelayMs);
+        Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
     public void Parse_ReadsMuteAudioMode()
     {
         AppCommandLineOptions options = AppCommandLineOptions.Parse(["--audio-mode", "mute"]);
@@ -65,12 +88,32 @@ public sealed class AppCommandLineOptionsTests
     [InlineData("--process")]
     [InlineData("--audio-mode")]
     [InlineData("--volume-percent")]
+    [InlineData("--capture-output")]
+    [InlineData("--capture-delay-ms")]
     public void Parse_RejectsMissingOptionValue(string optionName)
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
             () => AppCommandLineOptions.Parse([optionName]));
 
         Assert.Contains("requires a value", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_RejectsNonNumericCaptureDelay()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--capture-delay-ms", "abc"]));
+
+        Assert.Contains("Capture delay", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("5001")]
+    public void Parse_RejectsCaptureDelayOutsideRange(string delay)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => AppCommandLineOptions.Parse(["--capture-delay-ms", delay]));
     }
 
     [Fact]

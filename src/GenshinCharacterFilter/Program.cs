@@ -1,13 +1,15 @@
 using GenshinCharacterFilter;
 using GenshinCharacterFilter.Audio;
+using GenshinCharacterFilter.Capture;
 using GenshinCharacterFilter.Coordination;
 using GenshinCharacterFilter.Speakers;
 
 AppSettings settings;
+AppCommandLineOptions commandLineOptions;
 
 try
 {
-    AppCommandLineOptions commandLineOptions = AppCommandLineOptions.Parse(args);
+    commandLineOptions = AppCommandLineOptions.Parse(args);
     AppSettingsLoader settingsLoader = new();
     AppSettings loadedSettings = commandLineOptions.ConfigPath is null
         ? settingsLoader.LoadDefault()
@@ -21,9 +23,15 @@ catch (Exception exception) when (exception is AppSettingsException or ArgumentE
     return;
 }
 
+if (commandLineOptions.CaptureOnce)
+{
+    await CaptureOnceAsync(settings, commandLineOptions);
+    return;
+}
+
 using CancellationTokenSource appCancellation = new();
 ManualSpeakerDetector speakerDetector = new();
-// 默认使用模拟音频服务；只有配置或 CLI 显式启用 real audio 时才控制系统音频。
+// Default mode uses the simulated audio service; real system audio is controlled only after explicit opt-in.
 IAudioMuteService audioMuteService = settings.RealAudioEnabled
     ? new WindowsAudioMuteService(settings.TargetProcessName, Console.Out, settings.AudioFilter)
     : new LoggingAudioMuteService(Console.Out, settings.AudioFilter);
@@ -35,7 +43,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.2 Local JSON Configuration");
+Console.WriteLine("GenshinCharacterFilter v0.3 Window Capture Prototype");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");
@@ -69,6 +77,29 @@ finally
     Console.WriteLine("Exiting; attempting restore.");
     await coordinator.RestoreForShutdownAsync(CancellationToken.None);
     Console.WriteLine($"State: {coordinator.State}");
+}
+
+static async Task CaptureOnceAsync(AppSettings settings, AppCommandLineOptions commandLineOptions)
+{
+    WindowCaptureOptions captureOptions = new()
+    {
+        TargetProcessName = settings.TargetProcessName,
+        OutputDirectory = commandLineOptions.CaptureOutputDirectory,
+        CaptureDelayMs = commandLineOptions.CaptureDelayMs
+    };
+
+    IGameWindowCapture capture = new WindowsGameWindowCapture(Console.Out);
+    Console.WriteLine("Capture mode; this run does not control real system audio.");
+
+    try
+    {
+        string outputPath = await capture.CaptureOnceAsync(captureOptions, CancellationToken.None);
+        Console.WriteLine($"Capture completed: {outputPath}");
+    }
+    catch (Exception exception) when (exception is WindowCaptureException or PlatformNotSupportedException)
+    {
+        Console.Error.WriteLine($"Capture error: {exception.Message}");
+    }
 }
 
 static bool IsExitCommand(string input)
