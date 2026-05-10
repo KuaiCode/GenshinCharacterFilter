@@ -20,9 +20,9 @@ The agent should prioritize:
 
 ## Current milestone
 
-The current milestone is **v0.3 Window Capture Prototype**.
+The current milestone is **v0.4 OCR Text Extraction Prototype**.
 
-The previous **v0.1 Audio MVP** and **v0.2 Local JSON Configuration** are considered implemented and manually verified:
+The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, and **v0.3 Window Capture Prototype** are considered implemented and manually verified:
 
 - simulated speaker input works;
 - mute coordination works;
@@ -33,33 +33,41 @@ The previous **v0.1 Audio MVP** and **v0.2 Local JSON Configuration** are consid
 - local JSON configuration works;
 - CLI overrides work;
 - default execution remains safe;
+- `--capture-once` can explicitly trigger screenshot capture;
+- target windows can be found by process name where practical;
+- debug screenshots can be saved locally;
+- capture can attempt foreground activation and wait for capture delay;
+- Notepad manual screenshot verification succeeded;
+- default execution still does not screenshot or control real audio;
 - default target speakers are `流浪者` and `Wanderer`.
 
-Scope for v0.3:
+Scope for v0.4:
 
 - Console app only.
-- Find target window/process.
-- Capture target window or configured screen region.
-- Save debug screenshot to a local debug folder.
-- Use safe default behavior.
-- Do not control real audio during screenshot-only verification unless explicitly requested.
-- Do not OCR.
-- Do not mask.
-- Do not add GUI.
-- Existing v0.1 audio and v0.2 configuration behavior must remain stable.
+- OCR must be explicitly triggered.
+- Use the existing screenshot/capture pipeline as OCR input.
+- Support a configurable OCR region.
+- Extract raw text from a screenshot or captured region.
+- Print OCR raw text to console.
+- Save an OCR debug input image where useful.
+- Do not connect OCR result to `MuteCoordinator` yet.
+- Do not automatically mute based on OCR yet.
+- Default run must remain safe.
+- Existing v0.1 audio, v0.2 configuration, and v0.3 capture behavior must remain stable.
 - .NET 8.
 - Windows x64.
 - VS Code / Codex / Visual Studio friendly workflow.
 
 Out of scope for the current milestone:
 
-- OCR.
 - Speaker recognition from image.
+- Speaker detection from OCR text.
+- Automatic mute/restore based on OCR.
 - WPF.
 - WinUI.
 - Overlay masking.
 - Face detection.
-- ONNX.
+- ONNX unless explicitly justified.
 - OpenCV unless explicitly justified.
 - Persistent settings UI or configuration UI.
 - Gameplay automation.
@@ -72,11 +80,12 @@ Done when:
 
 - `dotnet build` passes.
 - If tests exist, `dotnet test` passes.
-- The app can locate the configured target process/window where practical.
-- The app can capture a target window or configured screen region.
-- The app can save a debug screenshot to a local debug folder for manual verification.
-- Screenshot-only verification does not control real system audio unless explicitly requested.
-- No OCR, GUI, masking, overlay, gameplay automation, game memory access, hooking, or injection is introduced.
+- OCR mode is explicit and does not run during default startup.
+- The app can use the existing capture/debug image path as OCR input where practical.
+- The app can extract raw OCR text from a screenshot or configured region and print it to console.
+- OCR-only verification does not control real system audio unless explicitly requested separately.
+- OCR results are not connected to `MuteCoordinator` or automatic mute/restore behavior.
+- No speaker recognition, GUI, masking, overlay, gameplay automation, game memory access, hooking, or injection is introduced.
 - The final response reports changed files, verification commands, assumptions, and limitations.
 
 Do not implement later roadmap phases until this milestone works.
@@ -97,7 +106,7 @@ Do not implement later roadmap phases until this milestone works.
 
 Do not assume administrator privileges unless explicitly required and explained.
 
-Do not introduce OCR, UI, model-inference, overlay, or gameplay automation dependencies during the v0.3 Window Capture Prototype milestone. Avoid OpenCV unless explicitly justified for this milestone.
+Do not introduce UI, overlay, gameplay automation, or model-inference dependencies during the v0.4 OCR Text Extraction Prototype milestone. Avoid OpenCV or ONNX unless explicitly justified for this milestone.
 
 ## Tooling workflow
 
@@ -169,16 +178,17 @@ Use these module boundaries unless the user asks for a different design:
 - `AudioFilterOptions`: stores mute/reduce-volume behavior and validation rules.
 - `WindowCaptureOptions`: stores target window or screen-region capture settings for debug screenshots.
 
-For v0.3, expected work is limited to:
+For v0.4, expected work is limited to:
 
-- `IGameWindowCapture`
-- `WindowCaptureOptions` or an equivalent small options type
-- target process/window lookup logic
-- target window or configured screen-region capture prototype
-- debug screenshot saving to a local debug folder
+- `IOcrService`
+- `OcrOptions` or an equivalent small options type
+- `OcrResult` or an equivalent small result type
+- OCR debug command or explicit OCR branch
+- raw OCR text extraction from a screenshot or captured region
+- OCR debug input image saving where useful
 - tests for pure logic where possible
 
-Do not create `IOcrService` implementations until the project reaches the OCR phase.
+Do not connect `IOcrService` output to speaker detection or automatic audio filtering during v0.4.
 
 ## Architecture rules
 
@@ -221,11 +231,13 @@ Required behavior:
 - Mute/reduce should be idempotent: repeated target detections while already filtered should not spam the audio API or repeatedly reduce volume.
 - Shutdown, cancellation, and unexpected exceptions should attempt safe restore.
 
-For v0.3:
+For v0.4:
 
-- Avoid changing `MuteCoordinator` unless screenshot wiring requires a minimal compatibility adjustment.
-- Existing v0.1 audio and v0.2 configuration behavior must remain stable.
-- Do not add OCR-specific debounce logic until OCR exists.
+- Do not modify `MuteCoordinator`.
+- Do not connect OCR results to `MuteCoordinator`.
+- Do not automatically mute or restore based on OCR output.
+- Existing v0.1 audio, v0.2 configuration, and v0.3 capture behavior must remain stable.
+- Do not add OCR-specific debounce logic or speaker detection from OCR text yet.
 
 ## Safety rules
 
@@ -247,9 +259,9 @@ For v0.3:
 
 Store user configuration in a local JSON file unless the project already uses another configuration format.
 
-For v0.3:
+For v0.4:
 
-- Local JSON configuration is implemented and may be extended only when needed for window capture options.
+- Local JSON configuration is implemented and may be extended only when needed for OCR options.
 - Do not add a persistent settings UI.
 - Do not store sensitive information.
 - Do not include credentials, cookies, tokens, or game login data.
@@ -265,6 +277,13 @@ Configuration should include at least:
 - `RealAudioEnabled`
 - `AudioFilter.Mode`
 - `AudioFilter.VolumePercent`
+
+v0.4 OCR configuration may include:
+
+- OCR input image path or explicit capture input;
+- OCR region;
+- OCR debug output directory;
+- OCR provider selection, only if a provider is actually introduced.
 
 Long-term configuration may later include:
 
@@ -323,7 +342,7 @@ CLI arguments may override JSON configuration values. Override behavior should b
 
 Prefer the .NET standard library and existing project dependencies.
 
-Do not add OCR, image-processing, model-inference, overlay, or UI dependencies without explaining:
+Do not add heavy OCR, image-processing, model-inference, overlay, or UI dependencies without explaining:
 
 - why the dependency is needed;
 - why existing code is insufficient;
@@ -334,13 +353,17 @@ Do not add OCR, image-processing, model-inference, overlay, or UI dependencies w
 
 Do not replace the project framework or UI stack without explicit approval.
 
-For v0.3:
+For v0.4:
 
 - Use built-in .NET JSON support where practical.
 - Existing NAudio dependency for real Windows audio control may remain.
-- Do not add OpenCV unless explicitly justified for the screenshot prototype.
-- Do not add OCR libraries.
-- Do not add ONNX Runtime.
+- Prefer an OCR provider abstraction so the engine can be replaced later.
+- Do not add heavy OCR or model dependencies without explaining why.
+- If using Tesseract CLI, do not vendor traineddata files into the repository.
+- If using Windows OCR APIs, document package identity or deployment limitations.
+- Do not send screenshots to cloud OCR services.
+- Do not add OpenCV unless explicitly justified for OCR preprocessing.
+- Do not add ONNX Runtime unless explicitly justified.
 - Do not add WPF or WinUI dependencies.
 - Do not add global hotkey libraries.
 - Do not add configuration frameworks unless strongly justified.
@@ -377,16 +400,18 @@ Use fake implementations for:
 - `IGameWindowCapture`
 - `IOcrService`
 
-For v0.3, prioritize tests for:
+For v0.4, prioritize tests for:
 
-- pure window/process name normalization logic;
-- capture region validation;
-- debug screenshot path generation;
-- config binding for capture options where practical;
+- OCR options validation;
+- OCR region validation;
+- command-line parsing for explicit OCR commands or flags;
+- OCR result normalization if implemented;
+- config binding for OCR options where practical;
 - existing configuration and mute/reduce coordination behavior remains unchanged.
 
 Do not write automated tests that require a real game window.
-Manual verification for v0.3 should save a screenshot file and must not modify system audio.
+Do not write automated tests that require a locally installed OCR engine unless the test can skip clearly.
+Manual verification for v0.4 should use a Notepad screenshot or debug image, print raw OCR text, and must not modify system audio.
 
 Existing v0.1 tests should continue covering:
 
@@ -425,9 +450,9 @@ For early prototypes:
   4. restore audio;
   5. log state changes.
 
-The v0.1 audio MVP and v0.2 local JSON configuration are implemented; v0.3 should preserve them while adding a window capture prototype.
+The v0.1 audio MVP, v0.2 local JSON configuration, and v0.3 window capture prototype are implemented; v0.4 should preserve them while adding explicit OCR raw text extraction.
 
-Do not add masking, OCR, complex UI, persistent settings UI, model inference, speaker recognition from image, or gameplay automation during v0.3.
+Do not add masking, complex UI, persistent settings UI, model inference, speaker recognition from image, speaker detection from OCR text, automatic mute/restore from OCR, or gameplay automation during v0.4.
 
 Do not optimize prematurely.
 
@@ -456,6 +481,11 @@ Log important state transitions:
 - capture region selected;
 - debug screenshot saved;
 - capture error;
+- OCR command requested;
+- OCR input image selected or saved;
+- OCR region selected;
+- OCR raw text extracted;
+- OCR error;
 - cancellation requested;
 - shutdown restore attempted.
 
