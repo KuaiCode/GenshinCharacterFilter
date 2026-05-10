@@ -45,13 +45,12 @@ public sealed class MuteCoordinator
         }
         catch (OperationCanceledException)
         {
+            await RestoreForShutdownAsync(cancellationToken);
             throw;
         }
         catch
         {
-            // 检测失败时优先恢复，避免上一帧的静音状态残留。
-            await RestoreIfMutedAsync(cancellationToken);
-            State = MuteCoordinatorState.Faulted;
+            await RestoreIfNeededAsync(CancellationToken.None);
             return;
         }
 
@@ -61,12 +60,20 @@ public sealed class MuteCoordinator
             return;
         }
 
-        await RestoreIfMutedAsync(cancellationToken);
+        await RestoreIfNeededAsync(cancellationToken);
+    }
 
-        if (State == MuteCoordinatorState.Faulted || State == MuteCoordinatorState.Restoring)
-        {
-            State = MuteCoordinatorState.Idle;
-        }
+    /// <summary>
+    /// Attempts to restore audio during shutdown or cancellation cleanup.
+    /// </summary>
+    public async Task RestoreForShutdownAsync(CancellationToken cancellationToken)
+    {
+        // 取消已发出时仍要尝试恢复音频，避免清理操作被已取消的 token 立即跳过。
+        CancellationToken cleanupToken = cancellationToken.IsCancellationRequested
+            ? CancellationToken.None
+            : cancellationToken;
+
+        await RestoreIfNeededAsync(cleanupToken);
     }
 
     private async Task MuteIfNeededAsync(CancellationToken cancellationToken)
@@ -80,16 +87,32 @@ public sealed class MuteCoordinator
         State = MuteCoordinatorState.Muted;
     }
 
-    private async Task RestoreIfMutedAsync(CancellationToken cancellationToken)
+    private async Task RestoreIfNeededAsync(CancellationToken cancellationToken)
     {
-        if (State != MuteCoordinatorState.Muted)
+        if (!ShouldAttemptRestore())
         {
             return;
         }
 
         State = MuteCoordinatorState.Restoring;
-        await _audioMuteService.RestoreAsync(cancellationToken);
-        State = MuteCoordinatorState.Idle;
+
+        try
+        {
+            await _audioMuteService.RestoreAsync(cancellationToken);
+            State = MuteCoordinatorState.Idle;
+        }
+        catch
+        {
+            State = MuteCoordinatorState.Faulted;
+            throw;
+        }
+    }
+
+    private bool ShouldAttemptRestore()
+    {
+        return State is MuteCoordinatorState.Muted
+            or MuteCoordinatorState.Restoring
+            or MuteCoordinatorState.Faulted;
     }
 
     private bool IsTargetSpeaker(string? speaker)

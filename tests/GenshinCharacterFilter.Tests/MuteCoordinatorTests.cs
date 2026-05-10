@@ -87,7 +87,7 @@ public sealed class MuteCoordinatorTests
     }
 
     [Fact]
-    public async Task DetectorExceptionWhileMuted_RestoreAttemptedAndStateFaulted()
+    public async Task DetectorExceptionWhileMuted_RestoreAttemptedOnce()
     {
         FakeSpeakerDetector detector = new("Paimon");
         detector.EnqueueError(new InvalidOperationException("Simulated detection failure."));
@@ -99,7 +99,108 @@ public sealed class MuteCoordinatorTests
 
         Assert.Equal(1, audio.MuteCallCount);
         Assert.Equal(1, audio.RestoreCallCount);
+        Assert.Equal(MuteCoordinatorState.Idle, coordinator.State);
+    }
+
+    [Fact]
+    public async Task DetectorExceptionWhileIdle_RestoreNotCalled()
+    {
+        FakeSpeakerDetector detector = new();
+        detector.EnqueueError(new InvalidOperationException("Simulated detection failure."));
+        FakeAudioMuteService audio = new();
+        MuteCoordinator coordinator = CreateCoordinator(detector, audio);
+
+        await coordinator.TickAsync(CancellationToken.None);
+
+        Assert.Equal(0, audio.MuteCallCount);
+        Assert.Equal(0, audio.RestoreCallCount);
+        Assert.Equal(MuteCoordinatorState.Idle, coordinator.State);
+    }
+
+    [Fact]
+    public async Task CancellationDuringDetectionWhileMuted_AttemptsShutdownRestoreAndRethrows()
+    {
+        FakeSpeakerDetector detector = new("Paimon", "Paimon");
+        FakeAudioMuteService audio = new();
+        MuteCoordinator coordinator = CreateCoordinator(detector, audio);
+
+        await coordinator.TickAsync(CancellationToken.None);
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => coordinator.TickAsync(cancellation.Token));
+
+        Assert.Equal(1, audio.MuteCallCount);
+        Assert.Equal(1, audio.RestoreCallCount);
+        Assert.Equal(MuteCoordinatorState.Idle, coordinator.State);
+    }
+
+    [Fact]
+    public async Task RestoreForShutdownWithCanceledToken_CanRestoreWhileMuted()
+    {
+        FakeSpeakerDetector detector = new("Paimon");
+        FakeAudioMuteService audio = new();
+        MuteCoordinator coordinator = CreateCoordinator(detector, audio);
+
+        await coordinator.TickAsync(CancellationToken.None);
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+
+        await coordinator.RestoreForShutdownAsync(cancellation.Token);
+
+        Assert.Equal(1, audio.MuteCallCount);
+        Assert.Equal(1, audio.RestoreCallCount);
+        Assert.Equal(MuteCoordinatorState.Idle, coordinator.State);
+    }
+
+    [Fact]
+    public async Task RestoreAsyncThrows_StateFaultedAndShutdownRestoreCanRetry()
+    {
+        FakeSpeakerDetector detector = new("Paimon", "Traveler");
+        FakeAudioMuteService audio = new()
+        {
+            RestoreFailuresRemaining = 1
+        };
+        MuteCoordinator coordinator = CreateCoordinator(detector, audio);
+
+        await coordinator.TickAsync(CancellationToken.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.TickAsync(CancellationToken.None));
+
+        Assert.Equal(1, audio.RestoreCallCount);
         Assert.Equal(MuteCoordinatorState.Faulted, coordinator.State);
+
+        await coordinator.RestoreForShutdownAsync(CancellationToken.None);
+
+        Assert.Equal(2, audio.RestoreCallCount);
+        Assert.Equal(MuteCoordinatorState.Idle, coordinator.State);
+    }
+
+    [Fact]
+    public async Task RepeatedRestoreAfterFailureRemainsSafe()
+    {
+        FakeSpeakerDetector detector = new("Paimon", "Traveler");
+        FakeAudioMuteService audio = new()
+        {
+            RestoreFailuresRemaining = 2
+        };
+        MuteCoordinator coordinator = CreateCoordinator(detector, audio);
+
+        await coordinator.TickAsync(CancellationToken.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.TickAsync(CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.RestoreForShutdownAsync(CancellationToken.None));
+
+        Assert.Equal(2, audio.RestoreCallCount);
+        Assert.Equal(MuteCoordinatorState.Faulted, coordinator.State);
+
+        await coordinator.RestoreForShutdownAsync(CancellationToken.None);
+        await coordinator.RestoreForShutdownAsync(CancellationToken.None);
+
+        Assert.Equal(3, audio.RestoreCallCount);
+        Assert.Equal(MuteCoordinatorState.Idle, coordinator.State);
     }
 
     [Fact]
@@ -150,6 +251,8 @@ public sealed class MuteCoordinatorTests
 
         public int RestoreCallCount { get; private set; }
 
+        public int RestoreFailuresRemaining { get; set; }
+
         public Task MuteAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -161,6 +264,13 @@ public sealed class MuteCoordinatorTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             RestoreCallCount++;
+
+            if (RestoreFailuresRemaining > 0)
+            {
+                RestoreFailuresRemaining--;
+                throw new InvalidOperationException("Simulated restore failure.");
+            }
+
             return Task.CompletedTask;
         }
     }
