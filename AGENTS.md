@@ -20,29 +20,33 @@ The agent should prioritize:
 
 ## Current milestone
 
-The current milestone is **v0.2 Local JSON Configuration**.
+The current milestone is **v0.3 Window Capture Prototype**.
 
-The previous **v0.1 Audio MVP** is considered implemented and manually verified:
+The previous **v0.1 Audio MVP** and **v0.2 Local JSON Configuration** are considered implemented and manually verified:
 
 - simulated speaker input works;
 - mute coordination works;
 - real Windows audio mode is opt-in only;
 - target-process mute mode works;
 - target-process reduce-volume mode works;
-- shutdown restore behavior works in the tested manual path.
+- shutdown restore behavior works in the tested manual path;
+- local JSON configuration works;
+- CLI overrides work;
+- default execution remains safe;
+- default target speakers are `流浪者` and `Wanderer`.
 
-Scope for v0.2:
+Scope for v0.3:
 
 - Console app only.
-- Local JSON configuration support.
-- CLI arguments may override JSON configuration.
-- Target process name should be configurable.
-- Target speaker list should be configurable.
-- Real audio opt-in should be configurable.
-- Audio filter mode should be configurable.
-- Reduce-volume percentage should be configurable.
-- Default run must remain safe and must not control real system audio unless explicitly enabled by config or CLI.
-- Existing v0.1 audio behavior must remain stable.
+- Find target window/process.
+- Capture target window or configured screen region.
+- Save debug screenshot to a local debug folder.
+- Use safe default behavior.
+- Do not control real audio during screenshot-only verification unless explicitly requested.
+- Do not OCR.
+- Do not mask.
+- Do not add GUI.
+- Existing v0.1 audio and v0.2 configuration behavior must remain stable.
 - .NET 8.
 - Windows x64.
 - VS Code / Codex / Visual Studio friendly workflow.
@@ -50,28 +54,29 @@ Scope for v0.2:
 Out of scope for the current milestone:
 
 - OCR.
-- Screen capture.
+- Speaker recognition from image.
 - WPF.
 - WinUI.
 - Overlay masking.
 - Face detection.
 - ONNX.
-- OpenCV.
-- Persistent settings UI.
+- OpenCV unless explicitly justified.
+- Persistent settings UI or configuration UI.
 - Gameplay automation.
 - Keyboard/mouse automation.
 - Anti-cheat bypass.
 - Game memory reading or modification.
+- Hooking or injection.
 
 Done when:
 
 - `dotnet build` passes.
 - If tests exist, `dotnet test` passes.
-- The app can run without a config file using safe defaults.
-- The app can load local JSON config with target process, target speakers, audio mode, volume percent, and real-audio opt-in.
-- CLI arguments can override config file values where supported.
-- Invalid config produces clear errors.
-- Default execution still does not control real system audio.
+- The app can locate the configured target process/window where practical.
+- The app can capture a target window or configured screen region.
+- The app can save a debug screenshot to a local debug folder for manual verification.
+- Screenshot-only verification does not control real system audio unless explicitly requested.
+- No OCR, GUI, masking, overlay, gameplay automation, game memory access, hooking, or injection is introduced.
 - The final response reports changed files, verification commands, assumptions, and limitations.
 
 Do not implement later roadmap phases until this milestone works.
@@ -92,7 +97,7 @@ Do not implement later roadmap phases until this milestone works.
 
 Do not assume administrator privileges unless explicitly required and explained.
 
-Do not introduce OCR, image-processing, UI, model-inference, capture, overlay, or gameplay automation dependencies during the v0.2 Local JSON Configuration milestone.
+Do not introduce OCR, UI, model-inference, overlay, or gameplay automation dependencies during the v0.3 Window Capture Prototype milestone. Avoid OpenCV unless explicitly justified for this milestone.
 
 ## Tooling workflow
 
@@ -144,8 +149,7 @@ Follow this order unless the user explicitly changes the roadmap:
 7. Speaker detection from OCR text.
 8. Stable mute/unmute coordination with debounce and recovery.
 9. Minimal UI.
-10. Optional screen-region masking prototype.
-11. Optional dynamic mask or model-based detection prototype.
+10. Optional masking.
 
 Do not implement later-phase functionality prematurely.
 
@@ -163,17 +167,18 @@ Use these module boundaries unless the user asks for a different design:
 - `AppSettings`: stores target characters, target process name, OCR region, timing thresholds, audio settings, and feature toggles.
 - `AppSettingsLoader`: loads and validates local JSON configuration.
 - `AudioFilterOptions`: stores mute/reduce-volume behavior and validation rules.
+- `WindowCaptureOptions`: stores target window or screen-region capture settings for debug screenshots.
 
-For v0.2, expected work is limited to:
+For v0.3, expected work is limited to:
 
-- `AppSettings`
-- `AppSettingsLoader`
-- configuration validation
-- CLI/config merge behavior
-- example JSON configuration
-- tests for configuration loading and validation
+- `IGameWindowCapture`
+- `WindowCaptureOptions` or an equivalent small options type
+- target process/window lookup logic
+- target window or configured screen-region capture prototype
+- debug screenshot saving to a local debug folder
+- tests for pure logic where possible
 
-Do not create `IGameWindowCapture` or `IOcrService` implementations until the project reaches the corresponding phases.
+Do not create `IOcrService` implementations until the project reaches the OCR phase.
 
 ## Architecture rules
 
@@ -216,10 +221,10 @@ Required behavior:
 - Mute/reduce should be idempotent: repeated target detections while already filtered should not spam the audio API or repeatedly reduce volume.
 - Shutdown, cancellation, and unexpected exceptions should attempt safe restore.
 
-For v0.2:
+For v0.3:
 
-- Avoid changing `MuteCoordinator` unless configuration wiring requires a minimal adjustment.
-- Existing v0.1 behavior must remain stable.
+- Avoid changing `MuteCoordinator` unless screenshot wiring requires a minimal compatibility adjustment.
+- Existing v0.1 audio and v0.2 configuration behavior must remain stable.
 - Do not add OCR-specific debounce logic until OCR exists.
 
 ## Safety rules
@@ -242,9 +247,9 @@ For v0.2:
 
 Store user configuration in a local JSON file unless the project already uses another configuration format.
 
-For v0.2:
+For v0.3:
 
-- Local JSON configuration is allowed and expected.
+- Local JSON configuration is implemented and may be extended only when needed for window capture options.
 - Do not add a persistent settings UI.
 - Do not store sensitive information.
 - Do not include credentials, cookies, tokens, or game login data.
@@ -265,6 +270,7 @@ Long-term configuration may later include:
 
 - mute delay/debounce settings;
 - restore delay/debounce settings;
+- capture region;
 - OCR region;
 - feature toggles;
 - restore behavior;
@@ -274,7 +280,7 @@ Default safe values should be:
 
 - `RealAudioEnabled = false`
 - `TargetProcessName = "GenshinImpact"`
-- `TargetSpeakers = ["派蒙", "Paimon"]`
+- `TargetSpeakers = ["流浪者", "Wanderer"]`
 - `AudioFilter.Mode = "Mute"`
 - `AudioFilter.VolumePercent = 30`
 
@@ -317,7 +323,7 @@ CLI arguments may override JSON configuration values. Override behavior should b
 
 Prefer the .NET standard library and existing project dependencies.
 
-Do not add OCR, image-processing, model-inference, capture, overlay, or UI dependencies without explaining:
+Do not add OCR, image-processing, model-inference, overlay, or UI dependencies without explaining:
 
 - why the dependency is needed;
 - why existing code is insufficient;
@@ -328,11 +334,11 @@ Do not add OCR, image-processing, model-inference, capture, overlay, or UI depen
 
 Do not replace the project framework or UI stack without explicit approval.
 
-For v0.2:
+For v0.3:
 
 - Use built-in .NET JSON support where practical.
 - Existing NAudio dependency for real Windows audio control may remain.
-- Do not add OpenCV.
+- Do not add OpenCV unless explicitly justified for the screenshot prototype.
 - Do not add OCR libraries.
 - Do not add ONNX Runtime.
 - Do not add WPF or WinUI dependencies.
@@ -371,18 +377,16 @@ Use fake implementations for:
 - `IGameWindowCapture`
 - `IOcrService`
 
-For v0.2, prioritize tests for:
+For v0.3, prioritize tests for:
 
-- default `AppSettings`;
-- valid JSON configuration loading;
-- missing config file error;
-- invalid JSON error where practical;
-- blank target process name rejected;
-- empty target speaker list rejected;
-- invalid audio filter mode rejected;
-- invalid reduce-volume percentage rejected;
-- CLI override behavior if argument parsing is structured for testing;
-- existing mute/reduce coordination behavior remains unchanged.
+- pure window/process name normalization logic;
+- capture region validation;
+- debug screenshot path generation;
+- config binding for capture options where practical;
+- existing configuration and mute/reduce coordination behavior remains unchanged.
+
+Do not write automated tests that require a real game window.
+Manual verification for v0.3 should save a screenshot file and must not modify system audio.
 
 Existing v0.1 tests should continue covering:
 
@@ -421,9 +425,9 @@ For early prototypes:
   4. restore audio;
   5. log state changes.
 
-The v0.1 audio MVP is implemented; v0.2 should preserve it while adding local JSON configuration.
+The v0.1 audio MVP and v0.2 local JSON configuration are implemented; v0.3 should preserve them while adding a window capture prototype.
 
-Do not add masking, OCR, complex UI, persistent settings UI, model inference, or capture code during v0.2.
+Do not add masking, OCR, complex UI, persistent settings UI, model inference, speaker recognition from image, or gameplay automation during v0.3.
 
 Do not optimize prematurely.
 
@@ -448,6 +452,10 @@ Log important state transitions:
 - configuration load error;
 - configuration validation error;
 - CLI override applied where helpful;
+- target window/process lookup;
+- capture region selected;
+- debug screenshot saved;
+- capture error;
 - cancellation requested;
 - shutdown restore attempted.
 
