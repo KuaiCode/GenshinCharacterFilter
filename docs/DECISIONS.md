@@ -31,3 +31,49 @@ Reasoning:
 - Fake services verify mute/restore state transitions without changing system volume.
 - Real Windows audio can be added later behind `IAudioMuteService` without changing coordinator logic.
 - No NAudio, OCR, screen capture, UI, overlay, OpenCV, or ONNX dependencies are needed for this step.
+
+## 2026-05-10: Interactive Simulation Before Real Audio
+
+Decision: add a lightweight interactive console mode using `ManualSpeakerDetector` and `LoggingAudioMuteService` before implementing real Windows audio control.
+
+Reasoning:
+
+- The v0.1 milestone needs a command-line verifiable vertical slice.
+- Manual speaker input exercises the same `MuteCoordinator` used by tests.
+- Logging audio requests keeps verification safe and reversible because no system volume is changed.
+- Real Windows audio remains deferred behind `IAudioMuteService`.
+
+## 2026-05-10: Real Audio Behind IAudioMuteService
+
+Decision: add `WindowsAudioMuteService` behind `IAudioMuteService`, while keeping the default console mode simulated unless `--real-audio` is explicitly supplied.
+
+Reasoning:
+
+- Real audio control belongs behind `IAudioMuteService` so `MuteCoordinator` remains testable without changing system volume.
+- NAudio is used to access Windows Core Audio render sessions for a target process.
+- The implementation mutes only matched process audio sessions and attempts to restore each session's previous mute state and volume.
+- Deployment now includes NAudio managed NuGet assemblies for real audio mode.
+- The approach does not inject into the game process, read or write game memory, hook the process, modify game files, or simulate keyboard/mouse input.
+
+## 2026-05-10: Audio Action Supports Mute and Reduce Volume
+
+Decision: introduce `AudioFilterMode` and `AudioFilterOptions` so target-speaker audio handling can either mute or reduce volume while restore keeps the original session state.
+
+Reasoning:
+
+- Mute remains the default behavior for backwards compatibility and safety.
+- Reduce-volume mode uses the volume captured at first trigger, so repeated target frames do not repeatedly reduce volume.
+- Restore returns the original mute flag and volume when the session is still available.
+- The behavior stays behind `IAudioMuteService`; `MuteCoordinator` remains unchanged.
+
+## 2026-05-10: v0.2 Local JSON Configuration
+
+Decision: add local JSON configuration through `AppSettings` and `AppSettingsLoader`; CLI arguments may override JSON values.
+
+Reasoning:
+
+- Defaults must remain safe: real audio is disabled unless config or CLI explicitly enables it.
+- Local JSON keeps configuration transparent and reviewable without adding a settings UI.
+- CLI overrides allow quick manual verification without editing config files.
+- Invalid or missing config files should produce clear errors instead of silent fallback.
+- Configuration stays separate from `Program.cs`, which only performs light loading, merging, and service wiring.

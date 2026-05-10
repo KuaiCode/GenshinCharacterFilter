@@ -1,0 +1,12 @@
+{
+  "TargetProcessName": "GenshinImpact",
+  "TargetSpeakers": [
+    "派蒙",
+    "Paimon"
+  ],
+  "RealAudioEnabled": false,
+  "AudioFilter": {
+    "Mode": "Mute",
+    "VolumePercent": 30
+  }
+}
