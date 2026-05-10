@@ -32,7 +32,7 @@ Running without arguments uses built-in safe defaults:
 
 - `RealAudioEnabled = false`
 - `TargetProcessName = GenshinImpact`
-- `TargetSpeakers = 派蒙, Paimon`
+- `TargetSpeakers = 流浪者, Wanderer`
 - `AudioFilter.Mode = Mute`
 - `AudioFilter.VolumePercent = 30`
 
@@ -55,7 +55,7 @@ Example shape:
 ```json
 {
   "TargetProcessName": "GenshinImpact",
-  "TargetSpeakers": ["派蒙", "Paimon"],
+  "TargetSpeakers": ["流浪者", "Wanderer"],
   "RealAudioEnabled": false,
   "AudioFilter": {
     "Mode": "Mute",
@@ -69,7 +69,7 @@ Reduce-volume configuration:
 ```json
 {
   "TargetProcessName": "GenshinImpact",
-  "TargetSpeakers": ["派蒙", "Paimon"],
+  "TargetSpeakers": ["流浪者", "Wanderer"],
   "RealAudioEnabled": false,
   "AudioFilter": {
     "Mode": "ReduceVolume",
@@ -116,7 +116,7 @@ Real mode uses Windows Core Audio sessions through `WindowsAudioMuteService`. It
 
 ## Manual Verification
 
-- Enter `派蒙` or `Paimon` to simulate a target speaker and request configured audio filtering.
+- Enter `流浪者` or `Wanderer` to simulate a target speaker and request configured audio filtering.
 - Enter the same target speaker again to confirm repeated target input does not repeat audio API calls.
 - Enter another name, blank input, or `unknown` to request restore when filtered.
 - Enter another non-target value to confirm repeated non-target input does not request restore again.

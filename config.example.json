@@ -1,8 +1,8 @@
 {
   "TargetProcessName": "GenshinImpact",
   "TargetSpeakers": [
-    "派蒙",
-    "Paimon"
+    "流浪者",
+    "Wanderer"
   ],
   "RealAudioEnabled": false,
   "AudioFilter": {

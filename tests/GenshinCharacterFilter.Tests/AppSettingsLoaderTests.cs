@@ -12,7 +12,7 @@ public sealed class AppSettingsLoaderTests
 
         Assert.False(settings.RealAudioEnabled);
         Assert.Equal("GenshinImpact", settings.TargetProcessName);
-        Assert.Equal(["派蒙", "Paimon"], settings.TargetSpeakers);
+        Assert.Equal(["流浪者", "Wanderer"], settings.TargetSpeakers);
         Assert.Equal(AudioFilterMode.Mute, settings.AudioFilter.Mode);
         Assert.Equal(30, settings.AudioFilter.VolumePercent);
     }
@@ -169,7 +169,7 @@ public sealed class AppSettingsLoaderTests
         AppSettings settings = new AppSettingsLoader().LoadFromFile(configPath);
 
         Assert.False(settings.RealAudioEnabled);
-        Assert.Equal(["派蒙", "Paimon"], settings.TargetSpeakers);
+        Assert.Equal(["流浪者", "Wanderer"], settings.TargetSpeakers);
     }
 
     private static string FindRepositoryRoot()
