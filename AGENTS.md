@@ -20,18 +20,32 @@ The agent should prioritize:
 
 ## Current milestone
 
-The current milestone is **v0.1 Audio MVP**.
+The current milestone is **v0.2 Local JSON Configuration**.
 
-Scope:
+The previous **v0.1 Audio MVP** is considered implemented and manually verified:
+
+- simulated speaker input works;
+- mute coordination works;
+- real Windows audio mode is opt-in only;
+- target-process mute mode works;
+- target-process reduce-volume mode works;
+- shutdown restore behavior works in the tested manual path.
+
+Scope for v0.2:
 
 - Console app only.
-- Simulated speaker input only.
-- Target process audio mute/restore only.
+- Local JSON configuration support.
+- CLI arguments may override JSON configuration.
+- Target process name should be configurable.
+- Target speaker list should be configurable.
+- Real audio opt-in should be configurable.
+- Audio filter mode should be configurable.
+- Reduce-volume percentage should be configurable.
+- Default run must remain safe and must not control real system audio unless explicitly enabled by config or CLI.
+- Existing v0.1 audio behavior must remain stable.
 - .NET 8.
 - Windows x64.
 - VS Code / Codex / Visual Studio friendly workflow.
-- Core mute coordination logic must be testable without changing real system volume.
-- Real Windows audio control must be isolated behind `IAudioMuteService`.
 
 Out of scope for the current milestone:
 
@@ -53,11 +67,11 @@ Done when:
 
 - `dotnet build` passes.
 - If tests exist, `dotnet test` passes.
-- The app can simulate target speaker and non-target speaker input.
-- The app can decide whether the current speaker should trigger mute.
-- The app can request mute/restore through `IAudioMuteService`.
-- The mute coordination logic is covered by focused tests where practical.
-- Any real Windows audio implementation is isolated behind `IAudioMuteService`.
+- The app can run without a config file using safe defaults.
+- The app can load local JSON config with target process, target speakers, audio mode, volume percent, and real-audio opt-in.
+- CLI arguments can override config file values where supported.
+- Invalid config produces clear errors.
+- Default execution still does not control real system audio.
 - The final response reports changed files, verification commands, assumptions, and limitations.
 
 Do not implement later roadmap phases until this milestone works.
@@ -69,15 +83,16 @@ Do not implement later roadmap phases until this milestone works.
 - Target OS: Windows
 - Target architecture: Windows x64
 - Initial app type: console app
-- Later GUI options: WPF or WinUI, but only after the mute MVP is working and explicitly requested
+- Later GUI options: WPF or WinUI, but only after configuration and detection flows are stable and explicitly requested
 - Audio control: NAudio or Windows Core Audio APIs
+- Configuration: local JSON using .NET built-in JSON support unless a stronger reason is documented
 - Image processing later: TBD
 - OCR later: TBD
 - Packaging later: TBD
 
 Do not assume administrator privileges unless explicitly required and explained.
 
-Do not introduce OCR, image-processing, UI, model-inference, or automation dependencies during the v0.1 Audio MVP.
+Do not introduce OCR, image-processing, UI, model-inference, capture, overlay, or gameplay automation dependencies during the v0.2 Local JSON Configuration milestone.
 
 ## Tooling workflow
 
@@ -121,13 +136,16 @@ Visual Studio may be used for debugging, but command-line verification is still 
 Follow this order unless the user explicitly changes the roadmap:
 
 1. Simulated speaker input + target process mute/restore.
-2. Window capture prototype.
-3. OCR text extraction from a configurable screen region.
-4. Speaker detection from OCR text.
-5. Stable mute/unmute coordination with debounce and recovery.
-6. Minimal UI and local configuration.
-7. Optional screen-region masking prototype.
-8. Optional dynamic mask or model-based detection prototype.
+2. Real Windows audio control behind `IAudioMuteService`.
+3. Audio filter modes: mute and reduce volume.
+4. Local JSON configuration.
+5. Window capture prototype.
+6. OCR text extraction from a configurable screen region.
+7. Speaker detection from OCR text.
+8. Stable mute/unmute coordination with debounce and recovery.
+9. Minimal UI.
+10. Optional screen-region masking prototype.
+11. Optional dynamic mask or model-based detection prototype.
 
 Do not implement later-phase functionality prematurely.
 
@@ -140,16 +158,20 @@ Use these module boundaries unless the user asks for a different design:
 - `IGameWindowCapture`: captures frames from the target game window.
 - `IOcrService`: extracts text from a specific screen region.
 - `ISpeakerDetector`: determines the current speaker from OCR text or simulated input.
-- `IAudioMuteService`: mutes and restores the target game process or audio session.
-- `MuteCoordinator`: coordinates speaker detection, mute state, debounce logic, and recovery.
-- `AppSettings`: stores target characters, target process name, OCR region, timing thresholds, and feature toggles.
+- `IAudioMuteService`: mutes, reduces, and restores the target game process or audio session according to configured audio filtering behavior.
+- `MuteCoordinator`: coordinates speaker detection, mute/filter state, debounce logic, and recovery.
+- `AppSettings`: stores target characters, target process name, OCR region, timing thresholds, audio settings, and feature toggles.
+- `AppSettingsLoader`: loads and validates local JSON configuration.
+- `AudioFilterOptions`: stores mute/reduce-volume behavior and validation rules.
 
-For v0.1, only these are expected:
+For v0.2, expected work is limited to:
 
-- `ISpeakerDetector`
-- `IAudioMuteService`
-- `MuteCoordinator`
-- minimal settings or safe temporary console defaults
+- `AppSettings`
+- `AppSettingsLoader`
+- configuration validation
+- CLI/config merge behavior
+- example JSON configuration
+- tests for configuration loading and validation
 
 Do not create `IGameWindowCapture` or `IOcrService` implementations until the project reaches the corresponding phases.
 
@@ -159,9 +181,9 @@ Do not create `IGameWindowCapture` or `IOcrService` implementations until the pr
 - Windows API, COM interop, OCR provider code, screen capture code, and overlay code must be isolated behind service interfaces.
 - OCR logic must be replaceable.
 - Do not hard-code one OCR provider into core business logic.
-- Audio mute/restore logic must be reversible.
+- Audio mute/reduce/restore logic must be reversible.
 - The application must attempt to restore audio on cancellation, shutdown, and unexpected exceptions.
-- Prefer explicit state machines for mute transitions instead of scattered boolean flags.
+- Prefer explicit state machines for audio-filter transitions instead of scattered boolean flags.
 - Keep core logic testable without launching the game, changing system volume, or requiring OCR.
 - Do not put large procedural logic in `Program.cs`.
 - Do not put large procedural logic in UI event handlers.
@@ -183,22 +205,21 @@ Do not create `IGameWindowCapture` or `IOcrService` implementations until the pr
 
 Required behavior:
 
-- Target speaker starts speaking → mute target process/audio session.
+- Target speaker starts speaking → apply configured audio filtering to the target process/audio session.
 - Target speaker stops speaking → restore audio.
-- Non-target speaker speaks → do not mute.
-- Unknown speaker or detection failure → do not newly mute.
-- Detection failures must not leave audio permanently muted.
-- Repeated frames or repeated simulated inputs with the same speaker must not trigger repeated mute calls.
+- Non-target speaker speaks → do not apply audio filtering.
+- Unknown speaker or detection failure → do not newly apply audio filtering.
+- Detection failures must not leave audio permanently filtered.
+- Repeated frames or repeated simulated inputs with the same speaker must not trigger repeated audio API calls.
 - OCR jitter must later be handled with debounce or hysteresis.
 - Restore should be idempotent: calling restore multiple times should be safe.
-- Mute should be idempotent: repeated mute requests while already muted should not spam the audio API.
+- Mute/reduce should be idempotent: repeated target detections while already filtered should not spam the audio API or repeatedly reduce volume.
 - Shutdown, cancellation, and unexpected exceptions should attempt safe restore.
 
-For v0.1:
+For v0.2:
 
-- Use simulated speaker input.
-- Implement mute/restore coordination using fake services first where practical.
-- Add real audio control only behind `IAudioMuteService`.
+- Avoid changing `MuteCoordinator` unless configuration wiring requires a minimal adjustment.
+- Existing v0.1 behavior must remain stable.
 - Do not add OCR-specific debounce logic until OCR exists.
 
 ## Safety rules
@@ -221,30 +242,55 @@ For v0.1:
 
 Store user configuration in a local JSON file unless the project already uses another configuration format.
 
-For v0.1:
+For v0.2:
 
-- Hard-coded safe defaults are acceptable only for temporary console testing.
-- Do not hard-code target character names or process names inside reusable services.
-- If configuration is added, use local JSON.
-- Keep configuration minimal.
+- Local JSON configuration is allowed and expected.
+- Do not add a persistent settings UI.
+- Do not store sensitive information.
+- Do not include credentials, cookies, tokens, or game login data.
+- Do not make network requests for configuration.
+- Do not silently create or overwrite user configuration without explicit request.
+- A sample configuration file such as `config.example.json` is allowed.
+- If a default runtime config is created later, it must be safe by default.
 
-Long-term configuration should include at least:
+Configuration should include at least:
 
-- target process name;
-- target character list;
+- `TargetProcessName`
+- `TargetSpeakers`
+- `RealAudioEnabled`
+- `AudioFilter.Mode`
+- `AudioFilter.VolumePercent`
+
+Long-term configuration may later include:
+
 - mute delay/debounce settings;
 - restore delay/debounce settings;
 - OCR region;
 - feature toggles;
-- mute mode;
 - restore behavior;
 - logging options.
 
+Default safe values should be:
+
+- `RealAudioEnabled = false`
+- `TargetProcessName = "GenshinImpact"`
+- `TargetSpeakers = ["派蒙", "Paimon"]`
+- `AudioFilter.Mode = "Mute"`
+- `AudioFilter.VolumePercent = 30`
+
 Validate configuration values before using them.
 
-Provide safe defaults for early prototypes.
+Validation should reject:
+
+- blank target process name;
+- null or empty target speaker list;
+- null, blank, or duplicate-only target speaker entries;
+- unknown audio filter mode;
+- `ReduceVolume` mode with `VolumePercent` outside 1 to 100.
 
 Invalid configuration should produce a clear error message.
+
+CLI arguments may override JSON configuration values. Override behavior should be explicit and documented.
 
 ## Coding rules
 
@@ -271,7 +317,7 @@ Invalid configuration should produce a clear error message.
 
 Prefer the .NET standard library and existing project dependencies.
 
-Do not add OCR, audio, image-processing, model-inference, capture, or UI dependencies without explaining:
+Do not add OCR, image-processing, model-inference, capture, overlay, or UI dependencies without explaining:
 
 - why the dependency is needed;
 - why existing code is insufficient;
@@ -282,14 +328,17 @@ Do not add OCR, audio, image-processing, model-inference, capture, or UI depende
 
 Do not replace the project framework or UI stack without explicit approval.
 
-For v0.1:
+For v0.2:
 
-- An audio dependency such as NAudio may be considered only for real Windows audio control.
+- Use built-in .NET JSON support where practical.
+- Existing NAudio dependency for real Windows audio control may remain.
 - Do not add OpenCV.
 - Do not add OCR libraries.
 - Do not add ONNX Runtime.
 - Do not add WPF or WinUI dependencies.
 - Do not add global hotkey libraries.
+- Do not add configuration frameworks unless strongly justified.
+- Do not add logging frameworks unless explicitly requested.
 
 ## Build and run commands
 
@@ -322,20 +371,28 @@ Use fake implementations for:
 - `IGameWindowCapture`
 - `IOcrService`
 
-For v0.1, prioritize fake implementations for:
+For v0.2, prioritize tests for:
 
-- `IAudioMuteService`
-- `ISpeakerDetector`
+- default `AppSettings`;
+- valid JSON configuration loading;
+- missing config file error;
+- invalid JSON error where practical;
+- blank target process name rejected;
+- empty target speaker list rejected;
+- invalid audio filter mode rejected;
+- invalid reduce-volume percentage rejected;
+- CLI override behavior if argument parsing is structured for testing;
+- existing mute/reduce coordination behavior remains unchanged.
 
-Test at least:
+Existing v0.1 tests should continue covering:
 
 - target speaker starts speaking;
 - target speaker stops speaking;
 - non-target speaker speaks;
-- unknown speaker does not newly mute;
-- repeated speaker frames do not cause repeated mute calls;
+- unknown speaker does not newly mute/filter;
+- repeated speaker frames do not cause repeated audio API calls;
 - restore is safe when called multiple times;
-- mute is safe when called multiple times;
+- mute/reduce is safe when called multiple times;
 - exception during detection does not break recovery logic;
 - cancellation or shutdown attempts to restore audio.
 
@@ -344,6 +401,8 @@ For later OCR phases, test at least:
 - OCR jitter does not cause rapid mute/unmute;
 - OCR failure does not leave audio permanently muted;
 - OCR raw text normalization is separated from speaker matching.
+
+Do not write automated tests that modify real system audio.
 
 Do not weaken or delete existing tests to make the build pass.
 
@@ -357,16 +416,18 @@ For early prototypes:
 - Prefer console or minimal UI before full desktop UI.
 - Build the smallest working vertical slice:
   1. detect or simulate speaker name;
-  2. decide whether to mute;
-  3. mute target process/audio session;
+  2. decide whether to apply audio filtering;
+  3. mute or reduce target process/audio session;
   4. restore audio;
   5. log state changes.
 
-Do not add masking, OCR, complex UI, persistent settings UI, or model inference before the mute MVP works.
+The v0.1 audio MVP is implemented; v0.2 should preserve it while adding local JSON configuration.
+
+Do not add masking, OCR, complex UI, persistent settings UI, model inference, or capture code during v0.2.
 
 Do not optimize prematurely.
 
-Do not build a framework before the core behavior is verified.
+Do not build a framework before the next behavior is verified.
 
 ## Logging rules
 
@@ -375,20 +436,24 @@ Log important state transitions:
 - detected speaker changed;
 - target speaker detected;
 - non-target speaker detected;
+- audio filter requested;
 - mute requested;
-- mute succeeded;
-- mute skipped because already muted;
+- reduce-volume requested;
 - restore requested;
 - restore succeeded;
 - restore skipped because already restored;
+- repeated audio filter skipped because already active;
 - detection error;
 - audio control error;
+- configuration load error;
+- configuration validation error;
+- CLI override applied where helpful;
 - cancellation requested;
 - shutdown restore attempted.
 
 Do not log sensitive user information.
 
-Logs should help debug state transitions and timing issues.
+Logs should help debug state transitions, configuration values, and timing issues.
 
 Do not spam logs in tight loops.
 
@@ -418,6 +483,7 @@ Maintain these files when relevant:
 - `docs/ROADMAP.md`: project phases and milestone status.
 - `docs/DECISIONS.md`: important technical decisions and reasons.
 - `AGENTS.md`: agent instructions and engineering rules.
+- `config.example.json`: example local configuration for safe startup and manual testing.
 
 For meaningful behavior changes, update `README.md` or relevant docs.
 
@@ -435,6 +501,7 @@ Before finishing a task:
 - If a command cannot be run, state the exact reason.
 - Verify that the task did not exceed the requested roadmap phase.
 - Verify that no unrelated files were modified.
+- Verify that default run remains safe and does not control real system audio unless explicitly enabled.
 - Verify that the final response contains concrete command results, not assumptions.
 
 The final response must include:

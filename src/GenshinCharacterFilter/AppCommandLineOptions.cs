@@ -70,6 +70,7 @@ public sealed class AppCommandLineOptions
     {
         ArgumentNullException.ThrowIfNull(settings);
 
+        // CLI 只覆盖用户明确传入的字段；未传入的值保留 JSON 或安全默认配置。
         AppSettings merged = new()
         {
             TargetProcessName = _targetProcessSpecified ? TargetProcessName : settings.TargetProcessName,
@@ -99,14 +100,28 @@ public sealed class AppCommandLineOptions
 
     private static string? GetOptionValue(string[] arguments, string optionName)
     {
-        for (int i = 0; i < arguments.Length - 1; i++)
+        for (int i = 0; i < arguments.Length; i++)
         {
-            if (string.Equals(arguments[i], optionName, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(arguments[i], optionName, StringComparison.OrdinalIgnoreCase))
             {
-                return arguments[i + 1];
+                continue;
             }
+
+            if (i == arguments.Length - 1 ||
+                IsOptionName(arguments[i + 1]) ||
+                string.IsNullOrWhiteSpace(arguments[i + 1]))
+            {
+                throw new ArgumentException($"{optionName} requires a value.", nameof(arguments));
+            }
+
+            return arguments[i + 1];
         }
 
         return null;
+    }
+
+    private static bool IsOptionName(string value)
+    {
+        return value.StartsWith("--", StringComparison.Ordinal);
     }
 }

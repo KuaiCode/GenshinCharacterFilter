@@ -23,6 +23,7 @@ catch (Exception exception) when (exception is AppSettingsException or ArgumentE
 
 using CancellationTokenSource appCancellation = new();
 ManualSpeakerDetector speakerDetector = new();
+// 默认使用模拟音频服务；只有配置或 CLI 显式启用 real audio 时才控制系统音频。
 IAudioMuteService audioMuteService = settings.RealAudioEnabled
     ? new WindowsAudioMuteService(settings.TargetProcessName, Console.Out, settings.AudioFilter)
     : new LoggingAudioMuteService(Console.Out, settings.AudioFilter);

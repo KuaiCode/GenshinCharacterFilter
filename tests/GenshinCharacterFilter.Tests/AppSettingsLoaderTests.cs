@@ -161,6 +161,33 @@ public sealed class AppSettingsLoaderTests
         Assert.Contains("Volume percent", exception.Message);
     }
 
+    [Fact]
+    public void ConfigExample_IsSafeAndUsesExpectedTargetSpeakers()
+    {
+        string configPath = Path.Combine(FindRepositoryRoot(), "config.example.json");
+
+        AppSettings settings = new AppSettingsLoader().LoadFromFile(configPath);
+
+        Assert.False(settings.RealAudioEnabled);
+        Assert.Equal(["派蒙", "Paimon"], settings.TargetSpeakers);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "GenshinCharacterFilter.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
+    }
+
     private sealed class TempJsonFile : IDisposable
     {
         private TempJsonFile(string path)

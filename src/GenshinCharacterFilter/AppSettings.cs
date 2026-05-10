@@ -50,6 +50,7 @@ public sealed class AppSettings
             throw new AppSettingsException("TargetSpeakers must contain at least one speaker.");
         }
 
+        // 先清理用户输入的空白，再去重，避免同一角色因多余空格被重复匹配。
         List<string> normalizedSpeakers = [];
         foreach (string? speaker in TargetSpeakers)
         {
@@ -70,6 +71,7 @@ public sealed class AppSettings
             throw new AppSettingsException("TargetSpeakers must contain at least one non-empty speaker.");
         }
 
+        // 进程名也做 trim，避免配置文件中的空格导致真实音频会话匹配失败。
         TargetProcessName = TargetProcessName.Trim();
         TargetSpeakers = normalizedSpeakers;
 
@@ -80,6 +82,7 @@ public sealed class AppSettings
 
         try
         {
+            // 音频参数在进入服务层前统一校验，避免非法百分比影响真实音频恢复。
             AudioFilter.Validate();
         }
         catch (ArgumentOutOfRangeException exception)

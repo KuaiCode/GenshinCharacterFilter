@@ -24,6 +24,7 @@ public sealed class AppSettingsLoader
     /// </summary>
     public AppSettings LoadDefault()
     {
+        // 默认配置必须保持安全：不启用真实系统音频控制。
         AppSettings settings = AppSettings.CreateDefault();
         settings.Validate();
         return settings;

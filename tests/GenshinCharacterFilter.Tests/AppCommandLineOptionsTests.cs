@@ -60,6 +60,28 @@ public sealed class AppCommandLineOptionsTests
         Assert.ThrowsAny<ArgumentException>(() => AppCommandLineOptions.Parse(["--audio-mode", "reduce", "--volume-percent", volumePercent]));
     }
 
+    [Theory]
+    [InlineData("--config")]
+    [InlineData("--process")]
+    [InlineData("--audio-mode")]
+    [InlineData("--volume-percent")]
+    public void Parse_RejectsMissingOptionValue(string optionName)
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse([optionName]));
+
+        Assert.Contains("requires a value", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_RejectsOptionNameWhereValueIsRequired()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--config", "--process"]));
+
+        Assert.Contains("requires a value", exception.Message);
+    }
+
     [Fact]
     public void ApplyOverrides_CanOverrideProcessName()
     {
@@ -111,6 +133,23 @@ public sealed class AppCommandLineOptionsTests
             AudioFilter = new AudioFilterOptions()
         };
         AppCommandLineOptions options = AppCommandLineOptions.Parse(["--real-audio"]);
+
+        AppSettings merged = options.ApplyOverrides(settings);
+
+        Assert.True(merged.RealAudioEnabled);
+    }
+
+    [Fact]
+    public void ApplyOverrides_PreservesRealAudioEnabledWhenCliOmitsRealAudio()
+    {
+        AppSettings settings = new()
+        {
+            TargetProcessName = "chrome",
+            TargetSpeakers = ["Paimon"],
+            RealAudioEnabled = true,
+            AudioFilter = new AudioFilterOptions()
+        };
+        AppCommandLineOptions options = AppCommandLineOptions.Parse([]);
 
         AppSettings merged = options.ApplyOverrides(settings);
 
