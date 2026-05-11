@@ -20,9 +20,9 @@ The agent should prioritize:
 
 ## Current milestone
 
-The current milestone is **v0.6 OCR-driven Detection Dry Run**.
+The current milestone is **v0.7 Detection Stability Gate**.
 
-The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, and **v0.5 Speaker Detection from OCR Text Prototype** are considered implemented and manually verified:
+The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, **v0.5 Speaker Detection from OCR Text Prototype**, and **v0.6 OCR-driven Detection Dry Run** are considered implemented and manually verified:
 
 - simulated speaker input works;
 - mute coordination works;
@@ -48,17 +48,23 @@ The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Windo
 - `--speaker-text "流浪者："` and `--speaker-text "流浪者:"` both match;
 - OCR + speaker detection debug path works;
 - contains matching is documented as debug-only and must not directly drive audio control;
+- `--detect-loop` can run OCR-driven dry-run detection;
+- fixed-image OCR dry-run works;
+- window-capture OCR dry-run works;
+- dry-run output includes OCR raw text, normalized text, matched/not matched, matched speaker, and state changed;
+- dry-run does not call `MuteCoordinator`, does not create a real audio service, and does not control real system audio;
 - default execution still does not screenshot or control real audio;
 - OCR output is not connected to `MuteCoordinator` or automatic audio control;
 - default target speakers are `流浪者` and `Wanderer`.
 
-Scope for v0.6:
+Scope for v0.7:
 
 - Console app only.
-- Explicit dry-run mode only.
-- Repeatedly capture/OCR/match or repeatedly OCR a provided image.
-- Print detected OCR raw text, normalized text, matched/not matched, matched speaker, and state changes.
-- Add basic loop timing options.
+- Add stability gate / debounce / hysteresis for OCR-driven speaker detection.
+- Require consecutive matched frames before stable target-present state.
+- Require consecutive non-matched frames before stable target-absent state.
+- Print raw match result and stable match state.
+- Keep dry-run behavior.
 - Do not control real audio.
 - Do not call `MuteCoordinator` yet.
 - Do not automatically mute.
@@ -66,6 +72,7 @@ Scope for v0.6:
 - Existing v0.1 audio, v0.2 configuration, and v0.3 capture behavior must remain stable.
 - Existing v0.4 OCR behavior must remain stable.
 - Existing v0.5 speaker matching behavior must remain stable.
+- Existing v0.6 dry-run behavior must remain stable.
 - .NET 8.
 - Windows x64.
 - VS Code / Codex / Visual Studio friendly workflow.
@@ -75,12 +82,11 @@ Out of scope for the current milestone:
 - Automatic mute/restore based on OCR.
 - `MuteCoordinator` integration.
 - Real audio mute/restore based on OCR.
-- Production debounce/hysteresis.
 - Background capture.
 - Fuzzy matching unless explicitly requested.
 - Speaker recognition from image.
-- WPF.
-- WinUI.
+- Production audio control.
+- GUI.
 - Overlay masking.
 - Face detection.
 - ONNX.
@@ -98,10 +104,10 @@ Done when:
 - If tests exist, `dotnet test` passes.
 - Speaker detection mode is explicit and does not run during default startup.
 - Dry-run mode is explicit and does not run during default startup.
-- The app can repeatedly run OCR + speaker matching against a provided image or explicit capture path.
-- The app prints OCR raw text, normalized text, matched/not matched, matched speaker, and state changes.
-- Dry-run verification does not control real system audio.
-- Dry-run state changes are not connected to `MuteCoordinator` or automatic mute/restore behavior.
+- The app can compute stable target-present / target-absent state from consecutive raw match results.
+- The app prints raw match result and stable match state.
+- Stability-gated dry-run verification does not control real system audio.
+- Stable state changes are not connected to `MuteCoordinator` or automatic mute/restore behavior.
 - No fuzzy matching, GUI, masking, overlay, gameplay automation, game memory access, hooking, or injection is introduced.
 - The final response reports changed files, verification commands, assumptions, and limitations.
 
@@ -123,7 +129,7 @@ Do not implement later roadmap phases until this milestone works.
 
 Do not assume administrator privileges unless explicitly required and explained.
 
-Do not introduce UI, overlay, gameplay automation, OCR model, image-processing, or model-inference dependencies during the v0.6 OCR-driven Detection Dry Run milestone. Avoid OpenCV and ONNX for this milestone.
+Do not introduce UI, overlay, gameplay automation, OCR model, image-processing, or model-inference dependencies during the v0.7 Detection Stability Gate milestone. Avoid OpenCV and ONNX for this milestone.
 
 ## Tooling workflow
 
@@ -174,9 +180,10 @@ Follow this order unless the user explicitly changes the roadmap:
 6. OCR text extraction from a configurable screen region.
 7. Speaker detection from OCR text.
 8. OCR-driven detection dry run.
-9. Stable mute/unmute coordination with debounce and recovery.
-10. Minimal UI.
-11. Optional masking.
+9. Detection stability gate.
+10. Stable mute/unmute coordination with debounce and recovery.
+11. Minimal UI.
+12. Optional masking.
 
 Do not implement later-phase functionality prematurely.
 
@@ -196,20 +203,21 @@ Use these module boundaries unless the user asks for a different design:
 - `AudioFilterOptions`: stores mute/reduce-volume behavior and validation rules.
 - `WindowCaptureOptions`: stores target window or screen-region capture settings for debug screenshots.
 
-For v0.6, expected work is limited to:
+For v0.7, expected work is limited to:
 
-- detection loop or dry-run coordinator separate from `MuteCoordinator`
-- dry-run options
-- repeated OCR + speaker matching against a provided image or explicit capture path
-- state-change reporting for matched/not matched transitions
-- basic loop timing options
-- tests for pure timing/options/state-change logic where possible
+- `DetectionStabilityGate` or an equivalent small type
+- `DetectionStabilityOptions` or an equivalent small options type
+- `DetectionStableState`, `DetectionStabilityResult`, or equivalent result/state types
+- consecutive matched-frame threshold before stable target-present state
+- consecutive non-matched-frame threshold before stable target-absent state
+- dry-run loop integration to report raw match result and stable state
+- tests for consecutive match / non-match thresholds and state-change reporting
 
-Do not connect dry-run detection results to `MuteCoordinator` or automatic audio filtering during v0.6.
+Do not connect stable detection results to `MuteCoordinator` or automatic audio filtering during v0.7.
 
 ## Speaker matching rules
 
-For v0.6 dry-run matching:
+For v0.7 stability-gated dry-run matching:
 
 - Trim whitespace.
 - Handle newlines around text.
@@ -217,6 +225,9 @@ For v0.6 dry-run matching:
 - English matching should be case-insensitive.
 - Exact match and simple contains match are allowed.
 - Contains matching is debug-only and must not directly drive automatic audio control.
+- Stable state may be computed from raw match results, but still must not control audio.
+- Default stability thresholds should be conservative, such as 2 or 3 consecutive frames.
+- Stability thresholds may be configurable by CLI, such as `--match-threshold` and `--miss-threshold`.
 - Before auto mute integration, require stricter speaker-label parsing, OCR region confidence, debounce/hysteresis, or an explicit safer match mode.
 - Do not add complex fuzzy matching yet.
 - Avoid false positives.
@@ -262,16 +273,17 @@ Required behavior:
 - Mute/reduce should be idempotent: repeated target detections while already filtered should not spam the audio API or repeatedly reduce volume.
 - Shutdown, cancellation, and unexpected exceptions should attempt safe restore.
 
-For v0.6:
+For v0.7:
 
 - Do not modify `MuteCoordinator`.
 - Do not call `MuteCoordinator` from the dry-run loop.
-- Do not connect dry-run results to audio mute/restore behavior.
+- Do not connect raw or stable dry-run results to audio mute/restore behavior.
 - Do not automatically mute or restore based on OCR output or speaker match output.
 - Existing v0.1 audio, v0.2 configuration, and v0.3 capture behavior must remain stable.
 - Existing v0.4 OCR behavior must remain stable.
 - Existing v0.5 speaker matching behavior must remain stable.
-- Do not add production debounce/hysteresis, automatic audio control, or fuzzy matching yet.
+- Existing v0.6 dry-run behavior must remain stable.
+- Do not add automatic audio control or fuzzy matching yet.
 
 ## Safety rules
 
@@ -293,9 +305,9 @@ For v0.6:
 
 Store user configuration in a local JSON file unless the project already uses another configuration format.
 
-For v0.6:
+For v0.7:
 
-- Local JSON configuration is implemented and may be extended only when needed for dry-run options.
+- Local JSON configuration is implemented and may be extended only when needed for stability-gate options.
 - Do not add a persistent settings UI.
 - Do not store sensitive information.
 - Do not include credentials, cookies, tokens, or game login data.
@@ -312,14 +324,15 @@ Configuration should include at least:
 - `AudioFilter.Mode`
 - `AudioFilter.VolumePercent`
 
-v0.4/v0.5/v0.6 OCR, speaker debug, and dry-run configuration may include:
+v0.4/v0.5/v0.6/v0.7 OCR, speaker debug, dry-run, and stability-gate configuration may include:
 
 - OCR input image path or explicit capture input;
 - OCR region;
 - OCR debug output directory;
 - OCR provider selection, only if a provider is actually introduced;
 - speaker matcher options, only if they are needed for explicit debug behavior;
-- dry-run timing options, only if needed for explicit dry-run behavior.
+- dry-run timing options, only if needed for explicit dry-run behavior;
+- match/miss stability thresholds, only if needed for explicit stability-gate dry-run behavior.
 
 Long-term configuration may later include:
 
@@ -389,11 +402,11 @@ Do not add heavy OCR, image-processing, model-inference, overlay, or UI dependen
 
 Do not replace the project framework or UI stack without explicit approval.
 
-For v0.6:
+For v0.7:
 
 - Use built-in .NET JSON support where practical.
 - Existing NAudio dependency for real Windows audio control may remain.
-- Do not add new dependencies for v0.6 unless strongly justified.
+- Do not add new dependencies for v0.7 unless strongly justified.
 - Prefer an OCR provider abstraction so the engine can be replaced later.
 - Do not add heavy OCR or model dependencies without explaining why.
 - If using Tesseract CLI, do not vendor traineddata files into the repository.
@@ -437,18 +450,20 @@ Use fake implementations for:
 - `IGameWindowCapture`
 - `IOcrService`
 
-For v0.6, prioritize tests for:
+For v0.7, prioritize tests for:
 
-- dry-run options validation;
-- dry-run loop timing validation;
-- state-change reporting logic;
-- repeated OCR + speaker matching orchestration with fake services where practical;
-- command-line parsing for explicit dry-run commands or flags;
+- consecutive matches transitioning from stable NotMatched to stable Matched;
+- a single match not transitioning when match threshold is greater than 1;
+- consecutive misses transitioning from stable Matched to stable NotMatched;
+- same stable state not repeatedly emitting state-changed;
+- stability threshold validation;
+- dry-run loop orchestration with fake OCR/matcher where practical;
+- command-line parsing for explicit stability threshold flags;
 - existing configuration, OCR, speaker matching, and mute/reduce coordination behavior remains unchanged.
 
 Do not write automated tests that require a real game window.
 Do not write automated tests that require a locally installed OCR engine unless the test can skip clearly.
-Manual verification for v0.6 should use explicit dry-run commands with `--speaker-text`, a provided debug image, or an explicit capture path, print OCR/speaker match state changes, and must not modify system audio.
+Manual verification for v0.7 should use explicit dry-run commands with a provided debug image or an explicit capture path, print raw match result and stable match state, and must not modify system audio.
 
 Existing v0.5 speaker matching tests should continue covering:
 
@@ -498,9 +513,9 @@ For early prototypes:
   4. restore audio;
   5. log state changes.
 
-The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, and v0.5 speaker detection prototype are implemented; v0.6 should preserve them while adding explicit OCR-driven detection dry-run logging.
+The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, and v0.6 OCR-driven detection dry-run are implemented; v0.7 should preserve them while adding a stability gate before any audio integration.
 
-Do not add masking, complex UI, persistent settings UI, model inference, speaker recognition from image, production debounce/hysteresis, automatic mute/restore from OCR, `MuteCoordinator` integration, or gameplay automation during v0.6.
+Do not add masking, complex UI, persistent settings UI, model inference, speaker recognition from image, automatic mute/restore from OCR, `MuteCoordinator` integration, or gameplay automation during v0.7.
 
 Do not optimize prematurely.
 
@@ -543,6 +558,9 @@ Log important state transitions:
 - dry-run iteration completed;
 - dry-run state changed;
 - dry-run timing selected;
+- raw match result observed;
+- stability gate threshold selected;
+- stable detection state changed;
 - cancellation requested;
 - shutdown restore attempted.
 
@@ -584,7 +602,7 @@ For meaningful behavior changes, update `README.md` or relevant docs.
 
 For important architectural choices, update `docs/DECISIONS.md`.
 
-For v0.6 implementation tasks, `README.md` should document dry-run commands and `docs/DECISIONS.md` should record that v0.6 observes OCR/matching stability before enabling audio control.
+For v0.7 implementation tasks, `README.md` should document stability-gate dry-run commands and `docs/DECISIONS.md` should record that v0.7 adds detection stability before any audio integration.
 
 Do not add excessive documentation for trivial changes.
 
