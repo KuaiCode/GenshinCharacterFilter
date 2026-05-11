@@ -14,6 +14,7 @@ public sealed class OcrOptionsTests
         Assert.Equal("chi_sim+eng", options.Language);
         Assert.Equal(7, options.PageSegmentationMode);
         Assert.Null(options.InputImagePath);
+        Assert.Null(options.OcrRegion);
     }
 
     [Fact]
@@ -65,6 +66,19 @@ public sealed class OcrOptionsTests
         {
             InputImagePath = input.Path,
             PageSegmentationMode = pageSegmentationMode
+        };
+
+        Assert.Throws<ArgumentOutOfRangeException>(options.Validate);
+    }
+
+    [Fact]
+    public void Validate_RejectsInvalidRegionShape()
+    {
+        using TempFile input = TempFile.Create();
+        OcrOptions options = new()
+        {
+            InputImagePath = input.Path,
+            OcrRegion = new OcrRegion(0, 0, 0, 10)
         };
 
         Assert.Throws<ArgumentOutOfRangeException>(options.Validate);

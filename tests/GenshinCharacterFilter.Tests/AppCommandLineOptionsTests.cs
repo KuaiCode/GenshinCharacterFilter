@@ -1,5 +1,6 @@
 using GenshinCharacterFilter;
 using GenshinCharacterFilter.Audio;
+using GenshinCharacterFilter.Ocr;
 
 namespace GenshinCharacterFilter.Tests;
 
@@ -69,7 +70,17 @@ public sealed class AppCommandLineOptionsTests
         Assert.Equal("chi_sim+eng", options.OcrLanguage);
         Assert.Equal("C:\\Tools\\tesseract.exe", options.TesseractExecutablePath);
         Assert.Equal(7, options.OcrPageSegmentationMode);
+        Assert.Null(options.OcrRegion);
         Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
+    public void Parse_ReadsOcrRegion()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--ocr-once", "--ocr-input", "input.png", "--ocr-region", "50,80,700,120"]);
+
+        Assert.Equal(new OcrRegion(50, 80, 700, 120), options.OcrRegion);
     }
 
     [Fact]
@@ -117,6 +128,7 @@ public sealed class AppCommandLineOptionsTests
     [InlineData("--ocr-lang")]
     [InlineData("--tesseract-path")]
     [InlineData("--ocr-psm")]
+    [InlineData("--ocr-region")]
     public void Parse_RejectsMissingOptionValue(string optionName)
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
@@ -150,6 +162,20 @@ public sealed class AppCommandLineOptionsTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(
             () => AppCommandLineOptions.Parse(["--ocr-psm", pageSegmentationMode]));
+    }
+
+    [Theory]
+    [InlineData("1,2,3")]
+    [InlineData("1,2,3,4,5")]
+    [InlineData("1,two,3,4")]
+    [InlineData("-1,2,3,4")]
+    [InlineData("1,-2,3,4")]
+    [InlineData("1,2,0,4")]
+    [InlineData("1,2,3,0")]
+    public void Parse_RejectsInvalidOcrRegion(string region)
+    {
+        Assert.ThrowsAny<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--ocr-region", region]));
     }
 
     [Theory]

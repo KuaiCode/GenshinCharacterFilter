@@ -64,7 +64,7 @@ The first OCR provider is the external Tesseract CLI. Install Tesseract separate
 
 Whole-image OCR can pick up window menus, status bars, and other UI text. Prefer `--ocr-region <x,y,width,height>` to crop the OCR input to the text area you want to inspect. The region uses image coordinates with `0,0` at the top-left. When a region is supplied, the cropped debug image is saved as `debug-ocr/ocr-input-latest.png`; inspect that file to confirm what is actually sent to OCR.
 
-For the current v0.4 OCR path, prefer a raw cropped image first. If the raw crop already recognizes correctly, do not add `--ocr-grayscale` or `--ocr-threshold`; those steps can remove anti-aliasing or damage small Chinese stroke structure. `--ocr-scale`, `--ocr-grayscale`, and `--ocr-threshold` remain optional debugging tools for later experiments, but they are not the default recommendation. For Chinese-only lines, try `--ocr-lang chi_sim` before `chi_sim+eng`; mixed language mode can make Tesseract prefer English-looking guesses. The final image sent to OCR is written to `debug-ocr/ocr-input-latest.png` whenever region cropping or preprocessing is enabled.
+For the current v0.4 OCR path, prefer a raw cropped image first. Manual testing found that keeping the original cropped image can preserve anti-aliased Chinese strokes better than extra preprocessing. For Chinese-only lines, try `--ocr-lang chi_sim` before `chi_sim+eng`; mixed language mode can make Tesseract prefer English-looking guesses. The final cropped image sent to OCR is written to `debug-ocr/ocr-input-latest.png` whenever `--ocr-region` is enabled.
 
 Manual OCR verification with an existing screenshot:
 
@@ -83,8 +83,6 @@ Recommended Chinese OCR debugging with a raw cropped region:
 ```powershell
 dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --ocr-once --ocr-input debug-captures/capture-latest.png --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
 ```
-
-Only try preprocessing flags such as `--ocr-scale 2`, `--ocr-grayscale`, or `--ocr-threshold 160` after the raw crop fails, and compare `debug-ocr/ocr-input-latest.png` before trusting the OCR result.
 
 If Tesseract is not installed or the requested language data is missing, the app reports a clear OCR error. No screenshots are sent to cloud OCR services.
 
@@ -150,9 +148,6 @@ Supported overrides:
 - `--tesseract-path <path>`
 - `--ocr-psm <number>`
 - `--ocr-region <x,y,width,height>`
-- `--ocr-scale <number>`
-- `--ocr-grayscale`
-- `--ocr-threshold <0-255>`
 
 `--real-audio` only enables real audio. To keep real audio disabled, omit `--real-audio` and set `RealAudioEnabled` to `false` in config or use the safe defaults.
 
@@ -182,7 +177,7 @@ Real mode uses Windows Core Audio sessions through `WindowsAudioMuteService`. It
 - Run `--capture-once` against Notepad and confirm a full-window debug screenshot is written without enabling real audio. If activation is blocked, manually put Notepad in front and rerun the command.
 - Run `--ocr-once` against an existing screenshot and confirm raw OCR text is printed without enabling real audio.
 - Run `--ocr-once --ocr-region <x,y,width,height>` and confirm `debug-ocr/ocr-input-latest.png` contains only the intended OCR input region.
-- For Chinese small text, first verify the raw cropped input in `debug-ocr/ocr-input-latest.png`; only try scale, grayscale, or threshold preprocessing if the raw crop fails.
+- For Chinese small text, first verify the raw cropped input in `debug-ocr/ocr-input-latest.png`; v0.4.1 does not apply scale, grayscale, or threshold preprocessing.
 
 ## Dependency Policy
 

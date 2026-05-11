@@ -37,6 +37,11 @@ public sealed class OcrOptions
     public string? InputImagePath { get; set; }
 
     /// <summary>
+    /// Gets or sets an optional region in input image coordinates.
+    /// </summary>
+    public OcrRegion? OcrRegion { get; set; }
+
+    /// <summary>
     /// Validates options before invoking OCR.
     /// </summary>
     public void Validate()
@@ -72,6 +77,8 @@ public sealed class OcrOptions
         {
             throw new FileNotFoundException($"OCR input image was not found: {InputImagePath}", InputImagePath);
         }
+
+        OcrRegion?.ValidateShape();
     }
 
     /// <summary>

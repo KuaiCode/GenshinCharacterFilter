@@ -38,6 +38,8 @@ public sealed class AppCommandLineOptions
 
     public int OcrPageSegmentationMode { get; private init; } = OcrOptions.DefaultPageSegmentationMode;
 
+    public OcrRegion? OcrRegion { get; private init; }
+
     /// <summary>
     /// Parses command-line arguments into application options.
     /// </summary>
@@ -88,6 +90,7 @@ public sealed class AppCommandLineOptions
         string? ocrLanguage = GetOptionValue(arguments, "--ocr-lang");
         string? tesseractExecutablePath = GetOptionValue(arguments, "--tesseract-path");
         string? ocrPsmValue = GetOptionValue(arguments, "--ocr-psm");
+        string? ocrRegionValue = GetOptionValue(arguments, "--ocr-region");
         int ocrPageSegmentationMode = OcrOptions.DefaultPageSegmentationMode;
         if (ocrPsmValue is not null &&
             !int.TryParse(ocrPsmValue, out ocrPageSegmentationMode))
@@ -101,6 +104,10 @@ public sealed class AppCommandLineOptions
                 nameof(arguments),
                 $"OCR page segmentation mode must be between {OcrOptions.MinPageSegmentationMode} and {OcrOptions.MaxPageSegmentationMode}.");
         }
+
+        OcrRegion? ocrRegion = ocrRegionValue is null
+            ? null
+            : GenshinCharacterFilter.Ocr.OcrRegion.Parse(ocrRegionValue);
 
         return new AppCommandLineOptions
         {
@@ -116,6 +123,7 @@ public sealed class AppCommandLineOptions
             OcrLanguage = ocrLanguage ?? OcrOptions.DefaultLanguage,
             TesseractExecutablePath = tesseractExecutablePath ?? OcrOptions.DefaultTesseractExecutablePath,
             OcrPageSegmentationMode = ocrPageSegmentationMode,
+            OcrRegion = ocrRegion,
             _realAudioSpecified = HasFlag(arguments, "--real-audio"),
             _targetProcessSpecified = processName is not null,
             _audioModeSpecified = audioModeSpecified,

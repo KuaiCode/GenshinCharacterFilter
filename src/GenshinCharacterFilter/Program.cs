@@ -116,17 +116,38 @@ static async Task OcrOnceAsync(AppCommandLineOptions commandLineOptions)
         InputImagePath = commandLineOptions.OcrInputPath,
         Language = commandLineOptions.OcrLanguage,
         TesseractExecutablePath = commandLineOptions.TesseractExecutablePath,
-        PageSegmentationMode = commandLineOptions.OcrPageSegmentationMode
+        PageSegmentationMode = commandLineOptions.OcrPageSegmentationMode,
+        OcrRegion = commandLineOptions.OcrRegion
     };
 
+    OcrInputPreparer inputPreparer = new();
     IOcrService ocrService = new TesseractCliOcrService();
     Console.WriteLine("OCR mode; this run does not control real system audio.");
     Console.WriteLine($"OCR input: {ocrOptions.InputImagePath}");
     Console.WriteLine($"OCR language: {ocrOptions.Language}, psm: {ocrOptions.PageSegmentationMode}");
+    if (ocrOptions.OcrRegion is not null)
+    {
+        Console.WriteLine($"OCR region: {ocrOptions.OcrRegion}");
+    }
 
     try
     {
-        OcrResult result = await ocrService.ExtractTextAsync(ocrOptions, CancellationToken.None);
+        string preparedInputPath = inputPreparer.PrepareInput(ocrOptions);
+        if (!string.Equals(Path.GetFullPath(ocrOptions.InputImagePath!), preparedInputPath, StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine($"OCR debug input image: {preparedInputPath}");
+        }
+
+        OcrOptions preparedOptions = new()
+        {
+            OcrEngine = ocrOptions.OcrEngine,
+            TesseractExecutablePath = ocrOptions.TesseractExecutablePath,
+            Language = ocrOptions.Language,
+            PageSegmentationMode = ocrOptions.PageSegmentationMode,
+            InputImagePath = preparedInputPath
+        };
+
+        OcrResult result = await ocrService.ExtractTextAsync(preparedOptions, CancellationToken.None);
         Console.WriteLine($"OCR engine: {result.EngineName}");
         Console.WriteLine($"OCR input path: {result.InputImagePath}");
         Console.WriteLine("OCR raw text:");
