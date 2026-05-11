@@ -20,9 +20,9 @@ The agent should prioritize:
 
 ## Current milestone
 
-The current milestone is **v0.5 Speaker Detection from OCR Text Prototype**.
+The current milestone is **v0.6 OCR-driven Detection Dry Run**.
 
-The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, and **v0.4 OCR Text Extraction Prototype** are considered implemented and manually verified:
+The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, and **v0.5 Speaker Detection from OCR Text Prototype** are considered implemented and manually verified:
 
 - simulated speaker input works;
 - mute coordination works;
@@ -43,24 +43,29 @@ The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Windo
 - `--ocr-region` can crop the target OCR area before invoking OCR;
 - `debug-ocr/ocr-input-latest.png` can save the actual cropped image passed to OCR;
 - raw cropped image OCR works better than scale/grayscale/threshold preprocessing for the current manual sample;
+- `SpeakerMatcher` is implemented independently;
+- `--detect-speaker-once` works;
+- `--speaker-text "流浪者："` and `--speaker-text "流浪者:"` both match;
+- OCR + speaker detection debug path works;
+- contains matching is documented as debug-only and must not directly drive audio control;
 - default execution still does not screenshot or control real audio;
 - OCR output is not connected to `MuteCoordinator` or automatic audio control;
 - default target speakers are `流浪者` and `Wanderer`.
 
-Scope for v0.5:
+Scope for v0.6:
 
 - Console app only.
-- Accept OCR raw text or provided text input.
-- Normalize OCR text.
-- Match normalized text against configured target speakers.
-- Print matched/not matched debug result.
-- Support manual debug input such as `--speaker-text`.
-- Support OCR + speaker detection debug path.
-- Do not automatically mute based on OCR.
-- Do not connect speaker detection to `MuteCoordinator` yet.
+- Explicit dry-run mode only.
+- Repeatedly capture/OCR/match or repeatedly OCR a provided image.
+- Print detected OCR raw text, normalized text, matched/not matched, matched speaker, and state changes.
+- Add basic loop timing options.
+- Do not control real audio.
+- Do not call `MuteCoordinator` yet.
+- Do not automatically mute.
 - Default run must remain safe.
 - Existing v0.1 audio, v0.2 configuration, and v0.3 capture behavior must remain stable.
 - Existing v0.4 OCR behavior must remain stable.
+- Existing v0.5 speaker matching behavior must remain stable.
 - .NET 8.
 - Windows x64.
 - VS Code / Codex / Visual Studio friendly workflow.
@@ -69,7 +74,9 @@ Out of scope for the current milestone:
 
 - Automatic mute/restore based on OCR.
 - `MuteCoordinator` integration.
-- OCR jitter debounce/hysteresis.
+- Real audio mute/restore based on OCR.
+- Production debounce/hysteresis.
+- Background capture.
 - Fuzzy matching unless explicitly requested.
 - Speaker recognition from image.
 - WPF.
@@ -90,10 +97,11 @@ Done when:
 - `dotnet build` passes.
 - If tests exist, `dotnet test` passes.
 - Speaker detection mode is explicit and does not run during default startup.
-- The app can match raw OCR text or manually supplied text against configured target speakers.
-- The app prints normalized text and matched/not matched debug output.
-- OCR + speaker detection verification does not control real system audio.
-- Speaker match results are not connected to `MuteCoordinator` or automatic mute/restore behavior.
+- Dry-run mode is explicit and does not run during default startup.
+- The app can repeatedly run OCR + speaker matching against a provided image or explicit capture path.
+- The app prints OCR raw text, normalized text, matched/not matched, matched speaker, and state changes.
+- Dry-run verification does not control real system audio.
+- Dry-run state changes are not connected to `MuteCoordinator` or automatic mute/restore behavior.
 - No fuzzy matching, GUI, masking, overlay, gameplay automation, game memory access, hooking, or injection is introduced.
 - The final response reports changed files, verification commands, assumptions, and limitations.
 
@@ -115,7 +123,7 @@ Do not implement later roadmap phases until this milestone works.
 
 Do not assume administrator privileges unless explicitly required and explained.
 
-Do not introduce UI, overlay, gameplay automation, OCR model, image-processing, or model-inference dependencies during the v0.5 Speaker Detection from OCR Text Prototype milestone. Avoid OpenCV and ONNX for this milestone.
+Do not introduce UI, overlay, gameplay automation, OCR model, image-processing, or model-inference dependencies during the v0.6 OCR-driven Detection Dry Run milestone. Avoid OpenCV and ONNX for this milestone.
 
 ## Tooling workflow
 
@@ -165,9 +173,10 @@ Follow this order unless the user explicitly changes the roadmap:
 5. Window capture prototype.
 6. OCR text extraction from a configurable screen region.
 7. Speaker detection from OCR text.
-8. Stable mute/unmute coordination with debounce and recovery.
-9. Minimal UI.
-10. Optional masking.
+8. OCR-driven detection dry run.
+9. Stable mute/unmute coordination with debounce and recovery.
+10. Minimal UI.
+11. Optional masking.
 
 Do not implement later-phase functionality prematurely.
 
@@ -187,29 +196,27 @@ Use these module boundaries unless the user asks for a different design:
 - `AudioFilterOptions`: stores mute/reduce-volume behavior and validation rules.
 - `WindowCaptureOptions`: stores target window or screen-region capture settings for debug screenshots.
 
-For v0.5, expected work is limited to:
+For v0.6, expected work is limited to:
 
-- `ISpeakerMatcher`
-- `SpeakerMatcher`
-- `SpeakerMatchResult`
-- `SpeakerMatcherOptions` or an equivalent small options type
-- explicit speaker detection debug command or branch
-- manual text input such as `--speaker-text`
-- OCR + speaker detection debug path
-- tests for normalization and matching
+- detection loop or dry-run coordinator separate from `MuteCoordinator`
+- dry-run options
+- repeated OCR + speaker matching against a provided image or explicit capture path
+- state-change reporting for matched/not matched transitions
+- basic loop timing options
+- tests for pure timing/options/state-change logic where possible
 
-Do not connect speaker match results to `MuteCoordinator` or automatic audio filtering during v0.5.
+Do not connect dry-run detection results to `MuteCoordinator` or automatic audio filtering during v0.6.
 
 ## Speaker matching rules
 
-For v0.5:
+For v0.6 dry-run matching:
 
 - Trim whitespace.
 - Handle newlines around text.
 - Ignore common trailing speaker punctuation such as `:` and `：`.
 - English matching should be case-insensitive.
 - Exact match and simple contains match are allowed.
-- Contains matching is debug-only in v0.5 and must not directly drive automatic audio control.
+- Contains matching is debug-only and must not directly drive automatic audio control.
 - Before auto mute integration, require stricter speaker-label parsing, OCR region confidence, debounce/hysteresis, or an explicit safer match mode.
 - Do not add complex fuzzy matching yet.
 - Avoid false positives.
@@ -255,14 +262,16 @@ Required behavior:
 - Mute/reduce should be idempotent: repeated target detections while already filtered should not spam the audio API or repeatedly reduce volume.
 - Shutdown, cancellation, and unexpected exceptions should attempt safe restore.
 
-For v0.5:
+For v0.6:
 
 - Do not modify `MuteCoordinator`.
-- Do not connect speaker match results to `MuteCoordinator`.
+- Do not call `MuteCoordinator` from the dry-run loop.
+- Do not connect dry-run results to audio mute/restore behavior.
 - Do not automatically mute or restore based on OCR output or speaker match output.
 - Existing v0.1 audio, v0.2 configuration, and v0.3 capture behavior must remain stable.
 - Existing v0.4 OCR behavior must remain stable.
-- Do not add OCR-specific debounce logic, hysteresis, or fuzzy matching yet.
+- Existing v0.5 speaker matching behavior must remain stable.
+- Do not add production debounce/hysteresis, automatic audio control, or fuzzy matching yet.
 
 ## Safety rules
 
@@ -284,9 +293,9 @@ For v0.5:
 
 Store user configuration in a local JSON file unless the project already uses another configuration format.
 
-For v0.5:
+For v0.6:
 
-- Local JSON configuration is implemented and may be extended only when needed for speaker matching options.
+- Local JSON configuration is implemented and may be extended only when needed for dry-run options.
 - Do not add a persistent settings UI.
 - Do not store sensitive information.
 - Do not include credentials, cookies, tokens, or game login data.
@@ -303,13 +312,14 @@ Configuration should include at least:
 - `AudioFilter.Mode`
 - `AudioFilter.VolumePercent`
 
-v0.4/v0.5 OCR and speaker debug configuration may include:
+v0.4/v0.5/v0.6 OCR, speaker debug, and dry-run configuration may include:
 
 - OCR input image path or explicit capture input;
 - OCR region;
 - OCR debug output directory;
 - OCR provider selection, only if a provider is actually introduced;
-- speaker matcher options, only if they are needed for explicit debug behavior.
+- speaker matcher options, only if they are needed for explicit debug behavior;
+- dry-run timing options, only if needed for explicit dry-run behavior.
 
 Long-term configuration may later include:
 
@@ -379,11 +389,11 @@ Do not add heavy OCR, image-processing, model-inference, overlay, or UI dependen
 
 Do not replace the project framework or UI stack without explicit approval.
 
-For v0.5:
+For v0.6:
 
 - Use built-in .NET JSON support where practical.
 - Existing NAudio dependency for real Windows audio control may remain.
-- Do not add new dependencies for v0.5 unless strongly justified.
+- Do not add new dependencies for v0.6 unless strongly justified.
 - Prefer an OCR provider abstraction so the engine can be replaced later.
 - Do not add heavy OCR or model dependencies without explaining why.
 - If using Tesseract CLI, do not vendor traineddata files into the repository.
@@ -427,21 +437,20 @@ Use fake implementations for:
 - `IGameWindowCapture`
 - `IOcrService`
 
-For v0.5, prioritize tests for:
+For v0.6, prioritize tests for:
 
-- speaker matcher normalization;
-- speaker matcher exact and contains matching;
-- command-line parsing for explicit speaker detection commands or flags;
-- `--detect-speaker-once`;
-- `--speaker-text` and missing value errors;
-- OCR + speaker detection debug command parsing where practical;
-- existing configuration and mute/reduce coordination behavior remains unchanged.
+- dry-run options validation;
+- dry-run loop timing validation;
+- state-change reporting logic;
+- repeated OCR + speaker matching orchestration with fake services where practical;
+- command-line parsing for explicit dry-run commands or flags;
+- existing configuration, OCR, speaker matching, and mute/reduce coordination behavior remains unchanged.
 
 Do not write automated tests that require a real game window.
 Do not write automated tests that require a locally installed OCR engine unless the test can skip clearly.
-Manual verification for v0.5 should use `--speaker-text` or a Notepad screenshot/debug image, print speaker match debug output, and must not modify system audio.
+Manual verification for v0.6 should use explicit dry-run commands with `--speaker-text`, a provided debug image, or an explicit capture path, print OCR/speaker match state changes, and must not modify system audio.
 
-For v0.5 speaker matching, test at least:
+Existing v0.5 speaker matching tests should continue covering:
 
 - matching `流浪者`;
 - matching `流浪者：`;
@@ -489,9 +498,9 @@ For early prototypes:
   4. restore audio;
   5. log state changes.
 
-The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, and v0.4 OCR text extraction prototype are implemented; v0.5 should preserve them while adding explicit speaker matching from OCR raw text or manual text.
+The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, and v0.5 speaker detection prototype are implemented; v0.6 should preserve them while adding explicit OCR-driven detection dry-run logging.
 
-Do not add masking, complex UI, persistent settings UI, model inference, speaker recognition from image, fuzzy matching, OCR debounce/hysteresis, automatic mute/restore from OCR, or gameplay automation during v0.5.
+Do not add masking, complex UI, persistent settings UI, model inference, speaker recognition from image, production debounce/hysteresis, automatic mute/restore from OCR, `MuteCoordinator` integration, or gameplay automation during v0.6.
 
 Do not optimize prematurely.
 
@@ -529,6 +538,11 @@ Log important state transitions:
 - speaker text selected;
 - speaker text normalized;
 - speaker match result;
+- dry-run command requested;
+- dry-run iteration started;
+- dry-run iteration completed;
+- dry-run state changed;
+- dry-run timing selected;
 - cancellation requested;
 - shutdown restore attempted.
 
@@ -570,7 +584,7 @@ For meaningful behavior changes, update `README.md` or relevant docs.
 
 For important architectural choices, update `docs/DECISIONS.md`.
 
-For v0.5 implementation tasks, `README.md` should document speaker detection debug commands and `docs/DECISIONS.md` should record that matching is simple rule-based and not connected to automatic mute yet.
+For v0.6 implementation tasks, `README.md` should document dry-run commands and `docs/DECISIONS.md` should record that v0.6 observes OCR/matching stability before enabling audio control.
 
 Do not add excessive documentation for trivial changes.
 
