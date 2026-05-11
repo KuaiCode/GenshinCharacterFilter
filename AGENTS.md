@@ -209,6 +209,8 @@ For v0.5:
 - Ignore common trailing speaker punctuation such as `:` and `：`.
 - English matching should be case-insensitive.
 - Exact match and simple contains match are allowed.
+- Contains matching is debug-only in v0.5 and must not directly drive automatic audio control.
+- Before auto mute integration, require stricter speaker-label parsing, OCR region confidence, debounce/hysteresis, or an explicit safer match mode.
 - Do not add complex fuzzy matching yet.
 - Avoid false positives.
 

@@ -140,6 +140,8 @@ Reasoning:
 
 - v0.5 needs to verify whether OCR raw text can identify a configured target speaker before any automatic audio behavior is considered.
 - Matching is limited to normalization, exact matching, and simple contains matching to reduce false positives.
+- Contains matching is allowed only for debug output in v0.5 and must not directly drive automatic mute/restore.
+- Before auto mute integration, matching must be gated by stricter speaker-label parsing, OCR region confidence, debounce/hysteresis, or an explicit safer match mode.
 - Complex fuzzy matching, OCR jitter debounce, and hysteresis are deferred because they can create accidental mute triggers.
 - Speaker match results are printed for manual debugging only and are not connected to `MuteCoordinator`.
 - The behavior does not add GUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, input automation, or automatic audio control.

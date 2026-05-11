@@ -28,6 +28,16 @@ public sealed class SpeakerMatcherTests
     }
 
     [Fact]
+    public void Match_MatchesChineseTargetSpeakerWithAsciiColon()
+    {
+        SpeakerMatchResult result = Match($"{WandererChinese}:");
+
+        Assert.True(result.Matched);
+        Assert.Equal(WandererChinese, result.MatchedSpeaker);
+        Assert.Equal(WandererChinese, result.NormalizedText);
+    }
+
+    [Fact]
     public void Match_MatchesChineseTargetSpeakerWrappedInWhitespaceAndNewlines()
     {
         SpeakerMatchResult result = Match($" \r\n\t{WandererChinese}\n ");
@@ -48,7 +58,7 @@ public sealed class SpeakerMatcherTests
     }
 
     [Fact]
-    public void Match_MatchesTextContainingTargetSpeaker()
+    public void Match_MatchesTextContainingTargetSpeakerForDebugOnly()
     {
         SpeakerMatchResult result = Match($"\u5F53\u524D\u8BF4\u8BDD\u4EBA\uFF1A{WandererChinese}");
 
