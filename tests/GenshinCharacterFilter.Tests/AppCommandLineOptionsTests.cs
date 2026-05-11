@@ -108,6 +108,50 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
+    public void Parse_ReadsDetectLoopWithFixedImageInput()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--detect-loop", "--ocr-input", "input.png", "--ocr-region", "10,20,30,40"]);
+
+        Assert.True(options.DetectLoop);
+        Assert.Equal("input.png", options.OcrInputPath);
+        Assert.Equal(new OcrRegion(10, 20, 30, 40), options.OcrRegion);
+        Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
+    public void Parse_ReadsDetectLoopWithProcessInput()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--detect-loop", "--process", "notepad", "--ocr-region", "10,20,30,40"]);
+
+        Assert.True(options.DetectLoop);
+        Assert.Equal("notepad", options.TargetProcessName);
+        Assert.Equal(new OcrRegion(10, 20, 30, 40), options.OcrRegion);
+        Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
+    public void Parse_ReadsLoopIntervalMs()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--detect-loop", "--ocr-input", "input.png", "--loop-interval-ms", "500"]);
+
+        Assert.True(options.DetectLoop);
+        Assert.Equal(500, options.LoopIntervalMs);
+    }
+
+    [Fact]
+    public void Parse_ReadsLoopCount()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--detect-loop", "--ocr-input", "input.png", "--loop-count", "5"]);
+
+        Assert.True(options.DetectLoop);
+        Assert.Equal(5, options.LoopCount);
+    }
+
+    [Fact]
     public void Parse_OcrOnceRequiresInput()
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
@@ -163,6 +207,8 @@ public sealed class AppCommandLineOptionsTests
     [InlineData("--ocr-psm")]
     [InlineData("--ocr-region")]
     [InlineData("--speaker-text")]
+    [InlineData("--loop-interval-ms")]
+    [InlineData("--loop-count")]
     public void Parse_RejectsMissingOptionValue(string optionName)
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
@@ -187,6 +233,61 @@ public sealed class AppCommandLineOptionsTests
             () => AppCommandLineOptions.Parse(["--ocr-psm", "abc"]));
 
         Assert.Contains("OCR page segmentation", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_RejectsNonNumericLoopInterval()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--loop-interval-ms", "abc"]));
+
+        Assert.Contains("Loop interval", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("99")]
+    [InlineData("10001")]
+    public void Parse_RejectsLoopIntervalOutsideRange(string loopIntervalMs)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => AppCommandLineOptions.Parse(["--loop-interval-ms", loopIntervalMs]));
+    }
+
+    [Fact]
+    public void Parse_RejectsNonNumericLoopCount()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--loop-count", "abc"]));
+
+        Assert.Contains("Loop count", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    public void Parse_RejectsLoopCountOutsideRange(string loopCount)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => AppCommandLineOptions.Parse(["--loop-count", loopCount]));
+    }
+
+    [Fact]
+    public void Parse_DetectLoopRequiresInputImageOrProcess()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--detect-loop"]));
+
+        Assert.Contains("--ocr-input", exception.Message);
+        Assert.Contains("--process", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_DetectLoopProcessModeRequiresOcrRegion()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--detect-loop", "--process", "notepad"]));
+
+        Assert.Contains("--ocr-region", exception.Message);
     }
 
     [Theory]

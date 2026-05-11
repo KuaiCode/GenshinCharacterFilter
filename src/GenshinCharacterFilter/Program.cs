@@ -2,6 +2,7 @@ using GenshinCharacterFilter;
 using GenshinCharacterFilter.Audio;
 using GenshinCharacterFilter.Capture;
 using GenshinCharacterFilter.Coordination;
+using GenshinCharacterFilter.Detection;
 using GenshinCharacterFilter.Ocr;
 using GenshinCharacterFilter.Speakers;
 
@@ -21,6 +22,12 @@ try
 catch (Exception exception) when (exception is AppSettingsException or ArgumentException)
 {
     Console.Error.WriteLine($"Configuration error: {exception.Message}");
+    return;
+}
+
+if (commandLineOptions.DetectLoop)
+{
+    await DetectLoopAsync(settings, commandLineOptions);
     return;
 }
 
@@ -56,7 +63,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.5 Speaker Detection from OCR Text Prototype");
+Console.WriteLine("GenshinCharacterFilter v0.6 OCR-driven Detection Dry Run");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");
@@ -164,6 +171,63 @@ static async Task DetectSpeakerOnceAsync(AppSettings settings, AppCommandLineOpt
     catch (Exception exception) when (exception is OcrException or ArgumentException or FileNotFoundException)
     {
         Console.Error.WriteLine($"Speaker detection error: {exception.Message}");
+    }
+}
+
+static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions commandLineOptions)
+{
+    Console.WriteLine("OCR-driven detection dry-run mode; this run does not control real system audio.");
+    Console.WriteLine("Dry-run output is not connected to MuteCoordinator or automatic mute/restore.");
+
+    using CancellationTokenSource cancellation = new();
+    ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
+    {
+        eventArgs.Cancel = true;
+        cancellation.Cancel();
+        Console.WriteLine("Cancellation requested; stopping dry-run loop.");
+    };
+    Console.CancelKeyPress += cancelHandler;
+
+    try
+    {
+        DetectionDryRunOptions dryRunOptions = new()
+        {
+            OcrInputPath = commandLineOptions.OcrInputPath,
+            TargetProcessName = settings.TargetProcessName,
+            OcrRegion = commandLineOptions.OcrRegion,
+            OcrLanguage = commandLineOptions.OcrLanguage,
+            TesseractExecutablePath = commandLineOptions.TesseractExecutablePath,
+            OcrPageSegmentationMode = commandLineOptions.OcrPageSegmentationMode,
+            TargetSpeakers = settings.TargetSpeakers,
+            LoopIntervalMs = commandLineOptions.LoopIntervalMs,
+            LoopCount = commandLineOptions.LoopCount,
+            CaptureOutputDirectory = commandLineOptions.CaptureOutputDirectory,
+            CaptureDelayMs = commandLineOptions.CaptureDelayMs
+        };
+
+        Console.WriteLine($"Loop interval: {dryRunOptions.LoopIntervalMs} ms");
+        Console.WriteLine($"Loop count: {(dryRunOptions.LoopCount?.ToString() ?? "until Ctrl+C")}");
+
+        DetectionDryRunLoop loop = new(
+            new TesseractCliOcrService(),
+            new SpeakerMatcher(),
+            new WindowsGameWindowCapture(Console.Out),
+            new OcrInputPreparer(),
+            Console.Out);
+
+        await loop.RunAsync(dryRunOptions, cancellation.Token);
+    }
+    catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+    {
+        Console.WriteLine("Detect loop stopped.");
+    }
+    catch (Exception exception) when (exception is OcrException or WindowCaptureException or ArgumentException or FileNotFoundException or PlatformNotSupportedException)
+    {
+        Console.Error.WriteLine($"Detect loop error: {exception.Message}");
+    }
+    finally
+    {
+        Console.CancelKeyPress -= cancelHandler;
     }
 }
 

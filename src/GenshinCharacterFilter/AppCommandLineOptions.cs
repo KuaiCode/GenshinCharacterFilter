@@ -1,5 +1,6 @@
 using GenshinCharacterFilter.Audio;
 using GenshinCharacterFilter.Capture;
+using GenshinCharacterFilter.Detection;
 using GenshinCharacterFilter.Ocr;
 
 namespace GenshinCharacterFilter;
@@ -24,6 +25,8 @@ public sealed class AppCommandLineOptions
 
     public bool DetectSpeakerOnce { get; private init; }
 
+    public bool DetectLoop { get; private init; }
+
     public string TargetProcessName { get; private init; } = "GenshinImpact";
 
     public AudioFilterOptions AudioFilter { get; private init; } = new();
@@ -43,6 +46,10 @@ public sealed class AppCommandLineOptions
     public OcrRegion? OcrRegion { get; private init; }
 
     public string? SpeakerText { get; private init; }
+
+    public int LoopIntervalMs { get; private init; } = DetectionDryRunOptions.DefaultLoopIntervalMs;
+
+    public int? LoopCount { get; private init; }
 
     /// <summary>
     /// Parses command-line arguments into application options.
@@ -86,6 +93,7 @@ public sealed class AppCommandLineOptions
 
         bool ocrOnce = HasFlag(arguments, "--ocr-once");
         bool detectSpeakerOnce = HasFlag(arguments, "--detect-speaker-once");
+        bool detectLoop = HasFlag(arguments, "--detect-loop");
         string? ocrInputPath = GetOptionValue(arguments, "--ocr-input");
         if (ocrOnce && ocrInputPath is null)
         {
@@ -120,6 +128,40 @@ public sealed class AppCommandLineOptions
             ? null
             : GenshinCharacterFilter.Ocr.OcrRegion.Parse(ocrRegionValue);
 
+        string? loopIntervalValue = GetOptionValue(arguments, "--loop-interval-ms");
+        int loopIntervalMs = DetectionDryRunOptions.DefaultLoopIntervalMs;
+        if (loopIntervalValue is not null &&
+            !int.TryParse(loopIntervalValue, out loopIntervalMs))
+        {
+            throw new ArgumentException("Loop interval ms must be a number.", nameof(arguments));
+        }
+
+        DetectionDryRunOptions.ValidateLoopIntervalMs(loopIntervalMs);
+
+        string? loopCountValue = GetOptionValue(arguments, "--loop-count");
+        int? loopCount = null;
+        if (loopCountValue is not null)
+        {
+            if (!int.TryParse(loopCountValue, out int parsedLoopCount))
+            {
+                throw new ArgumentException("Loop count must be a number.", nameof(arguments));
+            }
+
+            loopCount = parsedLoopCount;
+        }
+
+        DetectionDryRunOptions.ValidateLoopCount(loopCount);
+
+        if (detectLoop && ocrInputPath is null && processName is null)
+        {
+            throw new ArgumentException("--detect-loop requires --ocr-input <imagePath> or --process <name>.", nameof(arguments));
+        }
+
+        if (detectLoop && ocrInputPath is null && processName is not null && ocrRegion is null)
+        {
+            throw new ArgumentException("--detect-loop process mode requires --ocr-region <x,y,width,height>.", nameof(arguments));
+        }
+
         return new AppCommandLineOptions
         {
             ConfigPath = GetOptionValue(arguments, "--config"),
@@ -127,6 +169,7 @@ public sealed class AppCommandLineOptions
             CaptureOnce = HasFlag(arguments, "--capture-once"),
             OcrOnce = ocrOnce,
             DetectSpeakerOnce = detectSpeakerOnce,
+            DetectLoop = detectLoop,
             TargetProcessName = processName ?? "GenshinImpact",
             AudioFilter = audioFilterOptions,
             CaptureOutputDirectory = captureOutputDirectory ?? WindowCaptureOptions.DefaultOutputDirectory,
@@ -137,6 +180,8 @@ public sealed class AppCommandLineOptions
             OcrPageSegmentationMode = ocrPageSegmentationMode,
             OcrRegion = ocrRegion,
             SpeakerText = speakerText,
+            LoopIntervalMs = loopIntervalMs,
+            LoopCount = loopCount,
             _realAudioSpecified = HasFlag(arguments, "--real-audio"),
             _targetProcessSpecified = processName is not null,
             _audioModeSpecified = audioModeSpecified,

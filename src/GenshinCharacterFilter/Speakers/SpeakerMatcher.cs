@@ -1,7 +1,7 @@
 namespace GenshinCharacterFilter.Speakers;
 
 /// <summary>
-/// Performs simple rule-based speaker matching for v0.5 debug flows.
+/// Performs simple rule-based speaker matching for debug and dry-run flows.
 /// </summary>
 public sealed class SpeakerMatcher : ISpeakerMatcher
 {

@@ -145,3 +145,16 @@ Reasoning:
 - Complex fuzzy matching, OCR jitter debounce, and hysteresis are deferred because they can create accidental mute triggers.
 - Speaker match results are printed for manual debugging only and are not connected to `MuteCoordinator`.
 - The behavior does not add GUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, input automation, or automatic audio control.
+
+## 2026-05-11: v0.6 OCR-driven Detection Dry Run
+
+Decision: add an explicit dry-run loop that repeatedly runs OCR plus speaker matching and prints state changes without controlling audio.
+
+Reasoning:
+
+- v0.6 needs to observe OCR and speaker matching stability over repeated iterations before any automatic audio behavior is considered.
+- The loop can OCR a fixed image or capture a target window before OCR, but it remains an explicit `--detect-loop` debug mode.
+- Dry-run output includes raw OCR text, normalized text, matched/not matched, matched speaker, and matched-state changes.
+- Dry-run results are not passed to `MuteCoordinator` and do not create or call real audio services.
+- Contains matching remains debug-only; before audio integration the project must add debounce/hysteresis or stricter speaker-label parsing to reduce false positives from OCR noise.
+- The behavior does not add GUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, input automation, or automatic audio control.

@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.5 Speaker Detection from OCR Text Prototype**.
+Current milestone: **v0.6 OCR-driven Detection Dry Run**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, and v0.4 OCR Text Extraction Prototype are implemented. v0.5 adds explicit speaker detection debug output while preserving the safe default simulated run.
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, and v0.5 Speaker Detection from OCR Text Prototype are implemented. v0.6 adds an explicit OCR-driven detection dry-run loop while preserving the safe default simulated run.
 
 ## Current Scope
 
@@ -17,8 +17,9 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Explicit one-shot debug screenshot capture.
 - Explicit one-shot OCR raw text extraction from a local image.
 - Explicit one-shot speaker detection from manual text or OCR raw text.
+- Explicit OCR-driven detection dry-run loop for observing OCR and matching stability.
 
-Out of scope: automatic mute/restore based on OCR, connecting speaker detection to `MuteCoordinator`, OCR jitter debounce/hysteresis, fuzzy matching, speaker recognition from image, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
+Out of scope: automatic mute/restore based on OCR, connecting speaker detection to `MuteCoordinator`, production OCR jitter debounce/hysteresis, fuzzy matching, speaker recognition from image, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
 
 ## Commands
 
@@ -107,6 +108,24 @@ The output includes raw text, normalized text, whether a target speaker matched,
 
 Contains matching is debug-only in v0.5. A matched result does not automatically mute and must not be wired directly into automatic audio control. Before any auto-mute integration, the project needs stricter speaker-label parsing, OCR region confidence, debounce/hysteresis, or a gated match mode to avoid false positives from noisy OCR text.
 
+## OCR-driven Detection Dry Run
+
+Dry-run mode only runs when `--detect-loop` is supplied. It repeatedly runs OCR plus speaker matching, prints each iteration, and logs matched/not-matched state changes. It does not control real system audio, does not create a real audio service, and does not call `MuteCoordinator`.
+
+Fixed image dry run:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --detect-loop --ocr-input debug-captures/capture-latest.png --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --loop-count 5 --loop-interval-ms 500 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
+```
+
+Window capture dry run:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --detect-loop --process notepad --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --loop-count 5 --loop-interval-ms 500 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
+```
+
+Use `--loop-interval-ms <number>` to control timing. The allowed range is 100 to 10000 ms. Use `--loop-count <number>` to run a fixed number of iterations; omit it to run until Ctrl+C. Process capture mode requires `--ocr-region` so the loop observes the intended text area instead of full-window UI noise.
+
 ## Configuration File
 
 Use the included safe example:
@@ -171,6 +190,9 @@ Supported overrides:
 - `--ocr-region <x,y,width,height>`
 - `--detect-speaker-once`
 - `--speaker-text <text>`
+- `--detect-loop`
+- `--loop-interval-ms <number>`
+- `--loop-count <number>`
 
 `--real-audio` only enables real audio. To keep real audio disabled, omit `--real-audio` and set `RealAudioEnabled` to `false` in config or use the safe defaults.
 
@@ -202,6 +224,7 @@ Real mode uses Windows Core Audio sessions through `WindowsAudioMuteService`. It
 - Run `--ocr-once --ocr-region <x,y,width,height>` and confirm `debug-ocr/ocr-input-latest.png` contains only the intended OCR input region.
 - For Chinese small text, first verify the raw cropped input in `debug-ocr/ocr-input-latest.png`; v0.4.1 does not apply scale, grayscale, or threshold preprocessing.
 - Run `--detect-speaker-once --speaker-text "流浪者："` and confirm the debug output reports `Matched: True` without enabling real audio.
+- Run a fixed-image `--detect-loop` with `--loop-count 5` and confirm OCR raw text, normalized text, matched status, matched speaker, and state-change output are printed without enabling real audio.
 
 ## Dependency Policy
 
