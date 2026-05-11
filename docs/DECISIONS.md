@@ -107,3 +107,39 @@ Reasoning:
 - Missing Tesseract, missing language data, missing input files, and non-zero Tesseract exit codes should produce clear user-facing errors.
 - OCR output is printed as raw text only and is not connected to speaker detection, `MuteCoordinator`, or automatic mute/restore behavior.
 - The milestone does not add WPF, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, or input automation.
+
+## 2026-05-10: v0.4.1 OCR Region Crop Before OCR
+
+Decision: add optional OCR input region cropping before invoking Tesseract CLI, saving the cropped debug input image as `debug-ocr/ocr-input-latest.png`.
+
+Reasoning:
+
+- Whole-image OCR can include window menus, status bars, and unrelated UI text, which makes raw OCR validation noisy.
+- Cropping uses image coordinates and validates the region against the input image before OCR runs.
+- The cropped debug image makes the actual OCR input reviewable without adding OCR result interpretation.
+- The OCR provider still receives a local image path and remains isolated behind `IOcrService`.
+- The behavior does not add speaker detection from OCR text, does not connect to `MuteCoordinator`, and does not trigger automatic audio control.
+- The milestone still avoids OpenCV, ONNX, cloud OCR, game memory access, hooks, injection, GUI, overlay, and masking.
+
+## 2026-05-10: v0.4.2 Local OCR Image Preprocessing
+
+Decision: add simple local OCR input preprocessing options for integer scale, grayscale conversion, and thresholding before invoking Tesseract CLI.
+
+Reasoning:
+
+- Small Chinese text often needs a larger and cleaner OCR input than the raw screenshot region.
+- Preprocessing runs locally in `OcrInputPreparer` after optional region cropping and before Tesseract receives the image.
+- The debug image remains `debug-ocr/ocr-input-latest.png` so users can inspect the exact OCR input.
+- The implementation uses existing .NET/Windows drawing APIs and does not introduce OpenCV, ONNX, OCR model packages, or cloud OCR.
+- The behavior does not add speaker detection, does not connect to `MuteCoordinator`, and does not trigger automatic audio control.
+
+## 2026-05-11: Prefer Raw Cropped OCR Input For Current Samples
+
+Decision: use raw cropped image OCR as the current v0.4 recommended path; keep preprocessing flags available only as optional debugging tools.
+
+Reasoning:
+
+- Manual OCR testing showed that a focused `--ocr-region` crop can recognize the target Chinese text correctly.
+- Additional scale, grayscale, and threshold preprocessing can remove anti-aliasing or damage small Chinese stroke structure, which may make Tesseract recognition worse for the current sample.
+- The current priority is to stabilize region selection and raw OCR text output before adding speaker detection from OCR text.
+- OCR output remains disconnected from `MuteCoordinator` and automatic audio control.
