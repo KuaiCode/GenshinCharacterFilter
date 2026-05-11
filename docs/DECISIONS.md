@@ -158,3 +158,16 @@ Reasoning:
 - Dry-run results are not passed to `MuteCoordinator` and do not create or call real audio services.
 - Contains matching remains debug-only; before audio integration the project must add debounce/hysteresis or stricter speaker-label parsing to reduce false positives from OCR noise.
 - The behavior does not add GUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, input automation, or automatic audio control.
+
+## 2026-05-11: v0.7 Detection Stability Gate
+
+Decision: add a stability gate to the OCR-driven dry-run loop before any audio integration.
+
+Reasoning:
+
+- Raw OCR speaker matching can fluctuate frame to frame, and contains matching remains only a debug raw signal.
+- Stable target-present state requires consecutive raw matches, and stable target-absent state requires consecutive raw misses.
+- Match and miss thresholds are configurable for manual observation, while conservative defaults avoid reacting to a single noisy frame.
+- Dry-run output now reports both raw match result and stable match state so OCR/matching stability can be evaluated before audio control.
+- Stable detection results remain observation-only and are not passed to `MuteCoordinator`, `IAudioMuteService`, or `WindowsAudioMuteService`.
+- The behavior does not add fuzzy matching, GUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, input automation, or automatic audio control.

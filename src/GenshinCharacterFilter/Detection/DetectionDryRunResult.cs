@@ -10,6 +10,4 @@ public sealed record DetectionDryRunResult(
     int Iteration,
     OcrResult OcrResult,
     SpeakerMatchResult SpeakerMatchResult,
-    DetectionDryRunState CurrentState,
-    DetectionDryRunState? PreviousState,
-    bool StateChanged);
+    DetectionStabilityResult StabilityResult);

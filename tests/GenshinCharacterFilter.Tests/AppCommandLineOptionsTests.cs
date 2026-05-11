@@ -152,6 +152,26 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
+    public void Parse_ReadsMatchThreshold()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--detect-loop", "--ocr-input", "input.png", "--match-threshold", "3"]);
+
+        Assert.True(options.DetectLoop);
+        Assert.Equal(3, options.MatchThreshold);
+    }
+
+    [Fact]
+    public void Parse_ReadsMissThreshold()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--detect-loop", "--ocr-input", "input.png", "--miss-threshold", "4"]);
+
+        Assert.True(options.DetectLoop);
+        Assert.Equal(4, options.MissThreshold);
+    }
+
+    [Fact]
     public void Parse_OcrOnceRequiresInput()
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
@@ -209,6 +229,8 @@ public sealed class AppCommandLineOptionsTests
     [InlineData("--speaker-text")]
     [InlineData("--loop-interval-ms")]
     [InlineData("--loop-count")]
+    [InlineData("--match-threshold")]
+    [InlineData("--miss-threshold")]
     public void Parse_RejectsMissingOptionValue(string optionName)
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
@@ -260,6 +282,28 @@ public sealed class AppCommandLineOptionsTests
             () => AppCommandLineOptions.Parse(["--loop-count", "abc"]));
 
         Assert.Contains("Loop count", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("--match-threshold")]
+    [InlineData("--miss-threshold")]
+    public void Parse_RejectsNonNumericStabilityThreshold(string optionName)
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse([optionName, "abc"]));
+
+        Assert.Contains("must be a number", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("--match-threshold", "0")]
+    [InlineData("--match-threshold", "11")]
+    [InlineData("--miss-threshold", "0")]
+    [InlineData("--miss-threshold", "11")]
+    public void Parse_RejectsStabilityThresholdOutsideRange(string optionName, string threshold)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => AppCommandLineOptions.Parse([optionName, threshold]));
     }
 
     [Theory]

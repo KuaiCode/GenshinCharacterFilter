@@ -63,7 +63,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.6 OCR-driven Detection Dry Run");
+Console.WriteLine("GenshinCharacterFilter v0.7 Detection Stability Gate");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");
@@ -202,11 +202,18 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
             LoopIntervalMs = commandLineOptions.LoopIntervalMs,
             LoopCount = commandLineOptions.LoopCount,
             CaptureOutputDirectory = commandLineOptions.CaptureOutputDirectory,
-            CaptureDelayMs = commandLineOptions.CaptureDelayMs
+            CaptureDelayMs = commandLineOptions.CaptureDelayMs,
+            Stability = new DetectionStabilityOptions
+            {
+                MatchThreshold = commandLineOptions.MatchThreshold,
+                MissThreshold = commandLineOptions.MissThreshold
+            }
         };
 
         Console.WriteLine($"Loop interval: {dryRunOptions.LoopIntervalMs} ms");
         Console.WriteLine($"Loop count: {(dryRunOptions.LoopCount?.ToString() ?? "until Ctrl+C")}");
+        Console.WriteLine($"Match threshold: {dryRunOptions.Stability.MatchThreshold}");
+        Console.WriteLine($"Miss threshold: {dryRunOptions.Stability.MissThreshold}");
 
         DetectionDryRunLoop loop = new(
             new TesseractCliOcrService(),

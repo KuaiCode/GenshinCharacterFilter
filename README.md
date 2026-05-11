@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.6 OCR-driven Detection Dry Run**.
+Current milestone: **v0.7 Detection Stability Gate**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, and v0.5 Speaker Detection from OCR Text Prototype are implemented. v0.6 adds an explicit OCR-driven detection dry-run loop while preserving the safe default simulated run.
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, and v0.6 OCR-driven Detection Dry Run are implemented. v0.7 adds a stability gate to the dry-run loop while preserving the safe default simulated run.
 
 ## Current Scope
 
@@ -18,6 +18,7 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Explicit one-shot OCR raw text extraction from a local image.
 - Explicit one-shot speaker detection from manual text or OCR raw text.
 - Explicit OCR-driven detection dry-run loop for observing OCR and matching stability.
+- Stability-gated dry-run output using consecutive match/miss thresholds.
 
 Out of scope: automatic mute/restore based on OCR, connecting speaker detection to `MuteCoordinator`, production OCR jitter debounce/hysteresis, fuzzy matching, speaker recognition from image, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
 
@@ -110,21 +111,23 @@ Contains matching is debug-only in v0.5. A matched result does not automatically
 
 ## OCR-driven Detection Dry Run
 
-Dry-run mode only runs when `--detect-loop` is supplied. It repeatedly runs OCR plus speaker matching, prints each iteration, and logs matched/not-matched state changes. It does not control real system audio, does not create a real audio service, and does not call `MuteCoordinator`.
+Dry-run mode only runs when `--detect-loop` is supplied. It repeatedly runs OCR plus speaker matching, prints each raw match result, then applies a stability gate before reporting stable matched/not-matched state. It does not control real system audio, does not create a real audio service, and does not call `MuteCoordinator`.
 
 Fixed image dry run:
 
 ```powershell
-dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --detect-loop --ocr-input debug-captures/capture-latest.png --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --loop-count 5 --loop-interval-ms 500 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --detect-loop --ocr-input debug-captures/capture-latest.png --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --loop-count 5 --loop-interval-ms 500 --match-threshold 2 --miss-threshold 2 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
 ```
 
 Window capture dry run:
 
 ```powershell
-dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --detect-loop --process notepad --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --loop-count 5 --loop-interval-ms 500 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --detect-loop --process notepad --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --loop-count 5 --loop-interval-ms 500 --match-threshold 2 --miss-threshold 2 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
 ```
 
-Use `--loop-interval-ms <number>` to control timing. The allowed range is 100 to 10000 ms. Use `--loop-count <number>` to run a fixed number of iterations; omit it to run until Ctrl+C. Process capture mode requires `--ocr-region` so the loop observes the intended text area instead of full-window UI noise.
+Use `--loop-interval-ms <number>` to control timing. The allowed range is 100 to 10000 ms. Use `--loop-count <number>` to run a fixed number of iterations; omit it to run until Ctrl+C. Use `--match-threshold <number>` and `--miss-threshold <number>` to require consecutive raw matches or misses before the stable state changes; the allowed range is 1 to 10 and the default is 2 for both. Process capture mode requires `--ocr-region` so the loop observes the intended text area instead of full-window UI noise.
+
+The output includes raw matched, raw matched speaker, stable matched, stable matched speaker, stable state changed, consecutive match count, and consecutive miss count. The stable signal is still observation-only and must not be wired into audio control without a later explicit integration step.
 
 ## Configuration File
 
@@ -193,6 +196,8 @@ Supported overrides:
 - `--detect-loop`
 - `--loop-interval-ms <number>`
 - `--loop-count <number>`
+- `--match-threshold <number>`
+- `--miss-threshold <number>`
 
 `--real-audio` only enables real audio. To keep real audio disabled, omit `--real-audio` and set `RealAudioEnabled` to `false` in config or use the safe defaults.
 
@@ -224,7 +229,7 @@ Real mode uses Windows Core Audio sessions through `WindowsAudioMuteService`. It
 - Run `--ocr-once --ocr-region <x,y,width,height>` and confirm `debug-ocr/ocr-input-latest.png` contains only the intended OCR input region.
 - For Chinese small text, first verify the raw cropped input in `debug-ocr/ocr-input-latest.png`; v0.4.1 does not apply scale, grayscale, or threshold preprocessing.
 - Run `--detect-speaker-once --speaker-text "流浪者："` and confirm the debug output reports `Matched: True` without enabling real audio.
-- Run a fixed-image `--detect-loop` with `--loop-count 5` and confirm OCR raw text, normalized text, matched status, matched speaker, and state-change output are printed without enabling real audio.
+- Run a fixed-image `--detect-loop` with `--loop-count 5 --match-threshold 2 --miss-threshold 2` and confirm raw match output plus stable match output are printed without enabling real audio.
 
 ## Dependency Policy
 

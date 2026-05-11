@@ -68,12 +68,18 @@ public sealed class DetectionDryRunOptions
     public int CaptureDelayMs { get; set; } = WindowCaptureOptions.DefaultCaptureDelayMs;
 
     /// <summary>
+    /// Gets or sets the stability gate options used by the dry-run loop.
+    /// </summary>
+    public DetectionStabilityOptions Stability { get; set; } = new();
+
+    /// <summary>
     /// Validates dry-run options before the loop starts.
     /// </summary>
     public void Validate()
     {
         ValidateLoopIntervalMs(LoopIntervalMs);
         ValidateLoopCount(LoopCount);
+        Stability.Validate();
 
         bool hasFixedImage = !string.IsNullOrWhiteSpace(OcrInputPath);
         bool hasProcess = !string.IsNullOrWhiteSpace(TargetProcessName);

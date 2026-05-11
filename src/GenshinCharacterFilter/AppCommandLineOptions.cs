@@ -51,6 +51,10 @@ public sealed class AppCommandLineOptions
 
     public int? LoopCount { get; private init; }
 
+    public int MatchThreshold { get; private init; } = DetectionStabilityOptions.DefaultMatchThreshold;
+
+    public int MissThreshold { get; private init; } = DetectionStabilityOptions.DefaultMissThreshold;
+
     /// <summary>
     /// Parses command-line arguments into application options.
     /// </summary>
@@ -152,6 +156,15 @@ public sealed class AppCommandLineOptions
 
         DetectionDryRunOptions.ValidateLoopCount(loopCount);
 
+        int matchThreshold = ParseDetectionThreshold(
+            arguments,
+            "--match-threshold",
+            DetectionStabilityOptions.DefaultMatchThreshold);
+        int missThreshold = ParseDetectionThreshold(
+            arguments,
+            "--miss-threshold",
+            DetectionStabilityOptions.DefaultMissThreshold);
+
         if (detectLoop && ocrInputPath is null && processName is null)
         {
             throw new ArgumentException("--detect-loop requires --ocr-input <imagePath> or --process <name>.", nameof(arguments));
@@ -182,6 +195,8 @@ public sealed class AppCommandLineOptions
             SpeakerText = speakerText,
             LoopIntervalMs = loopIntervalMs,
             LoopCount = loopCount,
+            MatchThreshold = matchThreshold,
+            MissThreshold = missThreshold,
             _realAudioSpecified = HasFlag(arguments, "--real-audio"),
             _targetProcessSpecified = processName is not null,
             _audioModeSpecified = audioModeSpecified,
@@ -222,6 +237,23 @@ public sealed class AppCommandLineOptions
             "reduce-volume" => AudioFilterMode.ReduceVolume,
             _ => throw new ArgumentException("Audio mode must be 'mute' or 'reduce'.", nameof(audioMode))
         };
+    }
+
+    private static int ParseDetectionThreshold(string[] arguments, string optionName, int defaultValue)
+    {
+        string? value = GetOptionValue(arguments, optionName);
+        if (value is null)
+        {
+            return defaultValue;
+        }
+
+        if (!int.TryParse(value, out int threshold))
+        {
+            throw new ArgumentException($"{optionName} must be a number.", nameof(arguments));
+        }
+
+        DetectionStabilityOptions.ValidateThreshold(threshold, optionName);
+        return threshold;
     }
 
     private static string? GetOptionValue(string[] arguments, string optionName)

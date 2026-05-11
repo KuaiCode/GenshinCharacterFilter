@@ -37,16 +37,15 @@ public sealed class DetectionDryRunLoop
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
 
-        DetectionDryRunState? previousState = null;
+        DetectionStabilityGate stabilityGate = new(options.Stability);
         int iteration = 0;
 
         while (!cancellationToken.IsCancellationRequested &&
             (options.LoopCount is null || iteration < options.LoopCount.Value))
         {
             iteration++;
-            DetectionDryRunResult result = await RunIterationAsync(options, iteration, previousState, cancellationToken);
+            DetectionDryRunResult result = await RunIterationAsync(options, stabilityGate, iteration, cancellationToken);
             WriteResult(result);
-            previousState = result.CurrentState;
 
             if (options.LoopCount is not null && iteration >= options.LoopCount.Value)
             {
@@ -59,8 +58,8 @@ public sealed class DetectionDryRunLoop
 
     private async Task<DetectionDryRunResult> RunIterationAsync(
         DetectionDryRunOptions options,
+        DetectionStabilityGate stabilityGate,
         int iteration,
-        DetectionDryRunState? previousState,
         CancellationToken cancellationToken)
     {
         _log.WriteLine($"Dry-run iteration {iteration} started.");
@@ -78,10 +77,9 @@ public sealed class DetectionDryRunLoop
             {
                 TargetSpeakers = options.TargetSpeakers
             });
-        DetectionDryRunState currentState = DetectionDryRunState.FromMatch(matchResult);
-        bool stateChanged = currentState.IsStateChangeFrom(previousState);
+        DetectionStabilityResult stabilityResult = stabilityGate.Observe(matchResult);
 
-        return new DetectionDryRunResult(iteration, ocrResult, matchResult, currentState, previousState, stateChanged);
+        return new DetectionDryRunResult(iteration, ocrResult, matchResult, stabilityResult);
     }
 
     private async Task<string> ResolveInputImagePathAsync(DetectionDryRunOptions options, CancellationToken cancellationToken)
@@ -119,13 +117,17 @@ public sealed class DetectionDryRunLoop
         _log.WriteLine("OCR raw text:");
         _log.WriteLine(result.OcrResult.RawText);
         _log.WriteLine($"Normalized text: {result.SpeakerMatchResult.NormalizedText}");
-        _log.WriteLine($"Matched: {result.SpeakerMatchResult.Matched}");
-        _log.WriteLine($"Matched speaker: {result.SpeakerMatchResult.MatchedSpeaker ?? "(none)"}");
-        _log.WriteLine($"State changed since previous iteration: {result.StateChanged}");
+        _log.WriteLine($"Raw matched: {result.SpeakerMatchResult.Matched}");
+        _log.WriteLine($"Raw matched speaker: {result.SpeakerMatchResult.MatchedSpeaker ?? "(none)"}");
+        _log.WriteLine($"Stable matched: {result.StabilityResult.StableState.Matched}");
+        _log.WriteLine($"Stable matched speaker: {result.StabilityResult.StableState.MatchedSpeaker ?? "(none)"}");
+        _log.WriteLine($"Stable state changed: {result.StabilityResult.StableStateChanged}");
+        _log.WriteLine($"Consecutive match count: {result.StabilityResult.ConsecutiveMatchCount}");
+        _log.WriteLine($"Consecutive miss count: {result.StabilityResult.ConsecutiveMissCount}");
 
-        if (result.StateChanged && result.PreviousState is not null)
+        if (result.StabilityResult.StableStateChanged)
         {
-            _log.WriteLine($"State changed: {result.PreviousState} -> {result.CurrentState}");
+            _log.WriteLine($"Stable state changed: {result.StabilityResult.PreviousStableState} -> {result.StabilityResult.StableState}");
         }
 
         _log.WriteLine($"Dry-run iteration {result.Iteration} completed.");
