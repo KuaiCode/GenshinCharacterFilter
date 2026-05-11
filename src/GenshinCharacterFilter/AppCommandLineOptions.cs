@@ -22,6 +22,8 @@ public sealed class AppCommandLineOptions
 
     public bool OcrOnce { get; private init; }
 
+    public bool DetectSpeakerOnce { get; private init; }
+
     public string TargetProcessName { get; private init; } = "GenshinImpact";
 
     public AudioFilterOptions AudioFilter { get; private init; } = new();
@@ -39,6 +41,8 @@ public sealed class AppCommandLineOptions
     public int OcrPageSegmentationMode { get; private init; } = OcrOptions.DefaultPageSegmentationMode;
 
     public OcrRegion? OcrRegion { get; private init; }
+
+    public string? SpeakerText { get; private init; }
 
     /// <summary>
     /// Parses command-line arguments into application options.
@@ -81,10 +85,17 @@ public sealed class AppCommandLineOptions
         WindowCaptureOptions.ValidateCaptureDelayMs(captureDelayMs);
 
         bool ocrOnce = HasFlag(arguments, "--ocr-once");
+        bool detectSpeakerOnce = HasFlag(arguments, "--detect-speaker-once");
         string? ocrInputPath = GetOptionValue(arguments, "--ocr-input");
         if (ocrOnce && ocrInputPath is null)
         {
             throw new ArgumentException("--ocr-once requires --ocr-input <imagePath>.", nameof(arguments));
+        }
+
+        string? speakerText = GetOptionValue(arguments, "--speaker-text");
+        if (detectSpeakerOnce && speakerText is null && !ocrOnce)
+        {
+            throw new ArgumentException("--detect-speaker-once requires --speaker-text <text> or --ocr-once with --ocr-input <imagePath>.", nameof(arguments));
         }
 
         string? ocrLanguage = GetOptionValue(arguments, "--ocr-lang");
@@ -115,6 +126,7 @@ public sealed class AppCommandLineOptions
             UseRealAudio = HasFlag(arguments, "--real-audio"),
             CaptureOnce = HasFlag(arguments, "--capture-once"),
             OcrOnce = ocrOnce,
+            DetectSpeakerOnce = detectSpeakerOnce,
             TargetProcessName = processName ?? "GenshinImpact",
             AudioFilter = audioFilterOptions,
             CaptureOutputDirectory = captureOutputDirectory ?? WindowCaptureOptions.DefaultOutputDirectory,
@@ -124,6 +136,7 @@ public sealed class AppCommandLineOptions
             TesseractExecutablePath = tesseractExecutablePath ?? OcrOptions.DefaultTesseractExecutablePath,
             OcrPageSegmentationMode = ocrPageSegmentationMode,
             OcrRegion = ocrRegion,
+            SpeakerText = speakerText,
             _realAudioSpecified = HasFlag(arguments, "--real-audio"),
             _targetProcessSpecified = processName is not null,
             _audioModeSpecified = audioModeSpecified,

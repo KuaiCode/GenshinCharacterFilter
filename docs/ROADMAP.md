@@ -1,18 +1,19 @@
 # Roadmap
 
-## Current Milestone: v0.4 OCR Text Extraction Prototype
+## Current Milestone: v0.5 Speaker Detection from OCR Text Prototype
 
 Status: in progress.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, and v0.3 Window Capture Prototype milestones have been manually verified. The v0.4 milestone is limited to:
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, and v0.4 OCR Text Extraction Prototype milestones have been manually verified. The v0.5 milestone is limited to:
 
 - console app only;
-- explicitly triggered OCR raw text extraction;
-- using an existing screenshot or captured image as OCR input;
-- printing raw OCR text to the console;
-- isolating OCR behind `IOcrService`;
+- explicitly triggered speaker detection debug output;
+- accepting manual text through `--speaker-text` or OCR raw text from the existing OCR path;
+- normalizing OCR/manual text;
+- matching against configured target speakers;
+- printing matched/not matched debug results;
 - preserving existing simulated and opt-in real audio behavior;
-- no speaker detection from OCR text, automatic mute/restore from OCR, GUI, overlay, or masking.
+- no automatic mute/restore from OCR, no `MuteCoordinator` integration, no fuzzy matching, no OCR debounce/hysteresis, no GUI, overlay, or masking.
 
 ## Phase Order
 
@@ -27,14 +28,16 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, and v0.3 Window Capture Proto
 9. Minimal UI.
 10. Optional masking.
 
-## Out of Scope for v0.4
+## Out of Scope for v0.5
 
 - Speaker recognition from image.
-- Speaker detection from OCR text.
 - Automatic mute/restore based on OCR.
+- `MuteCoordinator` integration.
+- OCR jitter debounce/hysteresis.
+- Fuzzy matching unless explicitly requested.
 - WPF or WinUI.
 - Overlay masking.
-- ONNX or OpenCV unless explicitly justified.
+- ONNX or OpenCV.
 - Gameplay automation.
 - Game memory access or modification.
 - Hooking or injection.

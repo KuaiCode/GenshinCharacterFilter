@@ -24,6 +24,12 @@ catch (Exception exception) when (exception is AppSettingsException or ArgumentE
     return;
 }
 
+if (commandLineOptions.DetectSpeakerOnce)
+{
+    await DetectSpeakerOnceAsync(settings, commandLineOptions);
+    return;
+}
+
 if (commandLineOptions.OcrOnce)
 {
     await OcrOnceAsync(commandLineOptions);
@@ -50,7 +56,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.4 OCR Text Extraction Prototype");
+Console.WriteLine("GenshinCharacterFilter v0.5 Speaker Detection from OCR Text Prototype");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");
@@ -111,6 +117,58 @@ static async Task CaptureOnceAsync(AppSettings settings, AppCommandLineOptions c
 
 static async Task OcrOnceAsync(AppCommandLineOptions commandLineOptions)
 {
+    Console.WriteLine("OCR mode; this run does not control real system audio.");
+
+    try
+    {
+        OcrResult result = await ExtractOcrAsync(commandLineOptions);
+        PrintOcrResult(result);
+    }
+    catch (Exception exception) when (exception is OcrException or ArgumentException or FileNotFoundException)
+    {
+        Console.Error.WriteLine($"OCR error: {exception.Message}");
+    }
+}
+
+static async Task DetectSpeakerOnceAsync(AppSettings settings, AppCommandLineOptions commandLineOptions)
+{
+    Console.WriteLine("Speaker detection mode; this run does not control real system audio.");
+    Console.WriteLine("Speaker detection is debug-only and is not connected to MuteCoordinator.");
+
+    try
+    {
+        string rawText;
+        if (commandLineOptions.SpeakerText is not null)
+        {
+            rawText = commandLineOptions.SpeakerText;
+            Console.WriteLine("Speaker text source: --speaker-text");
+        }
+        else
+        {
+            Console.WriteLine("Speaker text source: OCR");
+            OcrResult ocrResult = await ExtractOcrAsync(commandLineOptions);
+            PrintOcrResult(ocrResult);
+            rawText = ocrResult.RawText;
+        }
+
+        ISpeakerMatcher speakerMatcher = new SpeakerMatcher();
+        SpeakerMatchResult matchResult = speakerMatcher.Match(
+            rawText,
+            new SpeakerMatcherOptions
+            {
+                TargetSpeakers = settings.TargetSpeakers
+            });
+
+        PrintSpeakerMatchResult(matchResult);
+    }
+    catch (Exception exception) when (exception is OcrException or ArgumentException or FileNotFoundException)
+    {
+        Console.Error.WriteLine($"Speaker detection error: {exception.Message}");
+    }
+}
+
+static async Task<OcrResult> ExtractOcrAsync(AppCommandLineOptions commandLineOptions)
+{
     OcrOptions ocrOptions = new()
     {
         InputImagePath = commandLineOptions.OcrInputPath,
@@ -122,7 +180,6 @@ static async Task OcrOnceAsync(AppCommandLineOptions commandLineOptions)
 
     OcrInputPreparer inputPreparer = new();
     IOcrService ocrService = new TesseractCliOcrService();
-    Console.WriteLine("OCR mode; this run does not control real system audio.");
     Console.WriteLine($"OCR input: {ocrOptions.InputImagePath}");
     Console.WriteLine($"OCR language: {ocrOptions.Language}, psm: {ocrOptions.PageSegmentationMode}");
     if (ocrOptions.OcrRegion is not null)
@@ -130,33 +187,39 @@ static async Task OcrOnceAsync(AppCommandLineOptions commandLineOptions)
         Console.WriteLine($"OCR region: {ocrOptions.OcrRegion}");
     }
 
-    try
+    string preparedInputPath = inputPreparer.PrepareInput(ocrOptions);
+    if (!string.Equals(Path.GetFullPath(ocrOptions.InputImagePath!), preparedInputPath, StringComparison.OrdinalIgnoreCase))
     {
-        string preparedInputPath = inputPreparer.PrepareInput(ocrOptions);
-        if (!string.Equals(Path.GetFullPath(ocrOptions.InputImagePath!), preparedInputPath, StringComparison.OrdinalIgnoreCase))
-        {
-            Console.WriteLine($"OCR debug input image: {preparedInputPath}");
-        }
-
-        OcrOptions preparedOptions = new()
-        {
-            OcrEngine = ocrOptions.OcrEngine,
-            TesseractExecutablePath = ocrOptions.TesseractExecutablePath,
-            Language = ocrOptions.Language,
-            PageSegmentationMode = ocrOptions.PageSegmentationMode,
-            InputImagePath = preparedInputPath
-        };
-
-        OcrResult result = await ocrService.ExtractTextAsync(preparedOptions, CancellationToken.None);
-        Console.WriteLine($"OCR engine: {result.EngineName}");
-        Console.WriteLine($"OCR input path: {result.InputImagePath}");
-        Console.WriteLine("OCR raw text:");
-        Console.WriteLine(result.RawText);
+        Console.WriteLine($"OCR debug input image: {preparedInputPath}");
     }
-    catch (Exception exception) when (exception is OcrException or ArgumentException or FileNotFoundException)
+
+    OcrOptions preparedOptions = new()
     {
-        Console.Error.WriteLine($"OCR error: {exception.Message}");
-    }
+        OcrEngine = ocrOptions.OcrEngine,
+        TesseractExecutablePath = ocrOptions.TesseractExecutablePath,
+        Language = ocrOptions.Language,
+        PageSegmentationMode = ocrOptions.PageSegmentationMode,
+        InputImagePath = preparedInputPath
+    };
+
+    return await ocrService.ExtractTextAsync(preparedOptions, CancellationToken.None);
+}
+
+static void PrintOcrResult(OcrResult result)
+{
+    Console.WriteLine($"OCR engine: {result.EngineName}");
+    Console.WriteLine($"OCR input path: {result.InputImagePath}");
+    Console.WriteLine("OCR raw text:");
+    Console.WriteLine(result.RawText);
+}
+
+static void PrintSpeakerMatchResult(SpeakerMatchResult result)
+{
+    Console.WriteLine("Raw text:");
+    Console.WriteLine(result.RawText);
+    Console.WriteLine($"Normalized text: {result.NormalizedText}");
+    Console.WriteLine($"Matched: {result.Matched}");
+    Console.WriteLine($"Matched speaker: {result.MatchedSpeaker ?? "(none)"}");
 }
 
 static bool IsExitCommand(string input)

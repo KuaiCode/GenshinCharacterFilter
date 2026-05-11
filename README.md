@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.4 OCR Text Extraction Prototype**.
+Current milestone: **v0.5 Speaker Detection from OCR Text Prototype**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, and v0.3 Window Capture Prototype are implemented. v0.4 adds explicit OCR raw text extraction while preserving the safe default simulated run.
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, and v0.4 OCR Text Extraction Prototype are implemented. v0.5 adds explicit speaker detection debug output while preserving the safe default simulated run.
 
 ## Current Scope
 
@@ -16,8 +16,9 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, and v0.3 Window Capture Proto
 - CLI arguments can override JSON configuration.
 - Explicit one-shot debug screenshot capture.
 - Explicit one-shot OCR raw text extraction from a local image.
+- Explicit one-shot speaker detection from manual text or OCR raw text.
 
-Out of scope: speaker detection from OCR text, automatic mute/restore based on OCR, speaker recognition from image, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
+Out of scope: automatic mute/restore based on OCR, connecting speaker detection to `MuteCoordinator`, OCR jitter debounce/hysteresis, fuzzy matching, speaker recognition from image, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
 
 ## Commands
 
@@ -86,6 +87,24 @@ dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj --
 
 If Tesseract is not installed or the requested language data is missing, the app reports a clear OCR error. No screenshots are sent to cloud OCR services.
 
+## Speaker Detection Debug
+
+Speaker detection mode only runs when `--detect-speaker-once` is supplied. v0.5 only normalizes text and matches it against configured target speakers; it does not mute, restore, or call `MuteCoordinator`.
+
+Manual text verification without Tesseract:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --detect-speaker-once --speaker-text "流浪者："
+```
+
+OCR plus speaker detection debug path:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --ocr-once --detect-speaker-once --ocr-input debug-captures/capture-latest.png --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
+```
+
+The output includes raw text, normalized text, whether a target speaker matched, and the matched speaker name. Matching is intentionally simple: trim whitespace, ignore common leading/trailing speaker punctuation such as `:` and `：`, match English names case-insensitively, and allow exact or contains matching. It does not use fuzzy matching.
+
 ## Configuration File
 
 Use the included safe example:
@@ -148,6 +167,8 @@ Supported overrides:
 - `--tesseract-path <path>`
 - `--ocr-psm <number>`
 - `--ocr-region <x,y,width,height>`
+- `--detect-speaker-once`
+- `--speaker-text <text>`
 
 `--real-audio` only enables real audio. To keep real audio disabled, omit `--real-audio` and set `RealAudioEnabled` to `false` in config or use the safe defaults.
 
@@ -178,6 +199,7 @@ Real mode uses Windows Core Audio sessions through `WindowsAudioMuteService`. It
 - Run `--ocr-once` against an existing screenshot and confirm raw OCR text is printed without enabling real audio.
 - Run `--ocr-once --ocr-region <x,y,width,height>` and confirm `debug-ocr/ocr-input-latest.png` contains only the intended OCR input region.
 - For Chinese small text, first verify the raw cropped input in `debug-ocr/ocr-input-latest.png`; v0.4.1 does not apply scale, grayscale, or threshold preprocessing.
+- Run `--detect-speaker-once --speaker-text "流浪者："` and confirm the debug output reports `Matched: True` without enabling real audio.
 
 ## Dependency Policy
 

@@ -131,3 +131,15 @@ Reasoning:
 - Additional scale, grayscale, and threshold preprocessing can remove anti-aliasing or damage small Chinese stroke structure, which made Tesseract recognition worse for the current sample.
 - The current priority is to stabilize region selection and raw OCR text output before adding speaker detection from OCR text.
 - OCR output remains disconnected from `MuteCoordinator` and automatic audio control.
+
+## 2026-05-11: v0.5 Rule-Based Speaker Matching Debug
+
+Decision: add simple rule-based speaker matching from manual text or OCR raw text, exposed only through explicit debug commands.
+
+Reasoning:
+
+- v0.5 needs to verify whether OCR raw text can identify a configured target speaker before any automatic audio behavior is considered.
+- Matching is limited to normalization, exact matching, and simple contains matching to reduce false positives.
+- Complex fuzzy matching, OCR jitter debounce, and hysteresis are deferred because they can create accidental mute triggers.
+- Speaker match results are printed for manual debugging only and are not connected to `MuteCoordinator`.
+- The behavior does not add GUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, input automation, or automatic audio control.

@@ -84,12 +84,45 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
+    public void Parse_ReadsDetectSpeakerOnceAndSpeakerText()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--detect-speaker-once", "--speaker-text", "\u6D41\u6D6A\u8005\uFF1A"]);
+
+        Assert.True(options.DetectSpeakerOnce);
+        Assert.Equal("\u6D41\u6D6A\u8005\uFF1A", options.SpeakerText);
+        Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
+    public void Parse_DetectSpeakerOnceCanUseOcrInput()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--ocr-once", "--detect-speaker-once", "--ocr-input", "input.png"]);
+
+        Assert.True(options.OcrOnce);
+        Assert.True(options.DetectSpeakerOnce);
+        Assert.Equal("input.png", options.OcrInputPath);
+        Assert.Null(options.SpeakerText);
+        Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
     public void Parse_OcrOnceRequiresInput()
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
             () => AppCommandLineOptions.Parse(["--ocr-once"]));
 
         Assert.Contains("--ocr-input", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_DetectSpeakerOnceRequiresTextOrOcr()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--detect-speaker-once"]));
+
+        Assert.Contains("--speaker-text", exception.Message);
     }
 
     [Fact]
@@ -129,6 +162,7 @@ public sealed class AppCommandLineOptionsTests
     [InlineData("--tesseract-path")]
     [InlineData("--ocr-psm")]
     [InlineData("--ocr-region")]
+    [InlineData("--speaker-text")]
     public void Parse_RejectsMissingOptionValue(string optionName)
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
