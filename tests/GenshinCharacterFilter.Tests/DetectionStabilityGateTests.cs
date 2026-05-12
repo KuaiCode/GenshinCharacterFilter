@@ -47,6 +47,23 @@ public sealed class DetectionStabilityGateTests
     }
 
     [Fact]
+    public void Observe_RepeatedMissesWhileAlreadyNotMatchedDoNotEmitStateChanged()
+    {
+        DetectionStabilityGate gate = CreateGate(matchThreshold: 2, missThreshold: 2);
+
+        DetectionStabilityResult firstMiss = gate.Observe(NotMatched());
+        DetectionStabilityResult secondMiss = gate.Observe(NotMatched());
+        DetectionStabilityResult thirdMiss = gate.Observe(NotMatched());
+
+        Assert.False(firstMiss.StableState.Matched);
+        Assert.False(firstMiss.StableStateChanged);
+        Assert.False(secondMiss.StableState.Matched);
+        Assert.False(secondMiss.StableStateChanged);
+        Assert.False(thirdMiss.StableState.Matched);
+        Assert.False(thirdMiss.StableStateChanged);
+    }
+
+    [Fact]
     public void Observe_SameStableSpeakerDoesNotRepeatedlyEmitStateChanged()
     {
         DetectionStabilityGate gate = CreateGate(matchThreshold: 2, missThreshold: 2);
