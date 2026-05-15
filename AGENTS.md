@@ -20,9 +20,9 @@ The agent should prioritize:
 
 ## Current milestone
 
-The current milestone is **v0.9 Guarded Real Audio Integration**.
+The current milestone is **v0.10 Manual OCR Region Calibration**.
 
-The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, **v0.5 Speaker Detection from OCR Text Prototype**, **v0.6 OCR-driven Detection Dry Run**, **v0.7 Detection Stability Gate**, and **v0.8 Simulated Audio Integration** are considered implemented and manually verified:
+The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, **v0.5 Speaker Detection from OCR Text Prototype**, **v0.6 OCR-driven Detection Dry Run**, **v0.7 Detection Stability Gate**, **v0.8 Simulated Audio Integration**, **v0.9 Guarded Real Audio Integration**, and **v0.9.1 Partial Audio Apply Restore Fix** are considered implemented and manually verified where applicable:
 
 - simulated speaker input works;
 - mute coordination works;
@@ -62,24 +62,24 @@ The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Windo
 - repeated stable matched does not repeatedly mute;
 - shutdown requests simulated restore;
 - `--simulate-audio-from-detection` and `--real-audio` conflict is rejected;
+- stable detection can drive real audio only behind `--detect-loop`, `--real-audio`, `--allow-real-audio-from-detection`, and `--process <target>`;
+- guarded real audio mute and reduce-volume modes were manually verified with Chrome;
+- partial audio apply failure no longer skips shutdown/cancellation restore;
 - default execution still does not screenshot or control real audio;
 - OCR output is not connected to `MuteCoordinator` or automatic audio control;
 - default target speakers are `流浪者` and `Wanderer`.
 
-Scope for v0.9:
+Scope for v0.10:
 
-- Console app only.
-- Use stable detection result, not raw match, to drive real audio.
-- Real audio integration must require explicit opt-in.
-- Required flags should include:
-  - `--detect-loop`
-  - `--real-audio`
-  - `--allow-real-audio-from-detection`
-  - `--process <target>`
-- Reuse existing `WindowsAudioMuteService`.
-- Reuse existing audio mode behavior: mute or reduce volume.
-- Restore audio on shutdown/cancellation where possible.
-- Simulated mode must remain available.
+- Console app remains the main app.
+- Add an explicit calibration mode only.
+- Capture one screenshot from the target process/window.
+- Display the screenshot in a minimal local calibration window.
+- Let the user drag-select the OCR speaker-name region.
+- Save both pixel region and ratio region to a local JSON file.
+- Do not run OCR automatically unless explicitly requested.
+- Do not control real audio in calibration mode.
+- Do not call `MuteCoordinator` in calibration mode.
 - Default run must remain safe.
 - Existing v0.1 audio, v0.2 configuration, and v0.3 capture behavior must remain stable.
 - Existing v0.4 OCR behavior must remain stable.
@@ -87,21 +87,22 @@ Scope for v0.9:
 - Existing v0.6 dry-run behavior must remain stable.
 - Existing v0.7 stability-gate behavior must remain stable.
 - Existing v0.8 simulated audio behavior must remain stable.
+- Existing v0.9 guarded real audio behavior must remain stable.
 - .NET 8.
 - Windows x64.
 - VS Code / Codex / Visual Studio friendly workflow.
 
 Out of scope for the current milestone:
 
-- Default automatic real audio.
-- Real audio without explicit allow flag.
-- Production auto mute beyond the explicit guarded integration.
-- GUI.
+- Full GUI application.
+- WPF.
+- WinUI.
 - Overlay masking.
 - Face detection.
 - ONNX.
 - OpenCV.
 - Persistent settings UI or configuration UI.
+- Automatic real audio during calibration.
 - Gameplay automation.
 - Keyboard/mouse automation.
 - Input automation.
@@ -109,21 +110,27 @@ Out of scope for the current milestone:
 - Game memory reading or modification.
 - Hooking or injection.
 
+Allowed for the current milestone:
+
+- Minimal WinForms-based calibration window if needed.
+- No external GUI dependency.
+- No OpenCV.
+
 Done when:
 
 - `dotnet build` passes.
 - If tests exist, `dotnet test` passes.
-- Speaker detection mode is explicit and does not run during default startup.
-- Dry-run mode is explicit and does not run during default startup.
-- The app can use stable target-present / target-absent state to drive real audio only after all explicit guard flags are present.
-- Raw match results do not directly drive real audio.
-- Real audio mode rejects unsafe or ambiguous arguments.
-- Real audio mode prints a clear warning before starting.
-- Repeated stable matched state does not repeatedly spam mute/reduce.
-- Repeated stable not-matched state does not repeatedly spam restore.
-- Shutdown or cancellation requests restore where possible.
+- Calibration mode is explicit and does not run during default startup.
+- Calibration mode captures one screenshot from the configured target window/process.
+- Calibration mode displays a minimal local selection window.
+- The selected OCR region is saved as both pixel coordinates and ratio coordinates.
+- The calibration output JSON is local and contains no sensitive data.
+- Calibration mode does not run OCR unless explicitly requested.
+- Calibration mode does not create `WindowsAudioMuteService`.
+- Calibration mode does not control real audio.
+- Calibration mode does not call `MuteCoordinator`.
 - Default run remains safe and does not control real system audio.
-- No fuzzy matching, GUI, masking, overlay, gameplay automation, game memory access, hooking, or injection is introduced.
+- No WPF, WinUI, OpenCV, ONNX, masking, overlay, gameplay automation, game memory access, hooking, or injection is introduced.
 - The final response reports changed files, verification commands, assumptions, and limitations.
 
 Do not implement later roadmap phases until this milestone works.
@@ -144,7 +151,7 @@ Do not implement later roadmap phases until this milestone works.
 
 Do not assume administrator privileges unless explicitly required and explained.
 
-Do not introduce UI, overlay, gameplay automation, OCR model, image-processing, or model-inference dependencies during the v0.9 Guarded Real Audio Integration milestone. Avoid OpenCV and ONNX for this milestone.
+Do not introduce a full GUI application, overlay, gameplay automation, OCR model, image-processing dependency, or model-inference dependency during the v0.10 Manual OCR Region Calibration milestone. A minimal WinForms-based calibration window is allowed if needed; avoid OpenCV and ONNX for this milestone.
 
 ## Tooling workflow
 
@@ -198,9 +205,10 @@ Follow this order unless the user explicitly changes the roadmap:
 9. Detection stability gate.
 10. Simulated audio integration.
 11. Guarded real audio integration.
-12. Stable mute/unmute coordination with debounce and recovery.
-13. Minimal UI.
-14. Optional masking.
+12. Manual OCR region calibration.
+13. Stable mute/unmute coordination with debounce and recovery.
+14. Minimal UI.
+15. Optional masking.
 
 Do not implement later-phase functionality prematurely.
 
@@ -219,22 +227,26 @@ Use these module boundaries unless the user asks for a different design:
 - `AppSettingsLoader`: loads and validates local JSON configuration.
 - `AudioFilterOptions`: stores mute/reduce-volume behavior and validation rules.
 - `WindowCaptureOptions`: stores target window or screen-region capture settings for debug screenshots.
+- `OcrRegionCalibrationOptions`: stores explicit calibration input/output settings.
+- `OcrRegionCalibrationResult`: stores the selected pixel and ratio regions.
+- `OcrRegionCalibrationFile`: serializes/deserializes local calibration JSON.
+- `WindowsOcrRegionCalibrator`: captures and displays a screenshot for manual OCR region selection.
+- A small calibration form: displays the screenshot and supports drag-selecting a rectangle.
 
-For v0.9, expected work is limited to:
+For v0.10, expected work is limited to:
 
-- guarded detection-to-real-audio integration
-- stable detection result driving real mute/reduce/restore actions
-- explicit required opt-in flags: `--detect-loop`, `--real-audio`, `--allow-real-audio-from-detection`, and `--process <target>`
-- reuse of existing `WindowsAudioMuteService`
-- reuse of existing audio filter modes: mute and reduce volume
-- tests proving missing `--allow-real-audio-from-detection` rejects real detection audio
-- tests proving missing `--process` rejects real detection audio
-- tests proving raw match below threshold does not call audio
-- tests proving stable match calls the audio service once
-- tests proving stable miss restores once
-- tests proving shutdown restore is attempted
+- explicit OCR region calibration mode, for example `--calibrate-ocr-region`
+- capture of one target process/window screenshot
+- minimal local calibration window for drag-selecting a rectangle
+- saving source screenshot size, selected pixel region, and selected ratio region
+- validation that x/y are >= 0, width/height are > 0, and the region is inside image bounds
+- Esc cancels calibration
+- Enter saves calibration after a valid region is selected
+- tests for pixel-to-ratio conversion, ratio-to-pixel conversion, bounds validation, and calibration JSON
+- no OCR by default in calibration mode
+- no real audio control in calibration mode
 
-Do not allow stable detection results to reach `WindowsAudioMuteService` unless all v0.9 explicit real-audio guard flags are present.
+Do not create `WindowsAudioMuteService`, call `MuteCoordinator`, run OCR, or control real audio during calibration mode unless a future task explicitly changes that scope.
 
 ## Speaker matching rules
 
@@ -297,29 +309,21 @@ Required behavior:
 - Mute/reduce should be idempotent: repeated target detections while already filtered should not spam the audio API or repeatedly reduce volume.
 - Shutdown, cancellation, and unexpected exceptions should attempt safe restore.
 
-For v0.9:
+For v0.10:
 
-- Real detection audio must require `--detect-loop`, `--real-audio`, `--allow-real-audio-from-detection`, and `--process <target>`.
-- Do not enable real audio by default.
-- Do not allow real audio without the explicit allow flag.
-- Real audio mode must reject unsafe or ambiguous arguments.
-- Real audio mode must print a clear warning before starting.
-- Reuse existing `WindowsAudioMuteService`.
-- Reuse existing audio mode behavior: mute or reduce volume.
-- Do not connect raw match results to audio mute/restore behavior.
-- Only stable matched state may request real mute/reduce.
-- Only stable not-matched state may request real restore.
-- Unknown, null, or blank matched speaker must not trigger real mute/reduce.
-- Repeated stable matched state must not repeatedly spam mute/reduce.
-- Repeated stable not-matched state must not repeatedly spam restore.
-- Shutdown and cancellation should request restore through the audio service where possible.
-- Simulated detection audio mode must remain available.
+- Calibration mode must not create `WindowsAudioMuteService`.
+- Calibration mode must not control real audio.
+- Calibration mode must not call `MuteCoordinator`.
+- Calibration mode must not run automatic mute/restore logic.
+- Existing guarded real audio behavior must remain opt-in only.
+- Existing simulated detection audio mode must remain available.
 - Existing v0.1 audio, v0.2 configuration, and v0.3 capture behavior must remain stable.
 - Existing v0.4 OCR behavior must remain stable.
 - Existing v0.5 speaker matching behavior must remain stable.
 - Existing v0.6 dry-run behavior must remain stable.
 - Existing v0.7 stability-gate behavior must remain stable.
 - Existing v0.8 simulated audio behavior must remain stable.
+- Existing v0.9 guarded real audio behavior must remain stable.
 - Do not add fuzzy matching yet.
 
 ## Safety rules
@@ -342,9 +346,9 @@ For v0.9:
 
 Store user configuration in a local JSON file unless the project already uses another configuration format.
 
-For v0.9:
+For v0.10:
 
-- Local JSON configuration is implemented and may be extended only when needed for stability-gate options.
+- Local JSON configuration is implemented and may be extended only when needed for OCR region calibration.
 - Do not add a persistent settings UI.
 - Do not store sensitive information.
 - Do not include credentials, cookies, tokens, or game login data.
@@ -361,7 +365,7 @@ Configuration should include at least:
 - `AudioFilter.Mode`
 - `AudioFilter.VolumePercent`
 
-v0.4/v0.5/v0.6/v0.7/v0.8/v0.9 OCR, speaker debug, dry-run, stability-gate, simulated audio, and guarded real audio configuration may include:
+v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10 OCR, speaker debug, dry-run, stability-gate, simulated audio, guarded real audio, and calibration configuration may include:
 
 - OCR input image path or explicit capture input;
 - OCR region;
@@ -372,6 +376,7 @@ v0.4/v0.5/v0.6/v0.7/v0.8/v0.9 OCR, speaker debug, dry-run, stability-gate, simul
 - match/miss stability thresholds, only if needed for explicit stability-gate dry-run behavior.
 - simulated detection audio mode options, only if needed for explicit v0.8 behavior.
 - guarded real audio detection options, only if needed for explicit v0.9 behavior.
+- OCR region calibration output path, source screenshot size, pixel region, and ratio region, only if needed for explicit v0.10 calibration behavior.
 
 Long-term configuration may later include:
 
@@ -441,11 +446,13 @@ Do not add heavy OCR, image-processing, model-inference, overlay, or UI dependen
 
 Do not replace the project framework or UI stack without explicit approval.
 
-For v0.9:
+For v0.10:
 
 - Use built-in .NET JSON support where practical.
 - Existing NAudio dependency for real Windows audio control may remain.
-- Do not add new dependencies for v0.9 unless strongly justified.
+- Do not add new dependencies for v0.10 unless strongly justified.
+- A minimal WinForms-based calibration window is allowed if needed.
+- Do not add external GUI dependencies.
 - Prefer an OCR provider abstraction so the engine can be replaced later.
 - Do not add heavy OCR or model dependencies without explaining why.
 - If using Tesseract CLI, do not vendor traineddata files into the repository.
@@ -489,24 +496,22 @@ Use fake implementations for:
 - `IGameWindowCapture`
 - `IOcrService`
 
-For v0.9, prioritize tests for:
+For v0.10, prioritize tests for:
 
-- missing `--allow-real-audio-from-detection` rejects real detection audio;
-- missing `--process` rejects real detection audio;
-- raw match below threshold does not call real or fake audio;
-- stable matched state calls the audio service once;
-- stable not-matched state restores once after a prior mute/reduce;
-- repeated stable matched state does not repeatedly spam mute/reduce;
-- repeated stable not-matched state does not repeatedly spam restore;
-- unknown, null, or blank matched speaker does not trigger mute/reduce;
-- shutdown and cancellation request restore where possible;
-- existing configuration, OCR, speaker matching, and mute/reduce coordination behavior remains unchanged.
+- pixel-to-ratio region conversion;
+- ratio-to-pixel region conversion;
+- region bounds validation;
+- calibration JSON serialization and deserialization;
+- explicit calibration command parsing, if CLI parsing is changed;
+- calibration mode not enabling real audio, if orchestration is testable without UI;
+- existing configuration, capture, OCR, speaker matching, and audio behavior remains unchanged.
 
 Do not write automated tests that require a real game window.
+Do not write automated tests requiring UI interaction.
 Do not write automated tests that require a locally installed OCR engine unless the test can skip clearly.
 Do not write tests that control real system audio.
 No automated test may control real system audio.
-Manual verification for v0.9 must be explicit, local, and guarded; do not run `--real-audio` automatically.
+Manual verification for v0.10 must be explicit, local, and must not run `--real-audio` automatically.
 
 Existing v0.5 speaker matching tests should continue covering:
 
@@ -556,9 +561,9 @@ For early prototypes:
   4. restore audio;
   5. log state changes.
 
-The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, v0.6 OCR-driven detection dry-run, v0.7 detection stability gate, and v0.8 simulated audio integration are implemented; v0.9 should preserve them while adding guarded real audio integration behind multiple explicit opt-in flags.
+The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, v0.6 OCR-driven detection dry-run, v0.7 detection stability gate, v0.8 simulated audio integration, and v0.9 guarded real audio integration are implemented; v0.10 should preserve them while adding an explicit manual OCR region calibration tool.
 
-Do not add masking, complex UI, persistent settings UI, model inference, speaker recognition from image, default real audio behavior, unguarded `WindowsAudioMuteService` integration, or gameplay automation during v0.9.
+Do not add masking, a full GUI application, persistent settings UI, model inference, speaker recognition from image, default real audio behavior, unguarded `WindowsAudioMuteService` integration, or gameplay automation during v0.10.
 
 Do not optimize prematurely.
 
@@ -604,6 +609,12 @@ Log important state transitions:
 - raw match result observed;
 - stability gate threshold selected;
 - stable detection state changed;
+- OCR region calibration command requested;
+- calibration screenshot captured;
+- calibration region selected;
+- calibration region validation error;
+- calibration JSON saved;
+- calibration cancelled;
 - cancellation requested;
 - shutdown restore attempted.
 
@@ -645,7 +656,7 @@ For meaningful behavior changes, update `README.md` or relevant docs.
 
 For important architectural choices, update `docs/DECISIONS.md`.
 
-For v0.9 implementation tasks, `README.md` should document guarded real audio commands and warnings, and `docs/DECISIONS.md` should record that v0.9 requires multiple explicit opt-in flags before stable detection can drive real audio.
+For v0.10 implementation tasks, `README.md` should document the calibration command, and `docs/DECISIONS.md` should record why calibration uses a minimal local window and saves a relative OCR region.
 
 Do not add excessive documentation for trivial changes.
 
