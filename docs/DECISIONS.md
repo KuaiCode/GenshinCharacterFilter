@@ -222,3 +222,18 @@ Reasoning:
 - Saving both pixel and ratio coordinates lets later runs reuse exact coordinates or adapt the region to different screenshot sizes.
 - Calibration mode does not run OCR, call `MuteCoordinator`, create `WindowsAudioMuteService`, or control real system audio.
 - The behavior does not add WPF, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.
+
+## 2026-05-15: v0.11 OCR Region Source Resolution
+
+Decision: add a unified OCR region source resolver that supports absolute pixel regions, local calibration JSON, and named presets.
+
+Reasoning:
+
+- One resolver keeps one-shot OCR, detection dry-run, simulated detection audio, and guarded real detection audio consistent.
+- `--ocr-region` remains the direct absolute pixel override for quick debugging.
+- `--ocr-region-config` loads the local calibration file from v0.10 and uses `regionRatio` to compute a pixel region for the current image size.
+- Preset names are limited to `auto`, `2560x1600`, `1920x1080`, and `none`.
+- Built-in presets for `2560x1600` and `1920x1080` must be backed by real calibration data; no guessed coordinates are added.
+- Manual calibration remains the fallback when resolution differs or preset data is unavailable.
+- Guarded real audio detection must have a valid OCR region source so full-window OCR does not drive real audio.
+- The behavior does not add automatic UI定位, OpenCV, ONNX, WPF, WinUI, overlay, masking, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.

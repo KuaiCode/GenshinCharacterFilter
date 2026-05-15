@@ -28,6 +28,16 @@ public sealed class DetectionDryRunOptions
     public OcrRegion? OcrRegion { get; set; }
 
     /// <summary>
+    /// Gets or sets an optional calibration JSON path used to resolve OCR region.
+    /// </summary>
+    public string? OcrRegionConfigPath { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional built-in OCR region preset selector.
+    /// </summary>
+    public OcrRegionPreset? OcrRegionPreset { get; set; }
+
+    /// <summary>
     /// Gets or sets the OCR language expression passed to Tesseract.
     /// </summary>
     public string OcrLanguage { get; set; } = OcrOptions.DefaultLanguage;
@@ -88,11 +98,6 @@ public sealed class DetectionDryRunOptions
             throw new ArgumentException("Detect loop requires --ocr-input <imagePath> or --process <name>.");
         }
 
-        if (!hasFixedImage && OcrRegion is null)
-        {
-            throw new ArgumentException("Detect loop process mode requires --ocr-region <x,y,width,height>.");
-        }
-
         if (string.IsNullOrWhiteSpace(OcrLanguage))
         {
             throw new ArgumentException("OCR language cannot be empty.", nameof(OcrLanguage));
@@ -111,6 +116,20 @@ public sealed class DetectionDryRunOptions
         }
 
         OcrRegion?.ValidateShape();
+        GetOcrRegionSourceOptions().Validate();
+    }
+
+    /// <summary>
+    /// Builds OCR region source options for the current loop.
+    /// </summary>
+    public OcrRegionSourceOptions GetOcrRegionSourceOptions()
+    {
+        return new OcrRegionSourceOptions
+        {
+            AbsoluteRegion = OcrRegion,
+            CalibrationFilePath = OcrRegionConfigPath,
+            Preset = OcrRegionPreset
+        };
     }
 
     /// <summary>

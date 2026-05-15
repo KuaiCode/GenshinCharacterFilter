@@ -68,16 +68,14 @@ public sealed class DetectionDryRunOptionsTests
     }
 
     [Fact]
-    public void Validate_ProcessModeRequiresOcrRegion()
+    public void Validate_ProcessModeAllowsFullImageDryRun()
     {
         DetectionDryRunOptions options = new()
         {
             TargetProcessName = "notepad"
         };
 
-        ArgumentException exception = Assert.Throws<ArgumentException>(options.Validate);
-
-        Assert.Contains("--ocr-region", exception.Message);
+        options.Validate();
     }
 
     [Fact]
@@ -101,5 +99,18 @@ public sealed class DetectionDryRunOptionsTests
         };
 
         options.Validate();
+    }
+
+    [Fact]
+    public void Validate_RejectsAmbiguousOcrRegionSources()
+    {
+        DetectionDryRunOptions options = new()
+        {
+            OcrInputPath = "input.png",
+            OcrRegion = new OcrRegion(1, 2, 3, 4),
+            OcrRegionConfigPath = "ocr-region.json"
+        };
+
+        Assert.Throws<ArgumentException>(options.Validate);
     }
 }

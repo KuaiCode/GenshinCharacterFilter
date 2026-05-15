@@ -70,7 +70,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.10 Manual OCR Region Calibration");
+Console.WriteLine("GenshinCharacterFilter v0.11 OCR Region Source Resolution");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");
@@ -138,7 +138,7 @@ static async Task OcrOnceAsync(AppCommandLineOptions commandLineOptions)
         OcrResult result = await ExtractOcrAsync(commandLineOptions);
         PrintOcrResult(result);
     }
-    catch (Exception exception) when (exception is OcrException or ArgumentException or FileNotFoundException)
+    catch (Exception exception) when (exception is OcrException or OcrRegionSourceException or ArgumentException or FileNotFoundException)
     {
         Console.Error.WriteLine($"OCR error: {exception.Message}");
     }
@@ -175,7 +175,7 @@ static async Task DetectSpeakerOnceAsync(AppSettings settings, AppCommandLineOpt
 
         PrintSpeakerMatchResult(matchResult);
     }
-    catch (Exception exception) when (exception is OcrException or ArgumentException or FileNotFoundException)
+    catch (Exception exception) when (exception is OcrException or OcrRegionSourceException or ArgumentException or FileNotFoundException)
     {
         Console.Error.WriteLine($"Speaker detection error: {exception.Message}");
     }
@@ -259,6 +259,8 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
             OcrInputPath = commandLineOptions.OcrInputPath,
             TargetProcessName = settings.TargetProcessName,
             OcrRegion = commandLineOptions.OcrRegion,
+            OcrRegionConfigPath = commandLineOptions.OcrRegionConfigPath,
+            OcrRegionPreset = commandLineOptions.OcrRegionPreset,
             OcrLanguage = commandLineOptions.OcrLanguage,
             TesseractExecutablePath = commandLineOptions.TesseractExecutablePath,
             OcrPageSegmentationMode = commandLineOptions.OcrPageSegmentationMode,
@@ -300,9 +302,9 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
             new SpeakerMatcher(),
             new WindowsGameWindowCapture(Console.Out),
             new OcrInputPreparer(),
-            audioCoordinator,
-            audioActionLabel,
-            Console.Out);
+            audioCoordinator: audioCoordinator,
+            audioActionLabel: audioActionLabel,
+            log: Console.Out);
 
         await loop.RunAsync(dryRunOptions, cancellation.Token);
     }
@@ -310,7 +312,7 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
     {
         Console.WriteLine("Detect loop stopped.");
     }
-    catch (Exception exception) when (exception is OcrException or WindowCaptureException or ArgumentException or FileNotFoundException or PlatformNotSupportedException)
+    catch (Exception exception) when (exception is OcrException or OcrRegionSourceException or WindowCaptureException or ArgumentException or FileNotFoundException or PlatformNotSupportedException)
     {
         Console.Error.WriteLine($"Detect loop error: {exception.Message}");
     }
@@ -328,13 +330,20 @@ static async Task<OcrResult> ExtractOcrAsync(AppCommandLineOptions commandLineOp
         Language = commandLineOptions.OcrLanguage,
         TesseractExecutablePath = commandLineOptions.TesseractExecutablePath,
         PageSegmentationMode = commandLineOptions.OcrPageSegmentationMode,
-        OcrRegion = commandLineOptions.OcrRegion
+        OcrRegion = null
     };
+
+    OcrRegionSourceResolver regionSourceResolver = new();
+    ResolvedOcrRegion resolvedRegion = regionSourceResolver.ResolveForImage(
+        commandLineOptions.GetOcrRegionSourceOptions(),
+        ocrOptions.InputImagePath!);
+    ocrOptions.OcrRegion = resolvedRegion.Region;
 
     OcrInputPreparer inputPreparer = new();
     IOcrService ocrService = new TesseractCliOcrService();
     Console.WriteLine($"OCR input: {ocrOptions.InputImagePath}");
     Console.WriteLine($"OCR language: {ocrOptions.Language}, psm: {ocrOptions.PageSegmentationMode}");
+    Console.WriteLine($"OCR region source: {resolvedRegion.SourceLabel}");
     if (ocrOptions.OcrRegion is not null)
     {
         Console.WriteLine($"OCR region: {ocrOptions.OcrRegion}");

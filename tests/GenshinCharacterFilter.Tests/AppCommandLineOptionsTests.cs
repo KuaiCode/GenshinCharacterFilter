@@ -109,6 +109,29 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
+    public void Parse_ReadsOcrRegionConfig()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--ocr-once", "--ocr-input", "input.png", "--ocr-region-config", "ocr-region.json"]);
+
+        Assert.Equal("ocr-region.json", options.OcrRegionConfigPath);
+        Assert.Null(options.OcrRegion);
+    }
+
+    [Theory]
+    [InlineData("auto", OcrRegionPreset.Auto)]
+    [InlineData("2560x1600", OcrRegionPreset.Size2560x1600)]
+    [InlineData("1920x1080", OcrRegionPreset.Size1920x1080)]
+    [InlineData("none", OcrRegionPreset.None)]
+    public void Parse_ReadsOcrRegionPreset(string value, OcrRegionPreset expectedPreset)
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--ocr-once", "--ocr-input", "input.png", "--ocr-region-preset", value]);
+
+        Assert.Equal(expectedPreset, options.OcrRegionPreset);
+    }
+
+    [Fact]
     public void Parse_ReadsDetectSpeakerOnceAndSpeakerText()
     {
         AppCommandLineOptions options = AppCommandLineOptions.Parse(
@@ -159,7 +182,7 @@ public sealed class AppCommandLineOptionsTests
     public void Parse_ReadsGuardedRealAudioFromDetection()
     {
         AppCommandLineOptions options = AppCommandLineOptions.Parse(
-            ["--detect-loop", "--real-audio", "--allow-real-audio-from-detection", "--process", "chrome", "--ocr-input", "input.png"]);
+            ["--detect-loop", "--real-audio", "--allow-real-audio-from-detection", "--process", "chrome", "--ocr-input", "input.png", "--ocr-region", "1,2,3,4"]);
 
         Assert.True(options.DetectLoop);
         Assert.True(options.UseRealAudio);
@@ -274,6 +297,8 @@ public sealed class AppCommandLineOptionsTests
     [InlineData("--tesseract-path")]
     [InlineData("--ocr-psm")]
     [InlineData("--ocr-region")]
+    [InlineData("--ocr-region-config")]
+    [InlineData("--ocr-region-preset")]
     [InlineData("--speaker-text")]
     [InlineData("--loop-interval-ms")]
     [InlineData("--loop-count")]
@@ -393,12 +418,13 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
-    public void Parse_DetectLoopProcessModeRequiresOcrRegion()
+    public void Parse_DetectLoopProcessModeAllowsFullImageForDryRun()
     {
-        ArgumentException exception = Assert.Throws<ArgumentException>(
-            () => AppCommandLineOptions.Parse(["--detect-loop", "--process", "notepad"]));
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--detect-loop", "--process", "notepad"]);
 
-        Assert.Contains("--ocr-region", exception.Message);
+        Assert.True(options.DetectLoop);
+        Assert.Equal("notepad", options.TargetProcessName);
+        Assert.Null(options.OcrRegion);
     }
 
     [Fact]
@@ -460,6 +486,16 @@ public sealed class AppCommandLineOptionsTests
         Assert.Contains("--process", exception.Message);
     }
 
+    [Fact]
+    public void Parse_AllowRealAudioFromDetectionRequiresOcrRegionSource()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(
+                ["--allow-real-audio-from-detection", "--real-audio", "--detect-loop", "--process", "chrome", "--ocr-input", "input.png"]));
+
+        Assert.Contains("--ocr-region", exception.Message);
+    }
+
     [Theory]
     [InlineData("-1")]
     [InlineData("14")]
@@ -481,6 +517,62 @@ public sealed class AppCommandLineOptionsTests
     {
         Assert.ThrowsAny<ArgumentException>(
             () => AppCommandLineOptions.Parse(["--ocr-region", region]));
+    }
+
+    [Fact]
+    public void Parse_RejectsInvalidOcrRegionPreset()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--ocr-region-preset", "4k"]));
+
+        Assert.Contains("OCR region preset", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_RejectsOcrRegionAndConfigTogether()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--ocr-region", "1,2,3,4", "--ocr-region-config", "ocr-region.json"]));
+
+        Assert.Contains("--ocr-region-config", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_RejectsOcrRegionAndExplicitPresetTogether()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--ocr-region", "1,2,3,4", "--ocr-region-preset", "auto"]));
+
+        Assert.Contains("--ocr-region-preset", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_AllowsOcrRegionAndPresetNone()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--ocr-region", "1,2,3,4", "--ocr-region-preset", "none"]);
+
+        Assert.Equal(new OcrRegion(1, 2, 3, 4), options.OcrRegion);
+        Assert.Equal(OcrRegionPreset.None, options.OcrRegionPreset);
+    }
+
+    [Fact]
+    public void Parse_RejectsOcrRegionConfigAndExplicitPresetTogether()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--ocr-region-config", "ocr-region.json", "--ocr-region-preset", "1920x1080"]));
+
+        Assert.Contains("--ocr-region-preset", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_AllowsOcrRegionConfigAndPresetNone()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--ocr-region-config", "ocr-region.json", "--ocr-region-preset", "none"]);
+
+        Assert.Equal("ocr-region.json", options.OcrRegionConfigPath);
+        Assert.Equal(OcrRegionPreset.None, options.OcrRegionPreset);
     }
 
     [Theory]

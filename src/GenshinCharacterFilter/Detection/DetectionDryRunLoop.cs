@@ -13,6 +13,7 @@ public sealed class DetectionDryRunLoop
     private readonly ISpeakerMatcher _speakerMatcher;
     private readonly IGameWindowCapture _windowCapture;
     private readonly OcrInputPreparer _ocrInputPreparer;
+    private readonly OcrRegionSourceResolver _ocrRegionSourceResolver;
     private readonly DetectionAudioCoordinator? _audioCoordinator;
     private readonly string _audioActionLabel;
     private readonly TextWriter _log;
@@ -22,6 +23,7 @@ public sealed class DetectionDryRunLoop
         ISpeakerMatcher speakerMatcher,
         IGameWindowCapture windowCapture,
         OcrInputPreparer? ocrInputPreparer = null,
+        OcrRegionSourceResolver? ocrRegionSourceResolver = null,
         DetectionAudioCoordinator? audioCoordinator = null,
         string audioActionLabel = "Simulated audio action",
         TextWriter? log = null)
@@ -30,6 +32,7 @@ public sealed class DetectionDryRunLoop
         _speakerMatcher = speakerMatcher;
         _windowCapture = windowCapture;
         _ocrInputPreparer = ocrInputPreparer ?? new OcrInputPreparer();
+        _ocrRegionSourceResolver = ocrRegionSourceResolver ?? new OcrRegionSourceResolver();
         _audioCoordinator = audioCoordinator;
         _audioActionLabel = string.IsNullOrWhiteSpace(audioActionLabel)
             ? "Audio action"
@@ -88,10 +91,15 @@ public sealed class DetectionDryRunLoop
     {
         _log.WriteLine($"Dry-run iteration {iteration} started.");
         string inputImagePath = await ResolveInputImagePathAsync(options, cancellationToken);
-        OcrOptions ocrOptions = BuildOcrOptions(options, inputImagePath);
+        ResolvedOcrRegion resolvedRegion = _ocrRegionSourceResolver.ResolveForImage(
+            options.GetOcrRegionSourceOptions(),
+            inputImagePath);
+        _log.WriteLine($"OCR region source: {resolvedRegion.SourceLabel}");
+
+        OcrOptions ocrOptions = BuildOcrOptions(options, inputImagePath, resolvedRegion.Region);
         string preparedInputPath = _ocrInputPreparer.PrepareInput(ocrOptions);
 
-        OcrOptions preparedOptions = BuildOcrOptions(options, preparedInputPath);
+        OcrOptions preparedOptions = BuildOcrOptions(options, preparedInputPath, null);
         preparedOptions.OcrRegion = null;
 
         OcrResult ocrResult = await _ocrService.ExtractTextAsync(preparedOptions, cancellationToken);
@@ -106,7 +114,13 @@ public sealed class DetectionDryRunLoop
             ? null
             : await _audioCoordinator.ApplyAsync(stabilityResult, cancellationToken);
 
-        return new DetectionDryRunResult(iteration, ocrResult, matchResult, stabilityResult, audioActionResult);
+        return new DetectionDryRunResult(
+            iteration,
+            ocrResult,
+            matchResult,
+            stabilityResult,
+            resolvedRegion.SourceLabel,
+            audioActionResult);
     }
 
     private async Task<string> ResolveInputImagePathAsync(DetectionDryRunOptions options, CancellationToken cancellationToken)
@@ -126,7 +140,10 @@ public sealed class DetectionDryRunLoop
         return await _windowCapture.CaptureOnceAsync(captureOptions, cancellationToken);
     }
 
-    private static OcrOptions BuildOcrOptions(DetectionDryRunOptions options, string inputImagePath)
+    private static OcrOptions BuildOcrOptions(
+        DetectionDryRunOptions options,
+        string inputImagePath,
+        OcrRegion? ocrRegion)
     {
         return new OcrOptions
         {
@@ -134,7 +151,7 @@ public sealed class DetectionDryRunLoop
             Language = options.OcrLanguage,
             TesseractExecutablePath = options.TesseractExecutablePath,
             PageSegmentationMode = options.OcrPageSegmentationMode,
-            OcrRegion = options.OcrRegion
+            OcrRegion = ocrRegion
         };
     }
 
@@ -143,6 +160,7 @@ public sealed class DetectionDryRunLoop
         _log.WriteLine($"Iteration: {result.Iteration}");
         _log.WriteLine("OCR raw text:");
         _log.WriteLine(result.OcrResult.RawText);
+        _log.WriteLine($"OCR region source: {result.OcrRegionSourceLabel}");
         _log.WriteLine($"Normalized text: {result.SpeakerMatchResult.NormalizedText}");
         _log.WriteLine($"Raw matched: {result.SpeakerMatchResult.Matched}");
         _log.WriteLine($"Raw matched speaker: {result.SpeakerMatchResult.MatchedSpeaker ?? "(none)"}");

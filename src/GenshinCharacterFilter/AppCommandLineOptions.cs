@@ -52,6 +52,10 @@ public sealed class AppCommandLineOptions
 
     public OcrRegion? OcrRegion { get; private init; }
 
+    public string? OcrRegionConfigPath { get; private init; }
+
+    public OcrRegionPreset? OcrRegionPreset { get; private init; }
+
     public string? SpeakerText { get; private init; }
 
     public int LoopIntervalMs { get; private init; } = DetectionDryRunOptions.DefaultLoopIntervalMs;
@@ -128,6 +132,8 @@ public sealed class AppCommandLineOptions
         string? tesseractExecutablePath = GetOptionValue(arguments, "--tesseract-path");
         string? ocrPsmValue = GetOptionValue(arguments, "--ocr-psm");
         string? ocrRegionValue = GetOptionValue(arguments, "--ocr-region");
+        string? ocrRegionConfigPath = GetOptionValue(arguments, "--ocr-region-config");
+        string? ocrRegionPresetValue = GetOptionValue(arguments, "--ocr-region-preset");
         int ocrPageSegmentationMode = OcrOptions.DefaultPageSegmentationMode;
         if (ocrPsmValue is not null &&
             !int.TryParse(ocrPsmValue, out ocrPageSegmentationMode))
@@ -145,6 +151,16 @@ public sealed class AppCommandLineOptions
         OcrRegion? ocrRegion = ocrRegionValue is null
             ? null
             : GenshinCharacterFilter.Ocr.OcrRegion.Parse(ocrRegionValue);
+        OcrRegionPreset? ocrRegionPreset = ocrRegionPresetValue is null
+            ? null
+            : OcrRegionPresetRegistry.Parse(ocrRegionPresetValue);
+        OcrRegionSourceOptions ocrRegionSourceOptions = new()
+        {
+            AbsoluteRegion = ocrRegion,
+            CalibrationFilePath = ocrRegionConfigPath,
+            Preset = ocrRegionPreset
+        };
+        ocrRegionSourceOptions.Validate();
 
         string? loopIntervalValue = GetOptionValue(arguments, "--loop-interval-ms");
         int loopIntervalMs = DetectionDryRunOptions.DefaultLoopIntervalMs;
@@ -184,11 +200,6 @@ public sealed class AppCommandLineOptions
             throw new ArgumentException("--detect-loop requires --ocr-input <imagePath> or --process <name>.", nameof(arguments));
         }
 
-        if (detectLoop && ocrInputPath is null && processName is not null && ocrRegion is null)
-        {
-            throw new ArgumentException("--detect-loop process mode requires --ocr-region <x,y,width,height>.", nameof(arguments));
-        }
-
         if (simulateAudioFromDetection && !detectLoop)
         {
             throw new ArgumentException("--simulate-audio-from-detection requires --detect-loop.", nameof(arguments));
@@ -217,6 +228,11 @@ public sealed class AppCommandLineOptions
         if (allowRealAudioFromDetection && processName is null)
         {
             throw new ArgumentException("--allow-real-audio-from-detection requires --process <target>.", nameof(arguments));
+        }
+
+        if (allowRealAudioFromDetection && !ocrRegionSourceOptions.HasEffectiveRegionSource)
+        {
+            throw new ArgumentException("--allow-real-audio-from-detection requires --ocr-region, --ocr-region-config, or --ocr-region-preset.", nameof(arguments));
         }
 
         if (calibrateOcrRegion && useRealAudio)
@@ -249,6 +265,8 @@ public sealed class AppCommandLineOptions
             TesseractExecutablePath = tesseractExecutablePath ?? OcrOptions.DefaultTesseractExecutablePath,
             OcrPageSegmentationMode = ocrPageSegmentationMode,
             OcrRegion = ocrRegion,
+            OcrRegionConfigPath = ocrRegionConfigPath,
+            OcrRegionPreset = ocrRegionPreset,
             SpeakerText = speakerText,
             LoopIntervalMs = loopIntervalMs,
             LoopCount = loopCount,
@@ -294,6 +312,19 @@ public sealed class AppCommandLineOptions
             "reduce" => AudioFilterMode.ReduceVolume,
             "reduce-volume" => AudioFilterMode.ReduceVolume,
             _ => throw new ArgumentException("Audio mode must be 'mute' or 'reduce'.", nameof(audioMode))
+        };
+    }
+
+    /// <summary>
+    /// Builds OCR region source options from parsed CLI values.
+    /// </summary>
+    public OcrRegionSourceOptions GetOcrRegionSourceOptions()
+    {
+        return new OcrRegionSourceOptions
+        {
+            AbsoluteRegion = OcrRegion,
+            CalibrationFilePath = OcrRegionConfigPath,
+            Preset = OcrRegionPreset
         };
     }
 

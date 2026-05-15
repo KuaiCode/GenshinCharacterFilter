@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.10 Manual OCR Region Calibration**.
+Current milestone: **v0.11 OCR Region Source Resolution**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, and v0.9 Guarded Real Audio Integration are implemented. v0.10 adds an explicit manual OCR region calibration tool.
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, and v0.10 Manual OCR Region Calibration are implemented. v0.11 adds unified OCR region source resolution.
 
 ## Current Scope
 
@@ -22,8 +22,9 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Explicit simulated detection audio mode using stable state only.
 - Guarded real detection audio mode using stable state only.
 - Explicit manual OCR region calibration that saves pixel and ratio coordinates.
+- Unified OCR region source resolution through absolute pixels, calibration JSON, or preset selector.
 
-Out of scope: default automatic real audio, unguarded real detection audio, production auto mute, fuzzy matching, speaker recognition from image, full GUI application, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
+Out of scope: default automatic real audio, unguarded real detection audio, production auto mute, automatic OCR region detection, fabricated preset coordinates, fuzzy matching, speaker recognition from image, full GUI application, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
 
 ## Commands
 
@@ -68,7 +69,7 @@ OCR mode only runs when `--ocr-once` is supplied. It reads an existing local ima
 
 The first OCR provider is the external Tesseract CLI. Install Tesseract separately and make `tesseract` available on `PATH`, or pass `--tesseract-path <path>`. This repository does not vendor tessdata files. For Simplified Chinese OCR, install the `chi_sim` language data; English OCR uses `eng`. The default OCR language is `chi_sim+eng`, and the default page segmentation mode is `7`, which is intended for a single line or small amount of text.
 
-Whole-image OCR can pick up window menus, status bars, and other UI text. Prefer `--ocr-region <x,y,width,height>` to crop the OCR input to the text area you want to inspect. The region uses image coordinates with `0,0` at the top-left. When a region is supplied, the cropped debug image is saved as `debug-ocr/ocr-input-latest.png`; inspect that file to confirm what is actually sent to OCR.
+Whole-image OCR can pick up window menus, status bars, and other UI text. Prefer `--ocr-region <x,y,width,height>` or `--ocr-region-config <path>` to crop the OCR input to the text area you want to inspect. Absolute regions use image coordinates with `0,0` at the top-left. Calibration files use the saved ratio region to compute pixels for the current input image size. When a region is resolved, the cropped debug image is saved as `debug-ocr/ocr-input-latest.png`; inspect that file to confirm what is actually sent to OCR.
 
 For the current v0.4 OCR path, prefer a raw cropped image first. Manual testing found that keeping the original cropped image can preserve anti-aliased Chinese strokes better than extra preprocessing. For Chinese-only lines, try `--ocr-lang chi_sim` before `chi_sim+eng`; mixed language mode can make Tesseract prefer English-looking guesses. The final cropped image sent to OCR is written to `debug-ocr/ocr-input-latest.png` whenever `--ocr-region` is enabled.
 
@@ -88,6 +89,12 @@ Recommended Chinese OCR debugging with a raw cropped region:
 
 ```powershell
 dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --ocr-once --ocr-input debug-captures/capture-latest.png --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
+```
+
+Manual OCR verification using a calibration file:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --ocr-once --ocr-input debug-captures/capture-latest.png --ocr-region-config ocr-region.json --ocr-lang chi_sim --ocr-psm 7 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
 ```
 
 If Tesseract is not installed or the requested language data is missing, the app reports a clear OCR error. No screenshots are sent to cloud OCR services.
@@ -128,7 +135,7 @@ Window capture dry run:
 dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --detect-loop --process notepad --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --loop-count 5 --loop-interval-ms 500 --match-threshold 2 --miss-threshold 2 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
 ```
 
-Use `--loop-interval-ms <number>` to control timing. The allowed range is 100 to 10000 ms. Use `--loop-count <number>` to run a fixed number of iterations; omit it to run until Ctrl+C. Use `--match-threshold <number>` and `--miss-threshold <number>` to require consecutive raw matches or misses before the stable state changes; the allowed range is 1 to 10 and the default is 2 for both. Process capture mode requires `--ocr-region` so the loop observes the intended text area instead of full-window UI noise.
+Use `--loop-interval-ms <number>` to control timing. The allowed range is 100 to 10000 ms. Use `--loop-count <number>` to run a fixed number of iterations; omit it to run until Ctrl+C. Use `--match-threshold <number>` and `--miss-threshold <number>` to require consecutive raw matches or misses before the stable state changes; the allowed range is 1 to 10 and the default is 2 for both. Process capture mode should use `--ocr-region`, `--ocr-region-config`, or a configured preset so the loop observes the intended text area instead of full-window UI noise.
 
 The output includes raw matched, raw matched speaker, stable matched, stable matched speaker, stable state changed, consecutive match count, and consecutive miss count. The stable signal is still observation-only unless `--simulate-audio-from-detection` is explicitly supplied.
 
@@ -153,7 +160,7 @@ Guarded real detection audio is disabled by default. It runs only when all requi
 - `--allow-real-audio-from-detection`
 - `--process <target>`
 
-The mode uses the same OCR, speaker matching, and stability gate as dry-run mode. Only stable matched state can request real mute/reduce, and only stable not-matched state can request restore. Raw contains matching never directly controls audio. The app prints a clear warning before starting and attempts restore on shutdown or cancellation. If audio apply fails after it has started, shutdown/cancellation still attempts restore where possible.
+The mode uses the same OCR, speaker matching, and stability gate as dry-run mode. Only stable matched state can request real mute/reduce, and only stable not-matched state can request restore. Raw contains matching never directly controls audio. Guarded real detection audio requires a valid OCR region source through `--ocr-region`, `--ocr-region-config`, or a configured preset. The app prints a clear warning before starting and attempts restore on shutdown or cancellation. If audio apply fails after it has started, shutdown/cancellation still attempts restore where possible.
 
 Recommended first manual test target is a normal browser audio session such as Chrome, not the game:
 
@@ -182,6 +189,24 @@ Workflow:
 - press Esc to cancel.
 
 The output JSON includes `sourceImageWidth`, `sourceImageHeight`, `regionPixels`, `regionRatio`, `generatedAt`, and `sourceProcessName`. Ratio coordinates are useful when the same relative speaker-name area must be reapplied after resolution or window-size changes.
+
+## OCR Region Source Resolution
+
+OCR and detection modes can resolve their OCR region from one of these sources:
+
+- `--ocr-region <x,y,width,height>`: absolute pixel region for the current image.
+- `--ocr-region-config <path>`: local calibration JSON generated by `--calibrate-ocr-region`; the saved `regionRatio` is converted to pixels for the current image size.
+- `--ocr-region-preset auto|2560x1600|1920x1080|none`: preset selector.
+
+Priority is absolute pixels, then calibration JSON, then preset. Do not combine `--ocr-region` with `--ocr-region-config`. Do not combine `--ocr-region-config` with an explicit preset unless the preset is `none`.
+
+Preset support is intentionally conservative. The only planned built-in preset names are `2560x1600` and `1920x1080`; preset coordinates must come from real calibration data and are not guessed. If a preset is selected but has no calibrated region, the app reports that the preset is not configured and asks you to run calibration or provide `--ocr-region-config`.
+
+`--ocr-region-preset auto` matches only exact image sizes of `2560x1600` or `1920x1080`. Other resolutions should use manual calibration:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --calibrate-ocr-region --process notepad --capture-output debug-captures --calibration-output ocr-region.json
+```
 
 ## Configuration File
 
@@ -245,6 +270,8 @@ Supported overrides:
 - `--tesseract-path <path>`
 - `--ocr-psm <number>`
 - `--ocr-region <x,y,width,height>`
+- `--ocr-region-config <path>`
+- `--ocr-region-preset auto|2560x1600|1920x1080|none`
 - `--detect-speaker-once`
 - `--speaker-text <text>`
 - `--detect-loop`
