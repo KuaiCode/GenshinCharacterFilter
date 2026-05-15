@@ -13,7 +13,8 @@ public sealed class DetectionDryRunLoop
     private readonly ISpeakerMatcher _speakerMatcher;
     private readonly IGameWindowCapture _windowCapture;
     private readonly OcrInputPreparer _ocrInputPreparer;
-    private readonly SimulatedDetectionAudioCoordinator? _simulatedAudioCoordinator;
+    private readonly DetectionAudioCoordinator? _audioCoordinator;
+    private readonly string _audioActionLabel;
     private readonly TextWriter _log;
 
     public DetectionDryRunLoop(
@@ -21,14 +22,18 @@ public sealed class DetectionDryRunLoop
         ISpeakerMatcher speakerMatcher,
         IGameWindowCapture windowCapture,
         OcrInputPreparer? ocrInputPreparer = null,
-        SimulatedDetectionAudioCoordinator? simulatedAudioCoordinator = null,
+        DetectionAudioCoordinator? audioCoordinator = null,
+        string audioActionLabel = "Simulated audio action",
         TextWriter? log = null)
     {
         _ocrService = ocrService;
         _speakerMatcher = speakerMatcher;
         _windowCapture = windowCapture;
         _ocrInputPreparer = ocrInputPreparer ?? new OcrInputPreparer();
-        _simulatedAudioCoordinator = simulatedAudioCoordinator;
+        _audioCoordinator = audioCoordinator;
+        _audioActionLabel = string.IsNullOrWhiteSpace(audioActionLabel)
+            ? "Audio action"
+            : audioActionLabel;
         _log = log ?? TextWriter.Null;
     }
 
@@ -62,14 +67,14 @@ public sealed class DetectionDryRunLoop
         }
         finally
         {
-            if (_simulatedAudioCoordinator is not null)
+            if (_audioCoordinator is not null)
             {
-                // 退出或取消时仍要尝试恢复模拟状态，避免下一次调试误判当前音频状态。
-                SimulatedAudioActionResult shutdownResult =
-                    await _simulatedAudioCoordinator.RestoreForShutdownAsync(CancellationToken.None);
-                if (shutdownResult.Action != SimulatedAudioAction.None)
+                // 退出或取消时仍要尝试恢复，避免检测驱动的音频状态残留。
+                DetectionAudioActionResult shutdownResult =
+                    await _audioCoordinator.RestoreForShutdownAsync(CancellationToken.None);
+                if (shutdownResult.Action != DetectionAudioAction.None)
                 {
-                    _log.WriteLine($"Simulated audio shutdown action: {FormatAction(shutdownResult.Action)}");
+                    _log.WriteLine($"{FormatShutdownActionLabel(_audioActionLabel)}: {FormatAction(shutdownResult.Action)}");
                 }
             }
         }
@@ -97,11 +102,11 @@ public sealed class DetectionDryRunLoop
                 TargetSpeakers = options.TargetSpeakers
             });
         DetectionStabilityResult stabilityResult = stabilityGate.Observe(matchResult);
-        SimulatedAudioActionResult? simulatedAudioActionResult = _simulatedAudioCoordinator is null
+        DetectionAudioActionResult? audioActionResult = _audioCoordinator is null
             ? null
-            : await _simulatedAudioCoordinator.ApplyAsync(stabilityResult, cancellationToken);
+            : await _audioCoordinator.ApplyAsync(stabilityResult, cancellationToken);
 
-        return new DetectionDryRunResult(iteration, ocrResult, matchResult, stabilityResult, simulatedAudioActionResult);
+        return new DetectionDryRunResult(iteration, ocrResult, matchResult, stabilityResult, audioActionResult);
     }
 
     private async Task<string> ResolveInputImagePathAsync(DetectionDryRunOptions options, CancellationToken cancellationToken)
@@ -146,9 +151,9 @@ public sealed class DetectionDryRunLoop
         _log.WriteLine($"Stable state changed: {result.StabilityResult.StableStateChanged}");
         _log.WriteLine($"Consecutive match count: {result.StabilityResult.ConsecutiveMatchCount}");
         _log.WriteLine($"Consecutive miss count: {result.StabilityResult.ConsecutiveMissCount}");
-        if (result.SimulatedAudioActionResult is not null)
+        if (result.DetectionAudioActionResult is not null)
         {
-            _log.WriteLine($"Simulated audio action: {FormatAction(result.SimulatedAudioActionResult.Action)}");
+            _log.WriteLine($"{_audioActionLabel}: {FormatAction(result.DetectionAudioActionResult.Action)}");
         }
 
         if (result.StabilityResult.StableStateChanged)
@@ -159,13 +164,22 @@ public sealed class DetectionDryRunLoop
         _log.WriteLine($"Dry-run iteration {result.Iteration} completed.");
     }
 
-    private static string FormatAction(SimulatedAudioAction action)
+    private static string FormatAction(DetectionAudioAction action)
     {
         return action switch
         {
-            SimulatedAudioAction.Mute => "mute",
-            SimulatedAudioAction.Restore => "restore",
+            DetectionAudioAction.Mute => "mute",
+            DetectionAudioAction.Reduce => "reduce",
+            DetectionAudioAction.Restore => "restore",
             _ => "none"
         };
+    }
+
+    private static string FormatShutdownActionLabel(string actionLabel)
+    {
+        const string suffix = " action";
+        return actionLabel.EndsWith(suffix, StringComparison.Ordinal)
+            ? $"{actionLabel[..^suffix.Length]} shutdown action"
+            : $"{actionLabel} shutdown action";
     }
 }

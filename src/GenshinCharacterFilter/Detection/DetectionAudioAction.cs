@@ -1,11 +1,12 @@
 namespace GenshinCharacterFilter.Detection;
 
 /// <summary>
-/// Describes the simulated audio action requested by stable detection.
+/// Describes the audio action requested by stable detection.
 /// </summary>
-public enum SimulatedAudioAction
+public enum DetectionAudioAction
 {
     None,
     Mute,
+    Reduce,
     Restore
 }

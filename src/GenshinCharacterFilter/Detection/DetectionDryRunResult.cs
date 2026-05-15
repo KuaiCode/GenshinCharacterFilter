@@ -11,4 +11,4 @@ public sealed record DetectionDryRunResult(
     OcrResult OcrResult,
     SpeakerMatchResult SpeakerMatchResult,
     DetectionStabilityResult StabilityResult,
-    SimulatedAudioActionResult? SimulatedAudioActionResult = null);
+    DetectionAudioActionResult? DetectionAudioActionResult = null);

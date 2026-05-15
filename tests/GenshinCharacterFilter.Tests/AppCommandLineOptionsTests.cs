@@ -131,6 +131,18 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
+    public void Parse_ReadsGuardedRealAudioFromDetection()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--detect-loop", "--real-audio", "--allow-real-audio-from-detection", "--process", "chrome", "--ocr-input", "input.png"]);
+
+        Assert.True(options.DetectLoop);
+        Assert.True(options.UseRealAudio);
+        Assert.True(options.AllowRealAudioFromDetection);
+        Assert.Equal("chrome", options.TargetProcessName);
+    }
+
+    [Fact]
     public void Parse_ReadsDetectLoopWithProcessInput()
     {
         AppCommandLineOptions options = AppCommandLineOptions.Parse(
@@ -362,6 +374,46 @@ public sealed class AppCommandLineOptionsTests
                 ["--simulate-audio-from-detection", "--detect-loop", "--ocr-input", "input.png", "--real-audio"]));
 
         Assert.Contains("--real-audio", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_RealAudioDetectLoopRequiresAllowFlag()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(
+                ["--detect-loop", "--real-audio", "--process", "chrome", "--ocr-input", "input.png"]));
+
+        Assert.Contains("--allow-real-audio-from-detection", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_AllowRealAudioFromDetectionRequiresRealAudio()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(
+                ["--allow-real-audio-from-detection", "--detect-loop", "--process", "chrome", "--ocr-input", "input.png"]));
+
+        Assert.Contains("--real-audio", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_AllowRealAudioFromDetectionRequiresDetectLoop()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(
+                ["--allow-real-audio-from-detection", "--real-audio", "--process", "chrome"]));
+
+        Assert.Contains("--detect-loop", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_AllowRealAudioFromDetectionRequiresExplicitProcess()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(
+                ["--allow-real-audio-from-detection", "--real-audio", "--detect-loop", "--ocr-input", "input.png"]));
+
+        Assert.Contains("--process", exception.Message);
     }
 
     [Theory]

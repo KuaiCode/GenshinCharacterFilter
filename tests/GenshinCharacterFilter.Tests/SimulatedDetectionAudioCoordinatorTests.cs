@@ -13,11 +13,11 @@ public sealed class SimulatedDetectionAudioCoordinatorTests
         SimulatedDetectionAudioCoordinator coordinator = new(audio);
         DetectionStabilityGate gate = CreateGate();
 
-        SimulatedAudioActionResult result = await coordinator.ApplyAsync(
+        DetectionAudioActionResult result = await coordinator.ApplyAsync(
             gate.Observe(Matched("Wanderer")),
             CancellationToken.None);
 
-        Assert.Equal(SimulatedAudioAction.None, result.Action);
+        Assert.Equal(DetectionAudioAction.None, result.Action);
         Assert.Equal(0, audio.MuteCalls);
     }
 
@@ -29,11 +29,33 @@ public sealed class SimulatedDetectionAudioCoordinatorTests
         DetectionStabilityGate gate = CreateGate();
 
         await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
-        SimulatedAudioActionResult result = await coordinator.ApplyAsync(
+        DetectionAudioActionResult result = await coordinator.ApplyAsync(
             gate.Observe(Matched("Wanderer")),
             CancellationToken.None);
 
-        Assert.Equal(SimulatedAudioAction.Mute, result.Action);
+        Assert.Equal(DetectionAudioAction.Mute, result.Action);
+        Assert.Equal(1, audio.MuteCalls);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_StableMatchedWithReduceModeReturnsReduceAction()
+    {
+        FakeAudioMuteService audio = new();
+        SimulatedDetectionAudioCoordinator coordinator = new(
+            audio,
+            new AudioFilterOptions
+            {
+                Mode = AudioFilterMode.ReduceVolume,
+                VolumePercent = 30
+            });
+        DetectionStabilityGate gate = CreateGate();
+
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        DetectionAudioActionResult result = await coordinator.ApplyAsync(
+            gate.Observe(Matched("Wanderer")),
+            CancellationToken.None);
+
+        Assert.Equal(DetectionAudioAction.Reduce, result.Action);
         Assert.Equal(1, audio.MuteCalls);
     }
 
@@ -46,11 +68,11 @@ public sealed class SimulatedDetectionAudioCoordinatorTests
 
         await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
         await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
-        SimulatedAudioActionResult repeated = await coordinator.ApplyAsync(
+        DetectionAudioActionResult repeated = await coordinator.ApplyAsync(
             gate.Observe(Matched("Wanderer")),
             CancellationToken.None);
 
-        Assert.Equal(SimulatedAudioAction.None, repeated.Action);
+        Assert.Equal(DetectionAudioAction.None, repeated.Action);
         Assert.Equal(1, audio.MuteCalls);
     }
 
@@ -64,11 +86,11 @@ public sealed class SimulatedDetectionAudioCoordinatorTests
         await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
         await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
         await coordinator.ApplyAsync(gate.Observe(NotMatched()), CancellationToken.None);
-        SimulatedAudioActionResult result = await coordinator.ApplyAsync(
+        DetectionAudioActionResult result = await coordinator.ApplyAsync(
             gate.Observe(NotMatched()),
             CancellationToken.None);
 
-        Assert.Equal(SimulatedAudioAction.Restore, result.Action);
+        Assert.Equal(DetectionAudioAction.Restore, result.Action);
         Assert.Equal(1, audio.RestoreCalls);
     }
 
@@ -83,11 +105,11 @@ public sealed class SimulatedDetectionAudioCoordinatorTests
         await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
         await coordinator.ApplyAsync(gate.Observe(NotMatched()), CancellationToken.None);
         await coordinator.ApplyAsync(gate.Observe(NotMatched()), CancellationToken.None);
-        SimulatedAudioActionResult repeated = await coordinator.ApplyAsync(
+        DetectionAudioActionResult repeated = await coordinator.ApplyAsync(
             gate.Observe(NotMatched()),
             CancellationToken.None);
 
-        Assert.Equal(SimulatedAudioAction.None, repeated.Action);
+        Assert.Equal(DetectionAudioAction.None, repeated.Action);
         Assert.Equal(1, audio.RestoreCalls);
     }
 
@@ -108,9 +130,9 @@ public sealed class SimulatedDetectionAudioCoordinatorTests
             2,
             0);
 
-        SimulatedAudioActionResult result = await coordinator.ApplyAsync(stabilityResult, CancellationToken.None);
+        DetectionAudioActionResult result = await coordinator.ApplyAsync(stabilityResult, CancellationToken.None);
 
-        Assert.Equal(SimulatedAudioAction.None, result.Action);
+        Assert.Equal(DetectionAudioAction.None, result.Action);
         Assert.Equal(0, audio.MuteCalls);
     }
 
@@ -123,9 +145,9 @@ public sealed class SimulatedDetectionAudioCoordinatorTests
 
         await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
         await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
-        SimulatedAudioActionResult result = await coordinator.RestoreForShutdownAsync(CancellationToken.None);
+        DetectionAudioActionResult result = await coordinator.RestoreForShutdownAsync(CancellationToken.None);
 
-        Assert.Equal(SimulatedAudioAction.Restore, result.Action);
+        Assert.Equal(DetectionAudioAction.Restore, result.Action);
         Assert.Equal(1, audio.RestoreCalls);
     }
 

@@ -29,6 +29,8 @@ public sealed class AppCommandLineOptions
 
     public bool SimulateAudioFromDetection { get; private init; }
 
+    public bool AllowRealAudioFromDetection { get; private init; }
+
     public string TargetProcessName { get; private init; } = "GenshinImpact";
 
     public AudioFilterOptions AudioFilter { get; private init; } = new();
@@ -101,6 +103,8 @@ public sealed class AppCommandLineOptions
         bool detectSpeakerOnce = HasFlag(arguments, "--detect-speaker-once");
         bool detectLoop = HasFlag(arguments, "--detect-loop");
         bool simulateAudioFromDetection = HasFlag(arguments, "--simulate-audio-from-detection");
+        bool allowRealAudioFromDetection = HasFlag(arguments, "--allow-real-audio-from-detection");
+        bool useRealAudio = HasFlag(arguments, "--real-audio");
         string? ocrInputPath = GetOptionValue(arguments, "--ocr-input");
         if (ocrOnce && ocrInputPath is null)
         {
@@ -188,15 +192,36 @@ public sealed class AppCommandLineOptions
             throw new ArgumentException("--simulate-audio-from-detection cannot be combined with --real-audio.", nameof(arguments));
         }
 
+        if (allowRealAudioFromDetection && !useRealAudio)
+        {
+            throw new ArgumentException("--allow-real-audio-from-detection requires --real-audio.", nameof(arguments));
+        }
+
+        if (allowRealAudioFromDetection && !detectLoop)
+        {
+            throw new ArgumentException("--allow-real-audio-from-detection requires --detect-loop.", nameof(arguments));
+        }
+
+        if (detectLoop && useRealAudio && !allowRealAudioFromDetection)
+        {
+            throw new ArgumentException("--real-audio with --detect-loop requires --allow-real-audio-from-detection.", nameof(arguments));
+        }
+
+        if (allowRealAudioFromDetection && processName is null)
+        {
+            throw new ArgumentException("--allow-real-audio-from-detection requires --process <target>.", nameof(arguments));
+        }
+
         return new AppCommandLineOptions
         {
             ConfigPath = GetOptionValue(arguments, "--config"),
-            UseRealAudio = HasFlag(arguments, "--real-audio"),
+            UseRealAudio = useRealAudio,
             CaptureOnce = HasFlag(arguments, "--capture-once"),
             OcrOnce = ocrOnce,
             DetectSpeakerOnce = detectSpeakerOnce,
             DetectLoop = detectLoop,
             SimulateAudioFromDetection = simulateAudioFromDetection,
+            AllowRealAudioFromDetection = allowRealAudioFromDetection,
             TargetProcessName = processName ?? "GenshinImpact",
             AudioFilter = audioFilterOptions,
             CaptureOutputDirectory = captureOutputDirectory ?? WindowCaptureOptions.DefaultOutputDirectory,
@@ -211,7 +236,7 @@ public sealed class AppCommandLineOptions
             LoopCount = loopCount,
             MatchThreshold = matchThreshold,
             MissThreshold = missThreshold,
-            _realAudioSpecified = HasFlag(arguments, "--real-audio"),
+            _realAudioSpecified = useRealAudio,
             _targetProcessSpecified = processName is not null,
             _audioModeSpecified = audioModeSpecified,
             _volumePercentSpecified = volumePercentSpecified

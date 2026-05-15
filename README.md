@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.8 Simulated Audio Integration**.
+Current milestone: **v0.9 Guarded Real Audio Integration**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, and v0.7 Detection Stability Gate are implemented. v0.8 connects stable detection results to simulated audio actions while preserving the safe default simulated run.
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, and v0.8 Simulated Audio Integration are implemented. v0.9 allows stable detection to control real Windows audio only behind multiple explicit opt-in flags.
 
 ## Current Scope
 
@@ -20,8 +20,9 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Explicit OCR-driven detection dry-run loop for observing OCR and matching stability.
 - Stability-gated dry-run output using consecutive match/miss thresholds.
 - Explicit simulated detection audio mode using stable state only.
+- Guarded real detection audio mode using stable state only.
 
-Out of scope: real audio mute/restore based on OCR, `WindowsAudioMuteService` integration from detection, production auto mute, fuzzy matching, speaker recognition from image, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
+Out of scope: default automatic real audio, unguarded real detection audio, production auto mute, fuzzy matching, speaker recognition from image, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
 
 ## Commands
 
@@ -142,6 +143,25 @@ dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj --
 
 The output includes raw matched, raw matched speaker, stable matched, stable matched speaker, and `Simulated audio action: none|mute|restore`. Raw contains matching below the stability threshold does not request simulated audio. Repeated stable matched/not-matched states do not repeatedly spam simulated mute/restore. Real audio integration remains a later phase.
 
+## Guarded Real Detection Audio
+
+Guarded real detection audio is disabled by default. It runs only when all required flags are supplied:
+
+- `--detect-loop`
+- `--real-audio`
+- `--allow-real-audio-from-detection`
+- `--process <target>`
+
+The mode uses the same OCR, speaker matching, and stability gate as dry-run mode. Only stable matched state can request real mute/reduce, and only stable not-matched state can request restore. Raw contains matching never directly controls audio. The app prints a clear warning before starting and attempts restore on shutdown or cancellation.
+
+Recommended first manual test target is a normal browser audio session such as Chrome, not the game:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --detect-loop --real-audio --allow-real-audio-from-detection --process chrome --ocr-input debug-captures/capture-latest.png --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --loop-count 5 --loop-interval-ms 500 --match-threshold 2 --miss-threshold 2 --audio-mode reduce --volume-percent 30 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
+```
+
+Do not use guarded real audio until the OCR region and stable detection output have already been checked in dry-run or simulated mode. The implementation controls only target process audio sessions through `WindowsAudioMuteService`; it does not inject into a game, read memory, hook rendering, modify files, or simulate keyboard/mouse input.
+
 ## Configuration File
 
 Use the included safe example:
@@ -212,6 +232,7 @@ Supported overrides:
 - `--match-threshold <number>`
 - `--miss-threshold <number>`
 - `--simulate-audio-from-detection`
+- `--allow-real-audio-from-detection`
 
 `--real-audio` only enables real audio. To keep real audio disabled, omit `--real-audio` and set `RealAudioEnabled` to `false` in config or use the safe defaults.
 
@@ -245,6 +266,7 @@ Real mode uses Windows Core Audio sessions through `WindowsAudioMuteService`. It
 - Run `--detect-speaker-once --speaker-text "流浪者："` and confirm the debug output reports `Matched: True` without enabling real audio.
 - Run a fixed-image `--detect-loop` with `--loop-count 5 --match-threshold 2 --miss-threshold 2` and confirm raw match output plus stable match output are printed without enabling real audio.
 - Run `--simulate-audio-from-detection --detect-loop` with a fixed image and confirm simulated audio actions are printed without enabling real audio.
+- Only after separate confirmation, run guarded real detection audio against Chrome with `--real-audio --allow-real-audio-from-detection --process chrome` and confirm restore occurs on exit.
 
 ## Dependency Policy
 

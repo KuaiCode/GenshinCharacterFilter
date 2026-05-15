@@ -1,18 +1,19 @@
 # Roadmap
 
-## Current Milestone: v0.8 Simulated Audio Integration
+## Current Milestone: v0.9 Guarded Real Audio Integration
 
 Status: in progress.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, and v0.7 Detection Stability Gate milestones have been manually verified. The v0.8 milestone is limited to:
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, and v0.8 Simulated Audio Integration milestones have been manually verified. The v0.9 milestone is limited to:
 
 - console app only;
-- simulated detection audio mode;
-- using stable detection result, not raw match, to drive simulated audio actions;
-- printing raw match, stable match, and simulated audio action;
-- rejecting or ignoring real audio for simulated detection audio mode;
+- guarded real detection audio mode;
+- requiring `--detect-loop`, `--real-audio`, `--allow-real-audio-from-detection`, and `--process <target>`;
+- using stable detection result, not raw match, to drive real audio actions;
+- printing warnings, target process, audio mode, stable match, and real audio action;
+- preserving simulated detection audio mode;
 - preserving existing simulated and opt-in real audio behavior;
-- no `WindowsAudioMuteService` integration from OCR, no real audio control from stable detection results, no GUI, overlay, or masking.
+- no default real audio control, no unguarded real audio control from stable detection results, no GUI, overlay, or masking.
 
 ## Phase Order
 
@@ -26,15 +27,16 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 8. OCR-driven detection dry run.
 9. Detection stability gate.
 10. Simulated audio integration.
-11. Stable mute/unmute coordination with debounce and recovery.
-12. Minimal UI.
-13. Optional masking.
+11. Guarded real audio integration.
+12. Stable mute/unmute coordination with debounce and recovery.
+13. Minimal UI.
+14. Optional masking.
 
-## Out of Scope for v0.8
+## Out of Scope for v0.9
 
 - Speaker recognition from image.
-- Real audio mute/restore based on OCR.
-- `WindowsAudioMuteService` integration from detection.
+- Default automatic real audio.
+- Real audio without explicit allow flag.
 - Production auto mute.
 - Fuzzy matching unless explicitly requested.
 - WPF or WinUI.

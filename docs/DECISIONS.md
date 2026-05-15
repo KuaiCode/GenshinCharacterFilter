@@ -184,3 +184,17 @@ Reasoning:
 - `WindowsAudioMuteService` is not created in this mode, and `--real-audio` is rejected when combined with simulated detection audio.
 - Real Windows audio integration from OCR remains a later phase after simulated sequencing is reviewed.
 - The behavior does not add fuzzy matching, GUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, input automation, or real audio control.
+
+## 2026-05-15: v0.9 Guarded Real Audio Integration
+
+Decision: allow stable detection to drive real Windows audio only behind multiple explicit opt-in flags.
+
+Reasoning:
+
+- Real detection audio requires `--detect-loop`, `--real-audio`, `--allow-real-audio-from-detection`, and `--process <target>`.
+- Raw contains matching still must not directly drive audio; only stability-gated matched/not-matched state may request mute/reduce/restore.
+- The implementation reuses `WindowsAudioMuteService` and existing audio filter modes instead of adding a new audio stack.
+- The mode prints a clear warning and target process/audio settings before starting.
+- Manual verification should start with a low-risk process such as Chrome before trying a game process.
+- Shutdown and cancellation should attempt restore where possible.
+- The behavior does not add GUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, input automation, game file modification, or keyboard/mouse automation.

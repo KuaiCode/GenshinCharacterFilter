@@ -66,7 +66,7 @@ public sealed class DetectionDryRunLoopTests
             new FakeOcrService(["target", "target"]),
             new FakeSpeakerMatcher(),
             new FakeWindowCapture(),
-            simulatedAudioCoordinator: new SimulatedDetectionAudioCoordinator(audio),
+            audioCoordinator: new SimulatedDetectionAudioCoordinator(audio),
             log: log);
 
         await loop.RunAsync(CreateOptions(input.Path), CancellationToken.None);
