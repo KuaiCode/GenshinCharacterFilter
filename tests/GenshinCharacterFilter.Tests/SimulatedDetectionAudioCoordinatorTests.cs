@@ -151,6 +151,81 @@ public sealed class SimulatedDetectionAudioCoordinatorTests
         Assert.Equal(1, audio.RestoreCalls);
     }
 
+    [Fact]
+    public async Task RestoreForShutdownAsync_AfterPartialMuteFailureAttemptsRestore()
+    {
+        PartialFailureAudioMuteService audio = new();
+        SimulatedDetectionAudioCoordinator coordinator = new(audio);
+        DetectionStabilityGate gate = CreateGate();
+
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None));
+        DetectionAudioActionResult result = await coordinator.RestoreForShutdownAsync(CancellationToken.None);
+
+        Assert.True(audio.PartialApplyStarted);
+        Assert.Equal(1, audio.MuteCalls);
+        Assert.Equal(DetectionAudioAction.Restore, result.Action);
+        Assert.Equal(1, audio.RestoreCalls);
+    }
+
+    [Fact]
+    public async Task RestoreForShutdownAsync_AfterPartialMuteFailureDoesNotSpamAfterSuccessfulRestore()
+    {
+        PartialFailureAudioMuteService audio = new();
+        SimulatedDetectionAudioCoordinator coordinator = new(audio);
+        DetectionStabilityGate gate = CreateGate();
+
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None));
+        await coordinator.RestoreForShutdownAsync(CancellationToken.None);
+        DetectionAudioActionResult repeated = await coordinator.RestoreForShutdownAsync(CancellationToken.None);
+
+        Assert.Equal(DetectionAudioAction.None, repeated.Action);
+        Assert.Equal(1, audio.RestoreCalls);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_AfterPartialMuteFailureDoesNotCallMuteRepeatedlyBeforeRestore()
+    {
+        PartialFailureAudioMuteService audio = new();
+        SimulatedDetectionAudioCoordinator coordinator = new(audio);
+        DetectionStabilityGate gate = CreateGate();
+
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None));
+        DetectionAudioActionResult repeated = await coordinator.ApplyAsync(
+            gate.Observe(Matched("Wanderer")),
+            CancellationToken.None);
+
+        Assert.Equal(DetectionAudioAction.None, repeated.Action);
+        Assert.Equal(1, audio.MuteCalls);
+    }
+
+    [Fact]
+    public async Task RestoreForShutdownAsync_AfterRestoreFailureCanRetry()
+    {
+        PartialFailureAudioMuteService audio = new()
+        {
+            ThrowOnRestore = true
+        };
+        SimulatedDetectionAudioCoordinator coordinator = new(audio);
+        DetectionStabilityGate gate = CreateGate();
+
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => coordinator.RestoreForShutdownAsync(CancellationToken.None));
+        audio.ThrowOnRestore = false;
+        DetectionAudioActionResult retry = await coordinator.RestoreForShutdownAsync(CancellationToken.None);
+
+        Assert.Equal(DetectionAudioAction.Restore, retry.Action);
+        Assert.Equal(2, audio.RestoreCalls);
+    }
+
     private static DetectionStabilityGate CreateGate()
     {
         return new DetectionStabilityGate(new DetectionStabilityOptions
@@ -187,6 +262,37 @@ public sealed class SimulatedDetectionAudioCoordinatorTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             RestoreCalls++;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class PartialFailureAudioMuteService : IAudioMuteService
+    {
+        public int MuteCalls { get; private set; }
+
+        public int RestoreCalls { get; private set; }
+
+        public bool PartialApplyStarted { get; private set; }
+
+        public bool ThrowOnRestore { get; set; }
+
+        public Task MuteAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            MuteCalls++;
+            PartialApplyStarted = true;
+            throw new InvalidOperationException("Simulated partial audio apply failure.");
+        }
+
+        public Task RestoreAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            RestoreCalls++;
+            if (ThrowOnRestore)
+            {
+                throw new InvalidOperationException("Simulated restore failure.");
+            }
+
             return Task.CompletedTask;
         }
     }

@@ -152,7 +152,7 @@ Guarded real detection audio is disabled by default. It runs only when all requi
 - `--allow-real-audio-from-detection`
 - `--process <target>`
 
-The mode uses the same OCR, speaker matching, and stability gate as dry-run mode. Only stable matched state can request real mute/reduce, and only stable not-matched state can request restore. Raw contains matching never directly controls audio. The app prints a clear warning before starting and attempts restore on shutdown or cancellation.
+The mode uses the same OCR, speaker matching, and stability gate as dry-run mode. Only stable matched state can request real mute/reduce, and only stable not-matched state can request restore. Raw contains matching never directly controls audio. The app prints a clear warning before starting and attempts restore on shutdown or cancellation. If audio apply fails after it has started, shutdown/cancellation still attempts restore where possible.
 
 Recommended first manual test target is a normal browser audio session such as Chrome, not the game:
 

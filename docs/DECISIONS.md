@@ -198,3 +198,15 @@ Reasoning:
 - Manual verification should start with a low-risk process such as Chrome before trying a game process.
 - Shutdown and cancellation should attempt restore where possible.
 - The behavior does not add GUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, input automation, game file modification, or keyboard/mouse automation.
+
+## 2026-05-15: v0.9.1 Restore After Partial Audio Apply Failure
+
+Decision: track that restore may be needed as soon as detection-driven audio apply starts, before `MuteAsync` finishes successfully.
+
+Reasoning:
+
+- Windows audio apply can snapshot and modify sessions one at a time.
+- If one session is already muted or reduced and a later session fails, shutdown must still attempt restore.
+- `DetectionAudioCoordinator` does not report the filter as successfully active until `MuteAsync` succeeds, but it keeps enough state to retry restore after partial failure.
+- Restore state is cleared only after `RestoreAsync` succeeds; if restore fails, a later shutdown/cancellation restore can retry.
+- Automated coverage uses fake `IAudioMuteService` implementations and does not control real system audio.
