@@ -1,19 +1,18 @@
 # Roadmap
 
-## Current Milestone: v0.9 Guarded Real Audio Integration
+## Current Milestone: v0.10 Manual OCR Region Calibration
 
 Status: in progress.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, and v0.8 Simulated Audio Integration milestones have been manually verified. The v0.9 milestone is limited to:
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, and v0.9 Guarded Real Audio Integration milestones have been manually verified where applicable. The v0.10 milestone is limited to:
 
 - console app only;
-- guarded real detection audio mode;
-- requiring `--detect-loop`, `--real-audio`, `--allow-real-audio-from-detection`, and `--process <target>`;
-- using stable detection result, not raw match, to drive real audio actions;
-- printing warnings, target process, audio mode, stable match, and real audio action;
-- preserving simulated detection audio mode;
+- explicit manual OCR region calibration mode;
+- capturing one target process/window screenshot;
+- displaying a minimal local calibration window for drag-selecting the speaker-name OCR region;
+- saving source screenshot size, pixel region, and ratio region to local JSON;
 - preserving existing simulated and opt-in real audio behavior;
-- no default real audio control, no unguarded real audio control from stable detection results, no GUI, overlay, or masking.
+- no OCR, real audio control, `MuteCoordinator`, full GUI application, overlay, or masking in calibration mode.
 
 ## Phase Order
 
@@ -28,16 +27,18 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 9. Detection stability gate.
 10. Simulated audio integration.
 11. Guarded real audio integration.
-12. Stable mute/unmute coordination with debounce and recovery.
-13. Minimal UI.
-14. Optional masking.
+12. Manual OCR region calibration.
+13. Stable mute/unmute coordination with debounce and recovery.
+14. Minimal UI.
+15. Optional masking.
 
-## Out of Scope for v0.9
+## Out of Scope for v0.10
 
 - Speaker recognition from image.
-- Default automatic real audio.
-- Real audio without explicit allow flag.
-- Production auto mute.
+- OCR during calibration unless explicitly requested in a later task.
+- Real audio during calibration.
+- MuteCoordinator integration during calibration.
+- Full GUI application.
 - Fuzzy matching unless explicitly requested.
 - WPF or WinUI.
 - Overlay masking.

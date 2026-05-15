@@ -1,4 +1,5 @@
 using GenshinCharacterFilter.Audio;
+using GenshinCharacterFilter.Calibration;
 using GenshinCharacterFilter.Capture;
 using GenshinCharacterFilter.Detection;
 using GenshinCharacterFilter.Ocr;
@@ -31,6 +32,8 @@ public sealed class AppCommandLineOptions
 
     public bool AllowRealAudioFromDetection { get; private init; }
 
+    public bool CalibrateOcrRegion { get; private init; }
+
     public string TargetProcessName { get; private init; } = "GenshinImpact";
 
     public AudioFilterOptions AudioFilter { get; private init; } = new();
@@ -58,6 +61,8 @@ public sealed class AppCommandLineOptions
     public int MatchThreshold { get; private init; } = DetectionStabilityOptions.DefaultMatchThreshold;
 
     public int MissThreshold { get; private init; } = DetectionStabilityOptions.DefaultMissThreshold;
+
+    public string CalibrationOutputPath { get; private init; } = OcrRegionCalibrationOptions.DefaultOutputPath;
 
     /// <summary>
     /// Parses command-line arguments into application options.
@@ -104,7 +109,9 @@ public sealed class AppCommandLineOptions
         bool detectLoop = HasFlag(arguments, "--detect-loop");
         bool simulateAudioFromDetection = HasFlag(arguments, "--simulate-audio-from-detection");
         bool allowRealAudioFromDetection = HasFlag(arguments, "--allow-real-audio-from-detection");
+        bool calibrateOcrRegion = HasFlag(arguments, "--calibrate-ocr-region");
         bool useRealAudio = HasFlag(arguments, "--real-audio");
+        string? calibrationOutputPath = GetOptionValue(arguments, "--calibration-output");
         string? ocrInputPath = GetOptionValue(arguments, "--ocr-input");
         if (ocrOnce && ocrInputPath is null)
         {
@@ -212,6 +219,16 @@ public sealed class AppCommandLineOptions
             throw new ArgumentException("--allow-real-audio-from-detection requires --process <target>.", nameof(arguments));
         }
 
+        if (calibrateOcrRegion && useRealAudio)
+        {
+            throw new ArgumentException("--calibrate-ocr-region cannot be combined with --real-audio.", nameof(arguments));
+        }
+
+        if (calibrateOcrRegion && processName is null)
+        {
+            throw new ArgumentException("--calibrate-ocr-region requires --process <name>.", nameof(arguments));
+        }
+
         return new AppCommandLineOptions
         {
             ConfigPath = GetOptionValue(arguments, "--config"),
@@ -222,6 +239,7 @@ public sealed class AppCommandLineOptions
             DetectLoop = detectLoop,
             SimulateAudioFromDetection = simulateAudioFromDetection,
             AllowRealAudioFromDetection = allowRealAudioFromDetection,
+            CalibrateOcrRegion = calibrateOcrRegion,
             TargetProcessName = processName ?? "GenshinImpact",
             AudioFilter = audioFilterOptions,
             CaptureOutputDirectory = captureOutputDirectory ?? WindowCaptureOptions.DefaultOutputDirectory,
@@ -236,6 +254,7 @@ public sealed class AppCommandLineOptions
             LoopCount = loopCount,
             MatchThreshold = matchThreshold,
             MissThreshold = missThreshold,
+            CalibrationOutputPath = calibrationOutputPath ?? OcrRegionCalibrationOptions.DefaultOutputPath,
             _realAudioSpecified = useRealAudio,
             _targetProcessSpecified = processName is not null,
             _audioModeSpecified = audioModeSpecified,

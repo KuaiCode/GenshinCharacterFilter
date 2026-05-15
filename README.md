@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.9 Guarded Real Audio Integration**.
+Current milestone: **v0.10 Manual OCR Region Calibration**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, and v0.8 Simulated Audio Integration are implemented. v0.9 allows stable detection to control real Windows audio only behind multiple explicit opt-in flags.
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, and v0.9 Guarded Real Audio Integration are implemented. v0.10 adds an explicit manual OCR region calibration tool.
 
 ## Current Scope
 
@@ -21,8 +21,9 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Stability-gated dry-run output using consecutive match/miss thresholds.
 - Explicit simulated detection audio mode using stable state only.
 - Guarded real detection audio mode using stable state only.
+- Explicit manual OCR region calibration that saves pixel and ratio coordinates.
 
-Out of scope: default automatic real audio, unguarded real detection audio, production auto mute, fuzzy matching, speaker recognition from image, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
+Out of scope: default automatic real audio, unguarded real detection audio, production auto mute, fuzzy matching, speaker recognition from image, full GUI application, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
 
 ## Commands
 
@@ -162,6 +163,26 @@ dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj --
 
 Do not use guarded real audio until the OCR region and stable detection output have already been checked in dry-run or simulated mode. The implementation controls only target process audio sessions through `WindowsAudioMuteService`; it does not inject into a game, read memory, hook rendering, modify files, or simulate keyboard/mouse input.
 
+## Manual OCR Region Calibration
+
+Calibration mode only runs when `--calibrate-ocr-region` is supplied. It captures one target window screenshot, opens a minimal local selection window, lets you drag-select the speaker-name region, and saves both pixel and ratio coordinates to JSON. It does not run OCR, create `WindowsAudioMuteService`, call `MuteCoordinator`, or control real system audio. If `--real-audio` is supplied with calibration, the command is rejected.
+
+Recommended first manual test target is Notepad:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --calibrate-ocr-region --process notepad --capture-output debug-captures --calibration-output ocr-region.json
+```
+
+Workflow:
+
+- keep the target window visible and uncovered;
+- drag a rectangle around the speaker-name text area;
+- check the displayed `x, y, width, height` values;
+- press Enter to save;
+- press Esc to cancel.
+
+The output JSON includes `sourceImageWidth`, `sourceImageHeight`, `regionPixels`, `regionRatio`, `generatedAt`, and `sourceProcessName`. Ratio coordinates are useful when the same relative speaker-name area must be reapplied after resolution or window-size changes.
+
 ## Configuration File
 
 Use the included safe example:
@@ -233,6 +254,8 @@ Supported overrides:
 - `--miss-threshold <number>`
 - `--simulate-audio-from-detection`
 - `--allow-real-audio-from-detection`
+- `--calibrate-ocr-region`
+- `--calibration-output <path>`
 
 `--real-audio` only enables real audio. To keep real audio disabled, omit `--real-audio` and set `RealAudioEnabled` to `false` in config or use the safe defaults.
 
@@ -266,6 +289,7 @@ Real mode uses Windows Core Audio sessions through `WindowsAudioMuteService`. It
 - Run `--detect-speaker-once --speaker-text "流浪者："` and confirm the debug output reports `Matched: True` without enabling real audio.
 - Run a fixed-image `--detect-loop` with `--loop-count 5 --match-threshold 2 --miss-threshold 2` and confirm raw match output plus stable match output are printed without enabling real audio.
 - Run `--simulate-audio-from-detection --detect-loop` with a fixed image and confirm simulated audio actions are printed without enabling real audio.
+- Run `--calibrate-ocr-region --process notepad --calibration-output ocr-region.json` and confirm a local calibration JSON is saved without OCR or real audio.
 - Only after separate confirmation, run guarded real detection audio against Chrome with `--real-audio --allow-real-audio-from-detection --process chrome` and confirm restore occurs on exit.
 
 ## Dependency Policy

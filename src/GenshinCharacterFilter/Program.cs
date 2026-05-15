@@ -1,5 +1,6 @@
 using GenshinCharacterFilter;
 using GenshinCharacterFilter.Audio;
+using GenshinCharacterFilter.Calibration;
 using GenshinCharacterFilter.Capture;
 using GenshinCharacterFilter.Coordination;
 using GenshinCharacterFilter.Detection;
@@ -22,6 +23,12 @@ try
 catch (Exception exception) when (exception is AppSettingsException or ArgumentException)
 {
     Console.Error.WriteLine($"Configuration error: {exception.Message}");
+    return;
+}
+
+if (commandLineOptions.CalibrateOcrRegion)
+{
+    await CalibrateOcrRegionAsync(settings, commandLineOptions);
     return;
 }
 
@@ -63,7 +70,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.9 Guarded Real Audio Integration");
+Console.WriteLine("GenshinCharacterFilter v0.10 Manual OCR Region Calibration");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");
@@ -171,6 +178,44 @@ static async Task DetectSpeakerOnceAsync(AppSettings settings, AppCommandLineOpt
     catch (Exception exception) when (exception is OcrException or ArgumentException or FileNotFoundException)
     {
         Console.Error.WriteLine($"Speaker detection error: {exception.Message}");
+    }
+}
+
+static async Task CalibrateOcrRegionAsync(AppSettings settings, AppCommandLineOptions commandLineOptions)
+{
+    Console.WriteLine("OCR region calibration mode; this run does not run OCR or control real system audio.");
+    if (settings.RealAudioEnabled)
+    {
+        Console.WriteLine("Real audio setting is ignored in calibration mode.");
+    }
+
+    OcrRegionCalibrationOptions calibrationOptions = new()
+    {
+        TargetProcessName = settings.TargetProcessName,
+        CaptureOutputDirectory = commandLineOptions.CaptureOutputDirectory,
+        CaptureDelayMs = commandLineOptions.CaptureDelayMs,
+        CalibrationOutputPath = commandLineOptions.CalibrationOutputPath
+    };
+
+    WindowsOcrRegionCalibrator calibrator = new(
+        new WindowsGameWindowCapture(Console.Out),
+        Console.Out);
+
+    try
+    {
+        OcrRegionCalibrationResult result = await calibrator.CalibrateAsync(
+            calibrationOptions,
+            CancellationToken.None);
+
+        Console.WriteLine($"Calibration output: {calibrationOptions.GetCalibrationOutputPath()}");
+        Console.WriteLine($"Source image: {result.SourceImageWidth}x{result.SourceImageHeight}");
+        Console.WriteLine($"Region pixels: {result.RegionPixels}");
+        Console.WriteLine(
+            $"Region ratio: x={result.RegionRatio.X:F6}, y={result.RegionRatio.Y:F6}, width={result.RegionRatio.Width:F6}, height={result.RegionRatio.Height:F6}");
+    }
+    catch (Exception exception) when (exception is CalibrationException or WindowCaptureException or ArgumentException or IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+    {
+        Console.Error.WriteLine($"Calibration error: {exception.Message}");
     }
 }
 

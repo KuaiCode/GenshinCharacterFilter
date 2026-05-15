@@ -210,3 +210,15 @@ Reasoning:
 - `DetectionAudioCoordinator` does not report the filter as successfully active until `MuteAsync` succeeds, but it keeps enough state to retry restore after partial failure.
 - Restore state is cleared only after `RestoreAsync` succeeds; if restore fails, a later shutdown/cancellation restore can retry.
 - Automated coverage uses fake `IAudioMuteService` implementations and does not control real system audio.
+
+## 2026-05-15: v0.10 Manual OCR Region Calibration
+
+Decision: add an explicit manual OCR region calibration mode that captures one target-window screenshot, opens a minimal WinForms selection window, and saves both pixel and ratio OCR regions to local JSON.
+
+Reasoning:
+
+- Manual calibration makes the speaker-name OCR area reviewable before relying on repeated OCR or audio behavior.
+- A minimal WinForms window is sufficient for drag-selecting a rectangle and avoids turning the console prototype into a full GUI application.
+- Saving both pixel and ratio coordinates lets later runs reuse exact coordinates or adapt the region to different screenshot sizes.
+- Calibration mode does not run OCR, call `MuteCoordinator`, create `WindowsAudioMuteService`, or control real system audio.
+- The behavior does not add WPF, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.

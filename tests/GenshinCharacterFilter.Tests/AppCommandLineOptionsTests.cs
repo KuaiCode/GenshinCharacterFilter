@@ -1,5 +1,6 @@
 using GenshinCharacterFilter;
 using GenshinCharacterFilter.Audio;
+using GenshinCharacterFilter.Calibration;
 using GenshinCharacterFilter.Ocr;
 
 namespace GenshinCharacterFilter.Tests;
@@ -57,6 +58,30 @@ public sealed class AppCommandLineOptionsTests
         Assert.True(options.CaptureOnce);
         Assert.Equal(500, options.CaptureDelayMs);
         Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
+    public void Parse_ReadsCalibrateOcrRegionOptions()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--calibrate-ocr-region", "--process", "notepad", "--capture-output", "debug-captures", "--capture-delay-ms", "500", "--calibration-output", "ocr-region.json"]);
+
+        Assert.True(options.CalibrateOcrRegion);
+        Assert.Equal("notepad", options.TargetProcessName);
+        Assert.Equal("debug-captures", options.CaptureOutputDirectory);
+        Assert.Equal(500, options.CaptureDelayMs);
+        Assert.Equal("ocr-region.json", options.CalibrationOutputPath);
+        Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
+    public void Parse_CalibrateOcrRegionUsesDefaultOutputPath()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--calibrate-ocr-region", "--process", "notepad"]);
+
+        Assert.True(options.CalibrateOcrRegion);
+        Assert.Equal(OcrRegionCalibrationOptions.DefaultOutputPath, options.CalibrationOutputPath);
     }
 
     [Fact]
@@ -254,12 +279,31 @@ public sealed class AppCommandLineOptionsTests
     [InlineData("--loop-count")]
     [InlineData("--match-threshold")]
     [InlineData("--miss-threshold")]
+    [InlineData("--calibration-output")]
     public void Parse_RejectsMissingOptionValue(string optionName)
     {
         ArgumentException exception = Assert.Throws<ArgumentException>(
             () => AppCommandLineOptions.Parse([optionName]));
 
         Assert.Contains("requires a value", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_CalibrateOcrRegionRequiresProcess()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--calibrate-ocr-region"]));
+
+        Assert.Contains("--process", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_CalibrateOcrRegionRejectsRealAudio()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--calibrate-ocr-region", "--process", "notepad", "--real-audio"]));
+
+        Assert.Contains("--real-audio", exception.Message);
     }
 
     [Fact]
