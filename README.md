@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.12 Configuration Integration**.
+Current milestone: **v0.13 Usability Hardening**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, and v0.11 OCR Region Source Resolution are implemented. v0.12 integrates common OCR and detection settings into local JSON configuration.
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, and v0.12 Configuration Integration are implemented. v0.13 adds validation, effective config printing, and preflight diagnostics.
 
 ## Current Scope
 
@@ -24,6 +24,8 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Explicit manual OCR region calibration that saves pixel and ratio coordinates.
 - Unified OCR region source resolution through absolute pixels, calibration JSON, or preset selector.
 - Local JSON configuration for OCR, detection loop, stability thresholds, OCR region source, and audio filter defaults.
+- Explicit configuration validation and effective configuration diagnostics.
+- Preflight checks for common OCR, image, region config, and process problems.
 
 Out of scope: default automatic real audio, config-only guarded real audio, unguarded real detection audio, production auto mute, automatic OCR region detection, fabricated preset coordinates, GUI settings editor, fuzzy matching, speaker recognition from image, full GUI application, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
 
@@ -226,6 +228,20 @@ dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj --
 
 `config.example.json` is safe by default: `RealAudioEnabled` is `false`, and it only provides OCR/detection defaults for explicit commands.
 
+Validate a config without running OCR, detection, capture, or audio:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --config config.local.json --validate-config
+```
+
+Print the merged effective config after CLI overrides without starting runtime work:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --config config.local.json --print-effective-config
+```
+
+The effective config output includes `RealAudioEnabled`, `AllowRealAudioFromDetection`, and `Detection real audio allowed` so the real-audio safety gate is visible. Config alone cannot enable detection-driven real audio; `--real-audio` and `--allow-real-audio-from-detection` must still be passed on the command line.
+
 Example shape:
 
 ```json
@@ -242,7 +258,7 @@ Example shape:
     "TesseractExecutablePath": "tesseract",
     "Language": "chi_sim",
     "PageSegmentationMode": 7,
-    "RegionConfigPath": "ocr-region.json"
+    "RegionPreset": "none"
   },
   "Detection": {
     "LoopIntervalMs": 500,
@@ -253,7 +269,7 @@ Example shape:
 }
 ```
 
-For local use, copy `config.local.example.json` to `config.local.json` and adjust paths such as `TesseractExecutablePath`. `config.local.json` is gitignored.
+For local use, copy `config.local.example.json` to `config.local.json` and adjust paths such as `TesseractExecutablePath` and `RegionConfigPath`. `config.local.json` is gitignored.
 
 Short OCR once command using config defaults:
 
@@ -310,6 +326,8 @@ dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj --
 Supported overrides:
 
 - `--real-audio`
+- `--validate-config`
+- `--print-effective-config`
 - `--process <name>`
 - `--audio-mode mute`
 - `--audio-mode reduce`
@@ -337,7 +355,7 @@ Supported overrides:
 - `--calibrate-ocr-region`
 - `--calibration-output <path>`
 
-`--real-audio` is the only way to enable runtime real audio. `RealAudioEnabled` in config is kept as a documented setting, but v0.12 does not let config alone enable runtime real audio or guarded detection audio.
+`--real-audio` is the only way to enable runtime real audio. `RealAudioEnabled` in config is kept as a documented setting, but v0.13 does not let config alone enable runtime real audio or guarded detection audio.
 
 ## Real Audio Mode
 
@@ -370,6 +388,8 @@ Real mode uses Windows Core Audio sessions through `WindowsAudioMuteService`. It
 - Run a fixed-image `--detect-loop` with `--loop-count 5 --match-threshold 2 --miss-threshold 2` and confirm raw match output plus stable match output are printed without enabling real audio.
 - Run `--simulate-audio-from-detection --detect-loop` with a fixed image and confirm simulated audio actions are printed without enabling real audio.
 - Run `--calibrate-ocr-region --process notepad --calibration-output ocr-region.json` and confirm a local calibration JSON is saved without OCR or real audio.
+- Run `--config config.local.json --validate-config` and confirm validation reports clear success or a specific config/preflight error.
+- Run `--config config.local.json --print-effective-config` and confirm it prints merged settings without starting OCR, detection, or audio.
 - Only after separate confirmation, run guarded real detection audio against Chrome with `--real-audio --allow-real-audio-from-detection --process chrome` and confirm restore occurs on exit.
 
 ## Dependency Policy

@@ -14,7 +14,7 @@
     "TesseractExecutablePath": "tesseract",
     "Language": "chi_sim",
     "PageSegmentationMode": 7,
-    "RegionConfigPath": "ocr-region.json"
+    "RegionPreset": "none"
   },
   "Detection": {
     "LoopIntervalMs": 500,

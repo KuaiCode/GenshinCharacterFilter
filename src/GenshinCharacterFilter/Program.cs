@@ -9,6 +9,7 @@ using GenshinCharacterFilter.Speakers;
 
 AppSettings settings;
 AppCommandLineOptions commandLineOptions;
+bool validateConfigRequested = args.Any(argument => string.Equals(argument, "--validate-config", StringComparison.OrdinalIgnoreCase));
 
 try
 {
@@ -22,36 +23,99 @@ try
 }
 catch (Exception exception) when (exception is AppSettingsException or ArgumentException)
 {
-    Console.Error.WriteLine($"Configuration error: {exception.Message}");
+    if (validateConfigRequested)
+    {
+        Console.Error.WriteLine("Validation failed.");
+        Console.Error.WriteLine($"Configuration error: {exception.Message}");
+    }
+    else
+    {
+        Console.Error.WriteLine($"Configuration error: {exception.Message}");
+    }
+
+    return;
+}
+
+if (commandLineOptions.ValidateConfig)
+{
+    RuntimePreflightResult preflightResult = new AppPreflightValidator().Validate(
+        settings,
+        commandLineOptions,
+        AppPreflightMode.ValidateConfig);
+
+    if (!preflightResult.Passed)
+    {
+        Console.Error.WriteLine("Validation failed.");
+        PrintPreflightIssues(preflightResult);
+        return;
+    }
+
+    Console.WriteLine("Validation passed.");
+    if (commandLineOptions.PrintEffectiveConfig)
+    {
+        new EffectiveConfigPrinter().Print(settings, commandLineOptions, Console.Out);
+    }
+
+    return;
+}
+
+if (commandLineOptions.PrintEffectiveConfig)
+{
+    new EffectiveConfigPrinter().Print(settings, commandLineOptions, Console.Out);
     return;
 }
 
 if (commandLineOptions.CalibrateOcrRegion)
 {
+    if (!RunCommandPreflight(settings, commandLineOptions))
+    {
+        return;
+    }
+
     await CalibrateOcrRegionAsync(settings, commandLineOptions);
     return;
 }
 
 if (commandLineOptions.DetectLoop)
 {
+    if (!RunCommandPreflight(settings, commandLineOptions))
+    {
+        return;
+    }
+
     await DetectLoopAsync(settings, commandLineOptions);
     return;
 }
 
 if (commandLineOptions.DetectSpeakerOnce)
 {
+    if (!RunCommandPreflight(settings, commandLineOptions))
+    {
+        return;
+    }
+
     await DetectSpeakerOnceAsync(settings, commandLineOptions);
     return;
 }
 
 if (commandLineOptions.OcrOnce)
 {
+    if (!RunCommandPreflight(settings, commandLineOptions))
+    {
+        return;
+    }
+
     await OcrOnceAsync(settings, commandLineOptions);
     return;
 }
 
 if (commandLineOptions.CaptureOnce)
 {
+    if (!RunCommandPreflight(settings, commandLineOptions))
+    {
+        return;
+    }
+
     await CaptureOnceAsync(settings, commandLineOptions);
     return;
 }
@@ -70,7 +134,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.12 Configuration Integration");
+Console.WriteLine("GenshinCharacterFilter v0.13 Usability Hardening");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");
@@ -183,7 +247,6 @@ static async Task DetectSpeakerOnceAsync(AppSettings settings, AppCommandLineOpt
 
 static async Task CalibrateOcrRegionAsync(AppSettings settings, AppCommandLineOptions commandLineOptions)
 {
-    Console.WriteLine("OCR region calibration mode; this run does not run OCR or control real system audio.");
     if (settings.RealAudioEnabled)
     {
         Console.WriteLine("Real audio setting is ignored in calibration mode.");
@@ -393,4 +456,24 @@ static bool IsExitCommand(string input)
     return string.Equals(command, "q", StringComparison.OrdinalIgnoreCase)
         || string.Equals(command, "quit", StringComparison.OrdinalIgnoreCase)
         || string.Equals(command, "exit", StringComparison.OrdinalIgnoreCase);
+}
+
+static bool RunCommandPreflight(AppSettings settings, AppCommandLineOptions commandLineOptions)
+{
+    RuntimePreflightResult preflightResult = new AppPreflightValidator().Validate(settings, commandLineOptions);
+    if (preflightResult.Passed)
+    {
+        return true;
+    }
+
+    PrintPreflightIssues(preflightResult);
+    return false;
+}
+
+static void PrintPreflightIssues(RuntimePreflightResult preflightResult)
+{
+    foreach (RuntimePreflightIssue issue in preflightResult.Issues)
+    {
+        Console.Error.WriteLine($"{issue.Category}: {issue.Message}");
+    }
 }

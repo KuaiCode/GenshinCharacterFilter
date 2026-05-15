@@ -292,7 +292,8 @@ public sealed class AppSettingsLoaderTests
 
         Assert.False(settings.RealAudioEnabled);
         Assert.Equal([DefaultChineseSpeaker, "Wanderer"], settings.TargetSpeakers);
-        Assert.Equal("ocr-region.json", settings.Ocr.RegionConfigPath);
+        Assert.Null(settings.Ocr.RegionConfigPath);
+        Assert.Equal("none", settings.Ocr.RegionPreset);
         Assert.Equal(500, settings.Detection.LoopIntervalMs);
     }
 

@@ -38,6 +38,22 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
+    public void Parse_ReadsValidateConfig()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--validate-config"]);
+
+        Assert.True(options.ValidateConfig);
+    }
+
+    [Fact]
+    public void Parse_ReadsPrintEffectiveConfig()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--print-effective-config"]);
+
+        Assert.True(options.PrintEffectiveConfig);
+    }
+
+    [Fact]
     public void Parse_ReadsCaptureOnceAndOutputDirectory()
     {
         AppCommandLineOptions options = AppCommandLineOptions.Parse(

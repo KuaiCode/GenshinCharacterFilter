@@ -250,3 +250,16 @@ Reasoning:
 - Runtime real audio is not enabled by config alone in v0.12; `--real-audio` and `--allow-real-audio-from-detection` remain explicit CLI safety gates.
 - Existing OCR region source behavior is preserved, including ambiguity rejection for competing region sources.
 - The behavior does not add a GUI settings editor, automatic region detection, OpenCV, ONNX, WPF, WinUI, overlay, masking, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.
+
+## 2026-05-15: v0.13 Usability Hardening
+
+Decision: add explicit configuration validation, effective configuration output, and runtime preflight checks before starting OCR, capture, detection, or audio work.
+
+Reasoning:
+
+- Long local configs are easier to diagnose when users can run `--validate-config` without starting OCR, detection, capture, or audio.
+- `--print-effective-config` makes CLI-over-config merge behavior visible and shows the real-audio safety gate state.
+- Preflight checks catch common missing Tesseract, missing image, missing OCR region config, and missing target process problems before deeper runtime errors.
+- Error categories distinguish configuration, OCR preflight, capture preflight, and audio safety problems so users know which setting to fix.
+- Real audio safety rules are unchanged: config alone cannot enable runtime real audio or guarded detection audio.
+- The behavior does not add dependencies, GUI settings editor, automatic region detection, OpenCV, ONNX, WPF, WinUI, overlay, masking, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.

@@ -1,20 +1,21 @@
 # Roadmap
 
-## Current Milestone: v0.12 Configuration Integration
+## Current Milestone: v0.13 Usability Hardening
 
 Status: in progress.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, and v0.11 OCR Region Source Resolution milestones have been manually verified where applicable. The v0.12 milestone is limited to:
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, and v0.12 Configuration Integration milestones have been manually verified where applicable. The v0.13 milestone is limited to:
 
 - console app only;
-- local JSON configuration for OCR settings;
-- local JSON configuration for detection loop settings;
-- local JSON configuration for match/miss stability thresholds;
-- local JSON configuration for OCR region source settings;
+- adding `--validate-config`;
+- adding `--print-effective-config`;
+- preflight-checking common OCR, image, OCR region config, and process problems;
+- improving startup diagnostics and error messages;
+- reducing duplicate logs such as calibration mode banner;
 - preserving CLI overrides over config values;
 - keeping `--real-audio` and `--allow-real-audio-from-detection` as explicit CLI-only safety gates;
 - preserving existing simulated and opt-in real audio behavior;
-- no GUI settings editor, automatic region detection, fabricated preset coordinates, full GUI application, overlay, or masking.
+- no new dependencies, GUI settings editor, automatic region detection, fabricated preset coordinates, full GUI application, overlay, or masking.
 
 ## Phase Order
 
@@ -36,7 +37,7 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 16. Minimal UI.
 17. Optional masking.
 
-## Out of Scope for v0.12
+## Out of Scope for v0.13
 
 - Speaker recognition from image.
 - GUI settings editor.
