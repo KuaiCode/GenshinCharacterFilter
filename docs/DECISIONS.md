@@ -191,7 +191,7 @@ Decision: allow stable detection to drive real Windows audio only behind multipl
 
 Reasoning:
 
-- Real detection audio requires `--detect-loop`, `--real-audio`, `--allow-real-audio-from-detection`, and `--process <target>`.
+- Real detection audio requires `--detect-loop`, `--real-audio`, and `--allow-real-audio-from-detection`; the target process may come from CLI `--process <target>` or from config `TargetProcessName`.
 - Raw contains matching still must not directly drive audio; only stability-gated matched/not-matched state may request mute/reduce/restore.
 - The implementation reuses `WindowsAudioMuteService` and existing audio filter modes instead of adding a new audio stack.
 - The mode prints a clear warning and target process/audio settings before starting.

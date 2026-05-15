@@ -154,12 +154,13 @@ The output includes raw matched, raw matched speaker, stable matched, stable mat
 
 ## Guarded Real Detection Audio
 
-Guarded real detection audio is disabled by default. It runs only when all required flags are supplied:
+Guarded real detection audio is disabled by default. It runs only when the required CLI safety flags are supplied:
 
 - `--detect-loop`
 - `--real-audio`
 - `--allow-real-audio-from-detection`
-- `--process <target>`
+
+The target process can be provided either by CLI with `--process <target>` or by `TargetProcessName` in the loaded config file. Real audio still cannot be enabled by config alone; `--real-audio` and `--allow-real-audio-from-detection` must be passed on the command line.
 
 The mode uses the same OCR, speaker matching, and stability gate as dry-run mode. Only stable matched state can request real mute/reduce, and only stable not-matched state can request restore. Raw contains matching never directly controls audio. Guarded real detection audio requires a valid OCR region source through `--ocr-region`, `--ocr-region-config`, or a configured preset. The app prints a clear warning before starting and attempts restore on shutdown or cancellation. If audio apply fails after it has started, shutdown/cancellation still attempts restore where possible.
 
@@ -167,6 +168,12 @@ Recommended first manual test target is a normal browser audio session such as C
 
 ```powershell
 dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --detect-loop --real-audio --allow-real-audio-from-detection --process chrome --ocr-input debug-captures/capture-latest.png --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --loop-count 5 --loop-interval-ms 500 --match-threshold 2 --miss-threshold 2 --audio-mode reduce --volume-percent 30 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
+```
+
+When using a local config with `TargetProcessName`, the process flag can be omitted:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --config config.local.json --detect-loop --real-audio --allow-real-audio-from-detection --loop-count 5
 ```
 
 Do not use guarded real audio until the OCR region and stable detection output have already been checked in dry-run or simulated mode. The implementation controls only target process audio sessions through `WindowsAudioMuteService`; it does not inject into a game, read memory, hook rendering, modify files, or simulate keyboard/mouse input.
