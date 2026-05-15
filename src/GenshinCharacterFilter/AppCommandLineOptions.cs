@@ -27,6 +27,8 @@ public sealed class AppCommandLineOptions
 
     public bool DetectLoop { get; private init; }
 
+    public bool SimulateAudioFromDetection { get; private init; }
+
     public string TargetProcessName { get; private init; } = "GenshinImpact";
 
     public AudioFilterOptions AudioFilter { get; private init; } = new();
@@ -98,6 +100,7 @@ public sealed class AppCommandLineOptions
         bool ocrOnce = HasFlag(arguments, "--ocr-once");
         bool detectSpeakerOnce = HasFlag(arguments, "--detect-speaker-once");
         bool detectLoop = HasFlag(arguments, "--detect-loop");
+        bool simulateAudioFromDetection = HasFlag(arguments, "--simulate-audio-from-detection");
         string? ocrInputPath = GetOptionValue(arguments, "--ocr-input");
         if (ocrOnce && ocrInputPath is null)
         {
@@ -175,6 +178,16 @@ public sealed class AppCommandLineOptions
             throw new ArgumentException("--detect-loop process mode requires --ocr-region <x,y,width,height>.", nameof(arguments));
         }
 
+        if (simulateAudioFromDetection && !detectLoop)
+        {
+            throw new ArgumentException("--simulate-audio-from-detection requires --detect-loop.", nameof(arguments));
+        }
+
+        if (simulateAudioFromDetection && HasFlag(arguments, "--real-audio"))
+        {
+            throw new ArgumentException("--simulate-audio-from-detection cannot be combined with --real-audio.", nameof(arguments));
+        }
+
         return new AppCommandLineOptions
         {
             ConfigPath = GetOptionValue(arguments, "--config"),
@@ -183,6 +196,7 @@ public sealed class AppCommandLineOptions
             OcrOnce = ocrOnce,
             DetectSpeakerOnce = detectSpeakerOnce,
             DetectLoop = detectLoop,
+            SimulateAudioFromDetection = simulateAudioFromDetection,
             TargetProcessName = processName ?? "GenshinImpact",
             AudioFilter = audioFilterOptions,
             CaptureOutputDirectory = captureOutputDirectory ?? WindowCaptureOptions.DefaultOutputDirectory,

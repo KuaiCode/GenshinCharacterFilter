@@ -120,6 +120,17 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
+    public void Parse_ReadsSimulateAudioFromDetection()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--simulate-audio-from-detection", "--detect-loop", "--ocr-input", "input.png"]);
+
+        Assert.True(options.SimulateAudioFromDetection);
+        Assert.True(options.DetectLoop);
+        Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
     public void Parse_ReadsDetectLoopWithProcessInput()
     {
         AppCommandLineOptions options = AppCommandLineOptions.Parse(
@@ -332,6 +343,25 @@ public sealed class AppCommandLineOptionsTests
             () => AppCommandLineOptions.Parse(["--detect-loop", "--process", "notepad"]));
 
         Assert.Contains("--ocr-region", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_SimulateAudioFromDetectionRequiresDetectLoop()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--simulate-audio-from-detection"]));
+
+        Assert.Contains("--detect-loop", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_RejectsSimulateAudioFromDetectionWithRealAudio()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(
+                ["--simulate-audio-from-detection", "--detect-loop", "--ocr-input", "input.png", "--real-audio"]));
+
+        Assert.Contains("--real-audio", exception.Message);
     }
 
     [Theory]

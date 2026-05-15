@@ -63,7 +63,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.7 Detection Stability Gate");
+Console.WriteLine("GenshinCharacterFilter v0.8 Simulated Audio Integration");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");
@@ -176,8 +176,16 @@ static async Task DetectSpeakerOnceAsync(AppSettings settings, AppCommandLineOpt
 
 static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions commandLineOptions)
 {
-    Console.WriteLine("OCR-driven detection dry-run mode; this run does not control real system audio.");
-    Console.WriteLine("Dry-run output is not connected to MuteCoordinator or automatic mute/restore.");
+    Console.WriteLine(commandLineOptions.SimulateAudioFromDetection
+        ? "Simulated detection audio mode; this run does not control real system audio."
+        : "OCR-driven detection dry-run mode; this run does not control real system audio.");
+    Console.WriteLine(commandLineOptions.SimulateAudioFromDetection
+        ? "Stable detection can request simulated mute/restore only; WindowsAudioMuteService is not created."
+        : "Dry-run output is not connected to MuteCoordinator or automatic mute/restore.");
+    if (commandLineOptions.SimulateAudioFromDetection && settings.RealAudioEnabled)
+    {
+        Console.WriteLine("Real audio setting is ignored in simulated detection audio mode.");
+    }
 
     using CancellationTokenSource cancellation = new();
     ConsoleCancelEventHandler cancelHandler = (_, eventArgs) =>
@@ -215,11 +223,16 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
         Console.WriteLine($"Match threshold: {dryRunOptions.Stability.MatchThreshold}");
         Console.WriteLine($"Miss threshold: {dryRunOptions.Stability.MissThreshold}");
 
+        SimulatedDetectionAudioCoordinator? simulatedAudioCoordinator = commandLineOptions.SimulateAudioFromDetection
+            ? new SimulatedDetectionAudioCoordinator(new LoggingAudioMuteService(Console.Out, settings.AudioFilter))
+            : null;
+
         DetectionDryRunLoop loop = new(
             new TesseractCliOcrService(),
             new SpeakerMatcher(),
             new WindowsGameWindowCapture(Console.Out),
             new OcrInputPreparer(),
+            simulatedAudioCoordinator,
             Console.Out);
 
         await loop.RunAsync(dryRunOptions, cancellation.Token);

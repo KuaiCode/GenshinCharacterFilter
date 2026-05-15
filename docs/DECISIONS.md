@@ -171,3 +171,16 @@ Reasoning:
 - Dry-run output now reports both raw match result and stable match state so OCR/matching stability can be evaluated before audio control.
 - Stable detection results remain observation-only and are not passed to `MuteCoordinator`, `IAudioMuteService`, or `WindowsAudioMuteService`.
 - The behavior does not add fuzzy matching, GUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, input automation, or automatic audio control.
+
+## 2026-05-15: v0.8 Simulated Audio Integration
+
+Decision: add an explicit simulated detection audio mode that uses stable detection results to request `LoggingAudioMuteService` actions before any real audio integration.
+
+Reasoning:
+
+- Raw contains matching remains too broad to drive audio actions directly.
+- v0.8 validates that stable matched/not-matched states can drive mute/restore sequencing without touching system audio.
+- The mode prints raw match, stable match, and simulated audio action for manual inspection.
+- `WindowsAudioMuteService` is not created in this mode, and `--real-audio` is rejected when combined with simulated detection audio.
+- Real Windows audio integration from OCR remains a later phase after simulated sequencing is reviewed.
+- The behavior does not add fuzzy matching, GUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, input automation, or real audio control.

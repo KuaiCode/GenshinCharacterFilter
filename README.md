@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.7 Detection Stability Gate**.
+Current milestone: **v0.8 Simulated Audio Integration**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, and v0.6 OCR-driven Detection Dry Run are implemented. v0.7 adds a stability gate to the dry-run loop while preserving the safe default simulated run.
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, and v0.7 Detection Stability Gate are implemented. v0.8 connects stable detection results to simulated audio actions while preserving the safe default simulated run.
 
 ## Current Scope
 
@@ -19,8 +19,9 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Explicit one-shot speaker detection from manual text or OCR raw text.
 - Explicit OCR-driven detection dry-run loop for observing OCR and matching stability.
 - Stability-gated dry-run output using consecutive match/miss thresholds.
+- Explicit simulated detection audio mode using stable state only.
 
-Out of scope: automatic mute/restore based on OCR, connecting speaker detection to `MuteCoordinator`, production OCR jitter debounce/hysteresis, fuzzy matching, speaker recognition from image, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
+Out of scope: real audio mute/restore based on OCR, `WindowsAudioMuteService` integration from detection, production auto mute, fuzzy matching, speaker recognition from image, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
 
 ## Commands
 
@@ -127,7 +128,19 @@ dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj --
 
 Use `--loop-interval-ms <number>` to control timing. The allowed range is 100 to 10000 ms. Use `--loop-count <number>` to run a fixed number of iterations; omit it to run until Ctrl+C. Use `--match-threshold <number>` and `--miss-threshold <number>` to require consecutive raw matches or misses before the stable state changes; the allowed range is 1 to 10 and the default is 2 for both. Process capture mode requires `--ocr-region` so the loop observes the intended text area instead of full-window UI noise.
 
-The output includes raw matched, raw matched speaker, stable matched, stable matched speaker, stable state changed, consecutive match count, and consecutive miss count. The stable signal is still observation-only and must not be wired into audio control without a later explicit integration step.
+The output includes raw matched, raw matched speaker, stable matched, stable matched speaker, stable state changed, consecutive match count, and consecutive miss count. The stable signal is still observation-only unless `--simulate-audio-from-detection` is explicitly supplied.
+
+## Simulated Detection Audio
+
+Simulated detection audio mode only runs when `--simulate-audio-from-detection` is supplied together with `--detect-loop`. It uses the stability-gated detection state to request simulated mute/restore through `LoggingAudioMuteService`; it does not create `WindowsAudioMuteService` and does not control real system audio. If `--real-audio` is supplied with this mode, the command is rejected.
+
+Fixed image simulated audio run:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --simulate-audio-from-detection --detect-loop --ocr-input debug-captures/capture-latest.png --ocr-region 10,150,700,120 --ocr-lang chi_sim --ocr-psm 7 --loop-count 5 --loop-interval-ms 500 --match-threshold 2 --miss-threshold 2 --tesseract-path "C:\Program Files\Tesseract-OCR\tesseract.exe"
+```
+
+The output includes raw matched, raw matched speaker, stable matched, stable matched speaker, and `Simulated audio action: none|mute|restore`. Raw contains matching below the stability threshold does not request simulated audio. Repeated stable matched/not-matched states do not repeatedly spam simulated mute/restore. Real audio integration remains a later phase.
 
 ## Configuration File
 
@@ -198,6 +211,7 @@ Supported overrides:
 - `--loop-count <number>`
 - `--match-threshold <number>`
 - `--miss-threshold <number>`
+- `--simulate-audio-from-detection`
 
 `--real-audio` only enables real audio. To keep real audio disabled, omit `--real-audio` and set `RealAudioEnabled` to `false` in config or use the safe defaults.
 
@@ -230,6 +244,7 @@ Real mode uses Windows Core Audio sessions through `WindowsAudioMuteService`. It
 - For Chinese small text, first verify the raw cropped input in `debug-ocr/ocr-input-latest.png`; v0.4.1 does not apply scale, grayscale, or threshold preprocessing.
 - Run `--detect-speaker-once --speaker-text "流浪者："` and confirm the debug output reports `Matched: True` without enabling real audio.
 - Run a fixed-image `--detect-loop` with `--loop-count 5 --match-threshold 2 --miss-threshold 2` and confirm raw match output plus stable match output are printed without enabling real audio.
+- Run `--simulate-audio-from-detection --detect-loop` with a fixed image and confirm simulated audio actions are printed without enabling real audio.
 
 ## Dependency Policy
 

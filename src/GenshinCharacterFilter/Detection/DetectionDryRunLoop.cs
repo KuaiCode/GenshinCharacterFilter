@@ -13,6 +13,7 @@ public sealed class DetectionDryRunLoop
     private readonly ISpeakerMatcher _speakerMatcher;
     private readonly IGameWindowCapture _windowCapture;
     private readonly OcrInputPreparer _ocrInputPreparer;
+    private readonly SimulatedDetectionAudioCoordinator? _simulatedAudioCoordinator;
     private readonly TextWriter _log;
 
     public DetectionDryRunLoop(
@@ -20,12 +21,14 @@ public sealed class DetectionDryRunLoop
         ISpeakerMatcher speakerMatcher,
         IGameWindowCapture windowCapture,
         OcrInputPreparer? ocrInputPreparer = null,
+        SimulatedDetectionAudioCoordinator? simulatedAudioCoordinator = null,
         TextWriter? log = null)
     {
         _ocrService = ocrService;
         _speakerMatcher = speakerMatcher;
         _windowCapture = windowCapture;
         _ocrInputPreparer = ocrInputPreparer ?? new OcrInputPreparer();
+        _simulatedAudioCoordinator = simulatedAudioCoordinator;
         _log = log ?? TextWriter.Null;
     }
 
@@ -40,19 +43,35 @@ public sealed class DetectionDryRunLoop
         DetectionStabilityGate stabilityGate = new(options.Stability);
         int iteration = 0;
 
-        while (!cancellationToken.IsCancellationRequested &&
-            (options.LoopCount is null || iteration < options.LoopCount.Value))
+        try
         {
-            iteration++;
-            DetectionDryRunResult result = await RunIterationAsync(options, stabilityGate, iteration, cancellationToken);
-            WriteResult(result);
-
-            if (options.LoopCount is not null && iteration >= options.LoopCount.Value)
+            while (!cancellationToken.IsCancellationRequested &&
+                (options.LoopCount is null || iteration < options.LoopCount.Value))
             {
-                break;
-            }
+                iteration++;
+                DetectionDryRunResult result = await RunIterationAsync(options, stabilityGate, iteration, cancellationToken);
+                WriteResult(result);
 
-            await Task.Delay(options.LoopIntervalMs, cancellationToken);
+                if (options.LoopCount is not null && iteration >= options.LoopCount.Value)
+                {
+                    break;
+                }
+
+                await Task.Delay(options.LoopIntervalMs, cancellationToken);
+            }
+        }
+        finally
+        {
+            if (_simulatedAudioCoordinator is not null)
+            {
+                // 退出或取消时仍要尝试恢复模拟状态，避免下一次调试误判当前音频状态。
+                SimulatedAudioActionResult shutdownResult =
+                    await _simulatedAudioCoordinator.RestoreForShutdownAsync(CancellationToken.None);
+                if (shutdownResult.Action != SimulatedAudioAction.None)
+                {
+                    _log.WriteLine($"Simulated audio shutdown action: {FormatAction(shutdownResult.Action)}");
+                }
+            }
         }
     }
 
@@ -78,8 +97,11 @@ public sealed class DetectionDryRunLoop
                 TargetSpeakers = options.TargetSpeakers
             });
         DetectionStabilityResult stabilityResult = stabilityGate.Observe(matchResult);
+        SimulatedAudioActionResult? simulatedAudioActionResult = _simulatedAudioCoordinator is null
+            ? null
+            : await _simulatedAudioCoordinator.ApplyAsync(stabilityResult, cancellationToken);
 
-        return new DetectionDryRunResult(iteration, ocrResult, matchResult, stabilityResult);
+        return new DetectionDryRunResult(iteration, ocrResult, matchResult, stabilityResult, simulatedAudioActionResult);
     }
 
     private async Task<string> ResolveInputImagePathAsync(DetectionDryRunOptions options, CancellationToken cancellationToken)
@@ -124,6 +146,10 @@ public sealed class DetectionDryRunLoop
         _log.WriteLine($"Stable state changed: {result.StabilityResult.StableStateChanged}");
         _log.WriteLine($"Consecutive match count: {result.StabilityResult.ConsecutiveMatchCount}");
         _log.WriteLine($"Consecutive miss count: {result.StabilityResult.ConsecutiveMissCount}");
+        if (result.SimulatedAudioActionResult is not null)
+        {
+            _log.WriteLine($"Simulated audio action: {FormatAction(result.SimulatedAudioActionResult.Action)}");
+        }
 
         if (result.StabilityResult.StableStateChanged)
         {
@@ -131,5 +157,15 @@ public sealed class DetectionDryRunLoop
         }
 
         _log.WriteLine($"Dry-run iteration {result.Iteration} completed.");
+    }
+
+    private static string FormatAction(SimulatedAudioAction action)
+    {
+        return action switch
+        {
+            SimulatedAudioAction.Mute => "mute",
+            SimulatedAudioAction.Restore => "restore",
+            _ => "none"
+        };
     }
 }

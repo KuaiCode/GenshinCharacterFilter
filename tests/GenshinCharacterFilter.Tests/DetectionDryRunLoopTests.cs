@@ -2,6 +2,7 @@ using GenshinCharacterFilter.Capture;
 using GenshinCharacterFilter.Detection;
 using GenshinCharacterFilter.Ocr;
 using GenshinCharacterFilter.Speakers;
+using GenshinCharacterFilter.Audio;
 
 namespace GenshinCharacterFilter.Tests;
 
@@ -53,6 +54,28 @@ public sealed class DetectionDryRunLoopTests
         Assert.Contains("Stable matched: True", output);
         Assert.Contains("Consecutive match count: 2", output);
         Assert.Contains("Stable state changed: NotMatched -> Matched(Wanderer)", output);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithSimulatedAudioCoordinatorReportsMuteAndShutdownRestore()
+    {
+        using TempFile input = TempFile.Create();
+        FakeAudioMuteService audio = new();
+        StringWriter log = new();
+        DetectionDryRunLoop loop = new(
+            new FakeOcrService(["target", "target"]),
+            new FakeSpeakerMatcher(),
+            new FakeWindowCapture(),
+            simulatedAudioCoordinator: new SimulatedDetectionAudioCoordinator(audio),
+            log: log);
+
+        await loop.RunAsync(CreateOptions(input.Path), CancellationToken.None);
+
+        string output = log.ToString();
+        Assert.Contains("Simulated audio action: mute", output);
+        Assert.Contains("Simulated audio shutdown action: restore", output);
+        Assert.Equal(1, audio.MuteCalls);
+        Assert.Equal(1, audio.RestoreCalls);
     }
 
     private static DetectionDryRunOptions CreateOptions(string inputPath)
@@ -112,6 +135,27 @@ public sealed class DetectionDryRunLoopTests
         {
             CallCount++;
             return Task.FromResult("capture.png");
+        }
+    }
+
+    private sealed class FakeAudioMuteService : IAudioMuteService
+    {
+        public int MuteCalls { get; private set; }
+
+        public int RestoreCalls { get; private set; }
+
+        public Task MuteAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            MuteCalls++;
+            return Task.CompletedTask;
+        }
+
+        public Task RestoreAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            RestoreCalls++;
+            return Task.CompletedTask;
         }
     }
 

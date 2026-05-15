@@ -1,0 +1,171 @@
+using GenshinCharacterFilter.Audio;
+using GenshinCharacterFilter.Detection;
+using GenshinCharacterFilter.Speakers;
+
+namespace GenshinCharacterFilter.Tests;
+
+public sealed class SimulatedDetectionAudioCoordinatorTests
+{
+    [Fact]
+    public async Task ApplyAsync_RawMatchBelowThresholdDoesNotCallMute()
+    {
+        FakeAudioMuteService audio = new();
+        SimulatedDetectionAudioCoordinator coordinator = new(audio);
+        DetectionStabilityGate gate = CreateGate();
+
+        SimulatedAudioActionResult result = await coordinator.ApplyAsync(
+            gate.Observe(Matched("Wanderer")),
+            CancellationToken.None);
+
+        Assert.Equal(SimulatedAudioAction.None, result.Action);
+        Assert.Equal(0, audio.MuteCalls);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_StableMatchedCallsMuteOnce()
+    {
+        FakeAudioMuteService audio = new();
+        SimulatedDetectionAudioCoordinator coordinator = new(audio);
+        DetectionStabilityGate gate = CreateGate();
+
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        SimulatedAudioActionResult result = await coordinator.ApplyAsync(
+            gate.Observe(Matched("Wanderer")),
+            CancellationToken.None);
+
+        Assert.Equal(SimulatedAudioAction.Mute, result.Action);
+        Assert.Equal(1, audio.MuteCalls);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_RepeatedStableMatchedDoesNotCallMuteRepeatedly()
+    {
+        FakeAudioMuteService audio = new();
+        SimulatedDetectionAudioCoordinator coordinator = new(audio);
+        DetectionStabilityGate gate = CreateGate();
+
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        SimulatedAudioActionResult repeated = await coordinator.ApplyAsync(
+            gate.Observe(Matched("Wanderer")),
+            CancellationToken.None);
+
+        Assert.Equal(SimulatedAudioAction.None, repeated.Action);
+        Assert.Equal(1, audio.MuteCalls);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_StableNotMatchedAfterMuteCallsRestoreOnce()
+    {
+        FakeAudioMuteService audio = new();
+        SimulatedDetectionAudioCoordinator coordinator = new(audio);
+        DetectionStabilityGate gate = CreateGate();
+
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        await coordinator.ApplyAsync(gate.Observe(NotMatched()), CancellationToken.None);
+        SimulatedAudioActionResult result = await coordinator.ApplyAsync(
+            gate.Observe(NotMatched()),
+            CancellationToken.None);
+
+        Assert.Equal(SimulatedAudioAction.Restore, result.Action);
+        Assert.Equal(1, audio.RestoreCalls);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_RepeatedStableNotMatchedDoesNotCallRestoreRepeatedly()
+    {
+        FakeAudioMuteService audio = new();
+        SimulatedDetectionAudioCoordinator coordinator = new(audio);
+        DetectionStabilityGate gate = CreateGate();
+
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        await coordinator.ApplyAsync(gate.Observe(NotMatched()), CancellationToken.None);
+        await coordinator.ApplyAsync(gate.Observe(NotMatched()), CancellationToken.None);
+        SimulatedAudioActionResult repeated = await coordinator.ApplyAsync(
+            gate.Observe(NotMatched()),
+            CancellationToken.None);
+
+        Assert.Equal(SimulatedAudioAction.None, repeated.Action);
+        Assert.Equal(1, audio.RestoreCalls);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task ApplyAsync_NullOrBlankStableMatchedSpeakerDoesNotCallMute(string? matchedSpeaker)
+    {
+        FakeAudioMuteService audio = new();
+        SimulatedDetectionAudioCoordinator coordinator = new(audio);
+        DetectionStabilityResult stabilityResult = new(
+            true,
+            matchedSpeaker,
+            new DetectionStableState(true, matchedSpeaker),
+            DetectionStableState.NotMatched,
+            true,
+            2,
+            0);
+
+        SimulatedAudioActionResult result = await coordinator.ApplyAsync(stabilityResult, CancellationToken.None);
+
+        Assert.Equal(SimulatedAudioAction.None, result.Action);
+        Assert.Equal(0, audio.MuteCalls);
+    }
+
+    [Fact]
+    public async Task RestoreForShutdownAsync_AfterSimulatedMuteAttemptsRestore()
+    {
+        FakeAudioMuteService audio = new();
+        SimulatedDetectionAudioCoordinator coordinator = new(audio);
+        DetectionStabilityGate gate = CreateGate();
+
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        await coordinator.ApplyAsync(gate.Observe(Matched("Wanderer")), CancellationToken.None);
+        SimulatedAudioActionResult result = await coordinator.RestoreForShutdownAsync(CancellationToken.None);
+
+        Assert.Equal(SimulatedAudioAction.Restore, result.Action);
+        Assert.Equal(1, audio.RestoreCalls);
+    }
+
+    private static DetectionStabilityGate CreateGate()
+    {
+        return new DetectionStabilityGate(new DetectionStabilityOptions
+        {
+            MatchThreshold = 2,
+            MissThreshold = 2
+        });
+    }
+
+    private static SpeakerMatchResult Matched(string speaker)
+    {
+        return new SpeakerMatchResult(true, speaker, speaker, speaker);
+    }
+
+    private static SpeakerMatchResult NotMatched()
+    {
+        return new SpeakerMatchResult(false, null, "unknown", "unknown");
+    }
+
+    private sealed class FakeAudioMuteService : IAudioMuteService
+    {
+        public int MuteCalls { get; private set; }
+
+        public int RestoreCalls { get; private set; }
+
+        public Task MuteAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            MuteCalls++;
+            return Task.CompletedTask;
+        }
+
+        public Task RestoreAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            RestoreCalls++;
+            return Task.CompletedTask;
+        }
+    }
+}
