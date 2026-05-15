@@ -20,9 +20,9 @@ The agent should prioritize:
 
 ## Current milestone
 
-The current milestone is **v0.11 OCR Region Source Resolution**.
+The current milestone is **v0.12 Configuration Integration**.
 
-The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, **v0.5 Speaker Detection from OCR Text Prototype**, **v0.6 OCR-driven Detection Dry Run**, **v0.7 Detection Stability Gate**, **v0.8 Simulated Audio Integration**, **v0.9 Guarded Real Audio Integration**, **v0.9.1 Partial Audio Apply Restore Fix**, and **v0.10 Manual OCR Region Calibration** are considered implemented and manually verified where applicable:
+The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, **v0.5 Speaker Detection from OCR Text Prototype**, **v0.6 OCR-driven Detection Dry Run**, **v0.7 Detection Stability Gate**, **v0.8 Simulated Audio Integration**, **v0.9 Guarded Real Audio Integration**, **v0.9.1 Partial Audio Apply Restore Fix**, **v0.10 Manual OCR Region Calibration**, and **v0.11 OCR Region Source Resolution** are considered implemented and manually verified where applicable:
 
 - simulated speaker input works;
 - mute coordination works;
@@ -71,31 +71,26 @@ The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Windo
 - calibration output includes source image size, pixel region, and ratio region;
 - calibration mode does not run OCR, control real audio, or call `MuteCoordinator`;
 - Notepad manual calibration verification succeeded;
+- `--ocr-region-config` can load `ocr-region.json`;
+- `regionRatio` can be converted into current-image pixel OCR regions;
+- `--ocr-region-preset` supports `auto`, `2560x1600`, `1920x1080`, and `none`;
+- built-in presets do not use fabricated coordinates when real calibration data is absent;
+- guarded real audio safety gates remain unchanged;
 - default target speakers are `流浪者` and `Wanderer`.
 
-Scope for v0.11:
+Scope for v0.12:
 
 - Console app only.
-- Add explicit OCR region calibration file loading.
-- Support CLI parameter such as `--ocr-region-config <path>`.
-- Support OCR region preset selection:
-  - `--ocr-region-preset auto`
-  - `--ocr-region-preset 2560x1600`
-  - `--ocr-region-preset 1920x1080`
-  - `--ocr-region-preset none`
-- Use saved ratio region to compute pixel region for the current input image size.
-- Keep existing `--ocr-region` absolute pixel override.
-- If both `--ocr-region` and `--ocr-region-config` are supplied, reject as ambiguous.
-- If `--ocr-region-config` and an explicit preset are supplied together, reject as ambiguous unless preset is `none`.
-- Apply loaded or resolved OCR regions in:
-  - `--ocr-once`
-  - `--detect-loop` fixed-image mode
-  - `--detect-loop` window capture mode
-  - simulated audio detection
-  - guarded real audio detection
-- Built-in preset names are supported, but preset coordinates must not be fabricated.
-- If preset coordinates are not configured from real calibration data, return a clear "preset not configured; run calibration" error.
-- Do not control real audio unless existing guarded real audio flags are explicitly supplied.
+- Extend `AppSettings` to include OCR settings.
+- Extend `AppSettings` to include detection loop settings.
+- Extend `AppSettings` to include stability threshold settings.
+- Extend `AppSettings` to include OCR region source settings.
+- Keep CLI overrides.
+- CLI values should override config values.
+- Default config must remain safe.
+- Real audio must still require explicit CLI opt-in for detection-driven real audio.
+- Do not enable real audio from config alone.
+- Do not control real audio unless existing guarded flags are explicitly supplied.
 - Default run must remain safe.
 - Existing v0.1 audio, v0.2 configuration, and v0.3 capture behavior must remain stable.
 - Existing v0.4 OCR behavior must remain stable.
@@ -105,12 +100,14 @@ Scope for v0.11:
 - Existing v0.8 simulated audio behavior must remain stable.
 - Existing v0.9 guarded real audio behavior must remain stable.
 - Existing v0.10 calibration behavior must remain stable.
+- Existing v0.11 OCR region source behavior must remain stable.
 - .NET 8.
 - Windows x64.
 - VS Code / Codex / Visual Studio friendly workflow.
 
 Out of scope for the current milestone:
 
+- GUI settings editor.
 - New calibration UI features.
 - Automatic region detection.
 - Fabricated preset coordinates.
@@ -134,14 +131,18 @@ Done when:
 
 - `dotnet build` passes.
 - If tests exist, `dotnet test` passes.
-- OCR region source resolution is explicit and test-covered.
-- Existing `--ocr-region` absolute pixel mode continues to work.
-- `--ocr-region-config` loads local calibration JSON and uses `regionRatio` to compute current image pixel coordinates.
-- `--ocr-region-preset` parses `auto`, `2560x1600`, `1920x1080`, and `none`.
-- Ambiguous region sources are rejected clearly.
-- Missing or invalid calibration files produce clear errors.
+- `AppSettings` can load OCR settings.
+- `AppSettings` can load detection loop settings.
+- `AppSettings` can load stability threshold settings.
+- `AppSettings` can load OCR region source settings.
+- CLI arguments override JSON configuration values clearly.
+- `config.example.json` remains safe with `RealAudioEnabled = false`.
+- `config.local.json` is gitignored.
+- Config cannot silently enable guarded real audio detection.
+- `--real-audio` and `--allow-real-audio-from-detection` remain explicit CLI safety gates.
+- Existing `--ocr-region`, `--ocr-region-config`, and `--ocr-region-preset` CLI behavior continues to work.
+- Ambiguous OCR region sources are still rejected clearly.
 - Guarded real audio detection requires a valid OCR region source.
-- Built-in presets do not use guessed coordinates.
 - Default run remains safe and does not control real system audio.
 - No WPF, WinUI, OpenCV, ONNX, masking, overlay, gameplay automation, game memory access, hooking, or injection is introduced.
 - The final response reports changed files, verification commands, assumptions, and limitations.
@@ -164,7 +165,7 @@ Do not implement later roadmap phases until this milestone works.
 
 Do not assume administrator privileges unless explicitly required and explained.
 
-Do not introduce a full GUI application, overlay, gameplay automation, OCR model, image-processing dependency, or model-inference dependency during the v0.11 OCR Region Source Resolution milestone. Avoid OpenCV and ONNX for this milestone.
+Do not introduce a full GUI application, overlay, gameplay automation, OCR model, image-processing dependency, or model-inference dependency during the v0.12 Configuration Integration milestone. Avoid OpenCV and ONNX for this milestone.
 
 ## Tooling workflow
 
@@ -220,9 +221,10 @@ Follow this order unless the user explicitly changes the roadmap:
 11. Guarded real audio integration.
 12. Manual OCR region calibration.
 13. OCR region source resolution.
-14. Stable mute/unmute coordination with debounce and recovery.
-15. Minimal UI.
-16. Optional masking.
+14. Configuration integration.
+15. Stable mute/unmute coordination with debounce and recovery.
+16. Minimal UI.
+17. Optional masking.
 
 Do not implement later-phase functionality prematurely.
 
@@ -249,24 +251,27 @@ Use these module boundaries unless the user asks for a different design:
 - `OcrRegionSourceResolver`: resolves the effective OCR region from pixels, calibration JSON, or presets.
 - `OcrRegionSourceOptions`: stores explicit OCR region source choices.
 - `OcrRegionPreset` / `OcrRegionPresetRegistry`: represent supported preset names and real calibration-backed preset data.
+- `OcrSettings` or equivalent: stores OCR provider, Tesseract, language, page segmentation, and OCR region source defaults.
+- `DetectionSettings` or equivalent: stores loop timing and stability threshold defaults.
 
-For v0.11, expected work is limited to:
+For v0.12, expected work is limited to:
 
-- resolving OCR regions from existing `--ocr-region` absolute pixels
-- loading `--ocr-region-config <path>` from local calibration JSON
-- parsing `--ocr-region-preset auto|2560x1600|1920x1080|none`
-- using saved ratio regions to compute pixel regions for the current input image size
-- applying the resolved region to one-shot OCR and detection-loop modes
-- keeping fixed-image, window-capture, simulated audio, and guarded real audio detection paths consistent
-- rejecting ambiguous OCR region source combinations
-- returning clear errors for missing/invalid calibration files and unconfigured presets
-- tests for source priority, ambiguity, calibration ratio conversion, preset parsing, and preset-not-configured behavior
+- extending `AppSettings` with OCR defaults
+- extending `AppSettings` with detection-loop timing defaults
+- extending `AppSettings` with stability threshold defaults
+- extending `AppSettings` with OCR region source defaults
+- preserving CLI override behavior, where CLI values override config values
+- preserving existing `--ocr-region`, `--ocr-region-config`, and `--ocr-region-preset` behavior
+- preserving ambiguous OCR region source rejection
+- keeping guarded real audio detection behind explicit CLI opt-in flags
+- ensuring config alone cannot enable detection-driven real audio
+- adding tests for config loading, validation, and CLI-over-config merge behavior
 
-Do not create new calibration UI behavior, detect regions automatically, fabricate preset coordinates, or weaken existing real-audio guard flags during v0.11.
+Do not create a GUI settings editor, create new calibration UI behavior, detect regions automatically, fabricate preset coordinates, or weaken existing real-audio guard flags during v0.12.
 
 ## OCR region source rules
 
-For v0.11 OCR region source resolution:
+For v0.12 configuration integration:
 
 - OCR region source priority:
   1. `--ocr-region` absolute pixels.
@@ -289,7 +294,7 @@ For v0.11 OCR region source resolution:
 
 ## Speaker matching rules
 
-For v0.11 OCR region source resolution:
+For v0.12 configuration integration:
 
 - Trim whitespace.
 - Handle newlines around text.
@@ -348,13 +353,15 @@ Required behavior:
 - Mute/reduce should be idempotent: repeated target detections while already filtered should not spam the audio API or repeatedly reduce volume.
 - Shutdown, cancellation, and unexpected exceptions should attempt safe restore.
 
-For v0.11:
+For v0.12:
 
-- OCR region source resolution must not create `WindowsAudioMuteService`.
-- OCR region source resolution must not control real audio.
-- OCR region source resolution must not call `MuteCoordinator`.
-- OCR region source resolution must not run automatic mute/restore logic.
+- Configuration integration must not create `WindowsAudioMuteService` by itself.
+- Configuration integration must not control real audio by itself.
+- Configuration integration must not call `MuteCoordinator` in new ways.
+- Configuration integration must not run automatic mute/restore logic.
 - Existing guarded real audio detection must require the current explicit guard flags and a valid OCR region source.
+- Config alone must not enable guarded real audio detection.
+- `--real-audio` and `--allow-real-audio-from-detection` must remain explicit CLI safety gates.
 - Existing guarded real audio behavior must remain opt-in only.
 - Existing simulated detection audio mode must remain available.
 - Existing v0.1 audio, v0.2 configuration, and v0.3 capture behavior must remain stable.
@@ -365,6 +372,7 @@ For v0.11:
 - Existing v0.8 simulated audio behavior must remain stable.
 - Existing v0.9 guarded real audio behavior must remain stable.
 - Existing v0.10 calibration behavior must remain stable.
+- Existing v0.11 OCR region source behavior must remain stable.
 - Do not add fuzzy matching yet.
 
 ## Safety rules
@@ -387,16 +395,22 @@ For v0.11:
 
 Store user configuration in a local JSON file unless the project already uses another configuration format.
 
-For v0.11:
+For v0.12:
 
-- Local JSON configuration is implemented and may be extended only when needed for OCR region source resolution.
+- Local JSON configuration is implemented and should now cover common OCR, detection loop, stability threshold, audio filter, and OCR region source defaults.
 - Do not add a persistent settings UI.
 - Do not store sensitive information.
 - Do not include credentials, cookies, tokens, or game login data.
 - Do not make network requests for configuration.
 - Do not silently create or overwrite user configuration without explicit request.
 - A sample configuration file such as `config.example.json` is allowed.
-- If a default runtime config is created later, it must be safe by default.
+- `config.example.json` must remain safe with `RealAudioEnabled = false`.
+- `config.local.json` should be gitignored for local user overrides.
+- Config may provide defaults for OCR, detection, stability, and audio-filter settings.
+- CLI arguments must override config values.
+- `--real-audio` and `--allow-real-audio-from-detection` must remain explicit CLI safety gates.
+- Config must not silently enable guarded real audio detection.
+- Do not control real audio unless existing guarded CLI flags are explicitly supplied.
 
 Configuration should include at least:
 
@@ -405,10 +419,29 @@ Configuration should include at least:
 - `RealAudioEnabled`
 - `AudioFilter.Mode`
 - `AudioFilter.VolumePercent`
+- `Ocr`
+- `Detection`
 
-v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10/v0.11 OCR, speaker debug, dry-run, stability-gate, simulated audio, guarded real audio, calibration, and region source configuration may include:
+Suggested `Ocr` fields:
 
-- OCR input image path or explicit capture input;
+- `Engine`
+- `TesseractExecutablePath`
+- `Language`
+- `PageSegmentationMode`
+- `RegionConfigPath`
+- `RegionPreset`
+- optional absolute `Region`
+
+Suggested `Detection` fields:
+
+- `LoopIntervalMs`
+- `LoopCount`
+- `MatchThreshold`
+- `MissThreshold`
+
+v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10/v0.11/v0.12 OCR, speaker debug, dry-run, stability-gate, simulated audio, guarded real audio, calibration, region source, and configuration integration may include:
+
+- OCR input image path or explicit capture input, only if needed for explicit commands;
 - OCR region;
 - OCR region source selection;
 - OCR region calibration JSON path;
@@ -416,12 +449,12 @@ v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10/v0.11 OCR, speaker debug, dry-run, stability
 - OCR debug output directory;
 - OCR provider selection, only if a provider is actually introduced;
 - speaker matcher options, only if they are needed for explicit debug behavior;
-- dry-run timing options, only if needed for explicit dry-run behavior;
-- match/miss stability thresholds, only if needed for explicit stability-gate dry-run behavior.
-- simulated detection audio mode options, only if needed for explicit v0.8 behavior.
-- guarded real audio detection options, only if needed for explicit v0.9 behavior.
-- OCR region calibration output path, source screenshot size, pixel region, and ratio region, only if needed for explicit v0.10 calibration behavior.
-- OCR region source resolver options, only if needed for explicit v0.11 behavior.
+- dry-run timing options;
+- match/miss stability thresholds;
+- simulated detection audio mode options, only if needed for explicit v0.8 behavior;
+- guarded real audio detection options, only if needed for explicit v0.9 behavior, but not the CLI allow safety gate;
+- OCR region calibration output path, source screenshot size, pixel region, and ratio region, only if needed for explicit v0.10 calibration behavior;
+- OCR region source resolver options.
 
 Long-term configuration may later include:
 
@@ -450,6 +483,15 @@ Validation should reject:
 - null, blank, or duplicate-only target speaker entries;
 - unknown audio filter mode;
 - `ReduceVolume` mode with `VolumePercent` outside 1 to 100.
+- unknown OCR engine;
+- blank Tesseract executable path;
+- blank OCR language;
+- OCR page segmentation mode outside the existing valid range;
+- ambiguous OCR region sources;
+- unknown OCR region preset;
+- invalid detection loop interval;
+- invalid loop count;
+- match or miss thresholds outside the existing valid range.
 
 Invalid configuration should produce a clear error message.
 
@@ -491,11 +533,11 @@ Do not add heavy OCR, image-processing, model-inference, overlay, or UI dependen
 
 Do not replace the project framework or UI stack without explicit approval.
 
-For v0.11:
+For v0.12:
 
 - Use built-in .NET JSON support where practical.
 - Existing NAudio dependency for real Windows audio control may remain.
-- Do not add new dependencies for v0.11 unless strongly justified.
+- Do not add new dependencies for v0.12 unless strongly justified.
 - Existing minimal WinForms-based calibration window may remain.
 - Do not add external GUI dependencies.
 - Prefer an OCR provider abstraction so the engine can be replaced later.
@@ -541,18 +583,18 @@ Use fake implementations for:
 - `IGameWindowCapture`
 - `IOcrService`
 
-For v0.11, prioritize tests for:
+For v0.12, prioritize tests for:
 
-- loading valid calibration JSON;
-- rejecting missing calibration files;
-- rejecting invalid calibration JSON;
-- rejecting both `--ocr-region` and `--ocr-region-config`;
-- rejecting ambiguous `--ocr-region-config` plus explicit preset unless preset is `none`;
-- converting ratio regions to current image pixel regions;
-- validating computed region bounds;
-- preserving existing absolute `--ocr-region` behavior;
-- parsing and validating preset names;
-- returning clear preset-not-configured errors when real preset data is absent;
+- loading config with OCR settings;
+- loading config with detection loop settings;
+- loading config with stability threshold settings;
+- loading config with OCR region source settings;
+- CLI values overriding config values;
+- config cannot enable guarded real audio detection without explicit CLI allow flags;
+- `config.example.json` remains safe with `RealAudioEnabled = false`;
+- invalid config values produce clear errors;
+- existing `--ocr-region`, `--ocr-region-config`, and `--ocr-region-preset` CLI behavior remains unchanged;
+- ambiguous OCR region sources are still rejected;
 - existing configuration, capture, OCR, speaker matching, and audio behavior remains unchanged.
 
 Do not write automated tests that require a real game window.
@@ -560,7 +602,7 @@ Do not write automated tests requiring UI interaction.
 Do not write automated tests that require a locally installed OCR engine unless the test can skip clearly.
 Do not write tests that control real system audio.
 No automated test may control real system audio.
-Manual verification for v0.11 must be explicit, local, and must not run `--real-audio` automatically.
+Manual verification for v0.12 must be explicit, local, and must not run `--real-audio` automatically.
 
 Existing v0.5 speaker matching tests should continue covering:
 
@@ -610,9 +652,9 @@ For early prototypes:
   4. restore audio;
   5. log state changes.
 
-The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, v0.6 OCR-driven detection dry-run, v0.7 detection stability gate, v0.8 simulated audio integration, v0.9 guarded real audio integration, and v0.10 manual OCR region calibration are implemented; v0.11 should preserve them while adding OCR region source resolution.
+The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, v0.6 OCR-driven detection dry-run, v0.7 detection stability gate, v0.8 simulated audio integration, v0.9 guarded real audio integration, v0.10 manual OCR region calibration, and v0.11 OCR region source resolution are implemented; v0.12 should preserve them while integrating common OCR/detection settings into local JSON configuration.
 
-Do not add masking, a full GUI application, persistent settings UI, model inference, speaker recognition from image, automatic region detection, fabricated preset coordinates, default real audio behavior, unguarded `WindowsAudioMuteService` integration, or gameplay automation during v0.11.
+Do not add masking, a full GUI application, persistent settings UI, GUI settings editor, model inference, speaker recognition from image, automatic region detection, fabricated preset coordinates, default real audio behavior, unguarded `WindowsAudioMuteService` integration, or gameplay automation during v0.12.
 
 Do not optimize prematurely.
 
@@ -710,7 +752,7 @@ For meaningful behavior changes, update `README.md` or relevant docs.
 
 For important architectural choices, update `docs/DECISIONS.md`.
 
-For v0.11 implementation tasks, `README.md` should document `--ocr-region-config` and `--ocr-region-preset`, and `docs/DECISIONS.md` should record the preset-plus-manual-calibration strategy and that preset coordinates must come from real calibration data.
+For v0.12 implementation tasks, `README.md` should document `config.local.json` usage and shorter `--config` commands, and `docs/DECISIONS.md` should record config-vs-CLI safety rules.
 
 Do not add excessive documentation for trivial changes.
 
