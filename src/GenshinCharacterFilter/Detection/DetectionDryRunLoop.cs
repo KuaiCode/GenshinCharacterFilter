@@ -147,6 +147,7 @@ public sealed class DetectionDryRunLoop
     {
         return new OcrOptions
         {
+            OcrEngine = options.OcrEngine,
             InputImagePath = inputImagePath,
             Language = options.OcrLanguage,
             TesseractExecutablePath = options.TesseractExecutablePath,

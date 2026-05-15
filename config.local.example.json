@@ -6,12 +6,12 @@
   ],
   "RealAudioEnabled": false,
   "AudioFilter": {
-    "Mode": "Mute",
+    "Mode": "ReduceVolume",
     "VolumePercent": 30
   },
   "Ocr": {
     "Engine": "TesseractCli",
-    "TesseractExecutablePath": "tesseract",
+    "TesseractExecutablePath": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
     "Language": "chi_sim",
     "PageSegmentationMode": 7,
     "RegionConfigPath": "ocr-region.json"

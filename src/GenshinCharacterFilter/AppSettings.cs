@@ -28,6 +28,16 @@ public sealed class AppSettings
     public AudioFilterOptions AudioFilter { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets OCR defaults used by explicit OCR and detection commands.
+    /// </summary>
+    public AppOcrSettings Ocr { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets detection-loop defaults used by explicit detection commands.
+    /// </summary>
+    public AppDetectionSettings Detection { get; set; } = new();
+
+    /// <summary>
     /// Creates a safe default configuration.
     /// </summary>
     public static AppSettings CreateDefault()
@@ -80,6 +90,16 @@ public sealed class AppSettings
             throw new AppSettingsException("AudioFilter is required.");
         }
 
+        if (Ocr is null)
+        {
+            throw new AppSettingsException("Ocr is required.");
+        }
+
+        if (Detection is null)
+        {
+            throw new AppSettingsException("Detection is required.");
+        }
+
         try
         {
             // 音频参数在进入服务层前统一校验，避免非法百分比影响真实音频恢复。
@@ -89,5 +109,8 @@ public sealed class AppSettings
         {
             throw new AppSettingsException(exception.Message, exception);
         }
+
+        Ocr.Validate();
+        Detection.Validate();
     }
 }

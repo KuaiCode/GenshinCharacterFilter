@@ -410,11 +410,10 @@ public sealed class AppCommandLineOptionsTests
     [Fact]
     public void Parse_DetectLoopRequiresInputImageOrProcess()
     {
-        ArgumentException exception = Assert.Throws<ArgumentException>(
-            () => AppCommandLineOptions.Parse(["--detect-loop"]));
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--detect-loop"]);
 
-        Assert.Contains("--ocr-input", exception.Message);
-        Assert.Contains("--process", exception.Message);
+        Assert.True(options.DetectLoop);
+        Assert.Equal("GenshinImpact", options.TargetProcessName);
     }
 
     [Fact]
@@ -477,21 +476,23 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
-    public void Parse_AllowRealAudioFromDetectionRequiresExplicitProcess()
+    public void Parse_AllowRealAudioFromDetectionCanUseConfiguredProcess()
     {
-        ArgumentException exception = Assert.Throws<ArgumentException>(
-            () => AppCommandLineOptions.Parse(
-                ["--allow-real-audio-from-detection", "--real-audio", "--detect-loop", "--ocr-input", "input.png"]));
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--allow-real-audio-from-detection", "--real-audio", "--detect-loop", "--ocr-input", "input.png"]);
 
-        Assert.Contains("--process", exception.Message);
+        Assert.True(options.AllowRealAudioFromDetection);
+        Assert.Equal("GenshinImpact", options.TargetProcessName);
     }
 
     [Fact]
-    public void Parse_AllowRealAudioFromDetectionRequiresOcrRegionSource()
+    public void ApplyOverrides_AllowRealAudioFromDetectionRequiresEffectiveOcrRegionSource()
     {
-        ArgumentException exception = Assert.Throws<ArgumentException>(
-            () => AppCommandLineOptions.Parse(
-                ["--allow-real-audio-from-detection", "--real-audio", "--detect-loop", "--process", "chrome", "--ocr-input", "input.png"]));
+        AppSettings settings = CreateBaseSettings();
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--allow-real-audio-from-detection", "--real-audio", "--detect-loop", "--process", "chrome", "--ocr-input", "input.png"]);
+
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => options.ApplyOverrides(settings));
 
         Assert.Contains("--ocr-region", exception.Message);
     }
@@ -651,7 +652,7 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
-    public void ApplyOverrides_PreservesRealAudioEnabledWhenCliOmitsRealAudio()
+    public void ApplyOverrides_ConfigRealAudioDoesNotEnableRuntimeRealAudioWithoutCli()
     {
         AppSettings settings = new()
         {
@@ -664,6 +665,108 @@ public sealed class AppCommandLineOptionsTests
 
         AppSettings merged = options.ApplyOverrides(settings);
 
+        Assert.False(merged.RealAudioEnabled);
+    }
+
+    [Fact]
+    public void ApplyOverrides_ConfigRealAudioDoesNotEnableDetectionDrivenRealAudioWithoutCli()
+    {
+        AppSettings settings = CreateBaseSettings();
+        settings.RealAudioEnabled = true;
+        settings.Ocr.RegionConfigPath = "ocr-region.json";
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--detect-loop", "--ocr-input", "input.png"]);
+
+        AppSettings merged = options.ApplyOverrides(settings);
+
+        Assert.False(merged.RealAudioEnabled);
+        Assert.False(options.AllowRealAudioFromDetection);
+    }
+
+    [Fact]
+    public void ApplyOverrides_CliRealAudioCanEnableRuntimeRealAudio()
+    {
+        AppSettings settings = CreateBaseSettings();
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--real-audio"]);
+
+        AppSettings merged = options.ApplyOverrides(settings);
+
         Assert.True(merged.RealAudioEnabled);
+    }
+
+    [Fact]
+    public void ApplyOverrides_CanOverrideOcrLanguage()
+    {
+        AppSettings settings = CreateBaseSettings();
+        settings.Ocr.Language = "eng";
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--ocr-lang", "chi_sim"]);
+
+        AppSettings merged = options.ApplyOverrides(settings);
+
+        Assert.Equal("chi_sim", merged.Ocr.Language);
+    }
+
+    [Fact]
+    public void ApplyOverrides_CanOverrideOcrRegionConfig()
+    {
+        AppSettings settings = CreateBaseSettings();
+        settings.Ocr.Region = new OcrRegion(1, 2, 3, 4);
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--ocr-region-config", "ocr-region.json"]);
+
+        AppSettings merged = options.ApplyOverrides(settings);
+
+        Assert.Null(merged.Ocr.Region);
+        Assert.Equal("ocr-region.json", merged.Ocr.RegionConfigPath);
+        Assert.Null(merged.Ocr.RegionPreset);
+    }
+
+    [Fact]
+    public void ApplyOverrides_CanOverrideLoopInterval()
+    {
+        AppSettings settings = CreateBaseSettings();
+        settings.Detection.LoopIntervalMs = 1000;
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--loop-interval-ms", "500"]);
+
+        AppSettings merged = options.ApplyOverrides(settings);
+
+        Assert.Equal(500, merged.Detection.LoopIntervalMs);
+    }
+
+    [Fact]
+    public void ApplyOverrides_CanOverrideStabilityThresholds()
+    {
+        AppSettings settings = CreateBaseSettings();
+        settings.Detection.MatchThreshold = 2;
+        settings.Detection.MissThreshold = 2;
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--match-threshold", "3", "--miss-threshold", "4"]);
+
+        AppSettings merged = options.ApplyOverrides(settings);
+
+        Assert.Equal(3, merged.Detection.MatchThreshold);
+        Assert.Equal(4, merged.Detection.MissThreshold);
+    }
+
+    [Fact]
+    public void ApplyOverrides_AllowRealAudioFromDetectionCanUseConfigRegionSource()
+    {
+        AppSettings settings = CreateBaseSettings();
+        settings.Ocr.RegionConfigPath = "ocr-region.json";
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--allow-real-audio-from-detection", "--real-audio", "--detect-loop", "--ocr-input", "input.png"]);
+
+        AppSettings merged = options.ApplyOverrides(settings);
+
+        Assert.True(merged.RealAudioEnabled);
+        Assert.Equal("ocr-region.json", merged.Ocr.RegionConfigPath);
+    }
+
+    private static AppSettings CreateBaseSettings()
+    {
+        return new AppSettings
+        {
+            TargetProcessName = "GenshinImpact",
+            TargetSpeakers = ["Wanderer"],
+            RealAudioEnabled = false,
+            AudioFilter = new AudioFilterOptions()
+        };
     }
 }

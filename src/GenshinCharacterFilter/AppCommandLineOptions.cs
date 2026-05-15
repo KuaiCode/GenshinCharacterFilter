@@ -15,6 +15,16 @@ public sealed class AppCommandLineOptions
     private bool _targetProcessSpecified;
     private bool _audioModeSpecified;
     private bool _volumePercentSpecified;
+    private bool _ocrLanguageSpecified;
+    private bool _tesseractExecutablePathSpecified;
+    private bool _ocrPageSegmentationModeSpecified;
+    private bool _ocrRegionSpecified;
+    private bool _ocrRegionConfigPathSpecified;
+    private bool _ocrRegionPresetSpecified;
+    private bool _loopIntervalMsSpecified;
+    private bool _loopCountSpecified;
+    private bool _matchThresholdSpecified;
+    private bool _missThresholdSpecified;
 
     public string? ConfigPath { get; private init; }
 
@@ -134,6 +144,12 @@ public sealed class AppCommandLineOptions
         string? ocrRegionValue = GetOptionValue(arguments, "--ocr-region");
         string? ocrRegionConfigPath = GetOptionValue(arguments, "--ocr-region-config");
         string? ocrRegionPresetValue = GetOptionValue(arguments, "--ocr-region-preset");
+        bool ocrLanguageSpecified = ocrLanguage is not null;
+        bool tesseractExecutablePathSpecified = tesseractExecutablePath is not null;
+        bool ocrPageSegmentationModeSpecified = ocrPsmValue is not null;
+        bool ocrRegionSpecified = ocrRegionValue is not null;
+        bool ocrRegionConfigPathSpecified = ocrRegionConfigPath is not null;
+        bool ocrRegionPresetSpecified = ocrRegionPresetValue is not null;
         int ocrPageSegmentationMode = OcrOptions.DefaultPageSegmentationMode;
         if (ocrPsmValue is not null &&
             !int.TryParse(ocrPsmValue, out ocrPageSegmentationMode))
@@ -163,6 +179,7 @@ public sealed class AppCommandLineOptions
         ocrRegionSourceOptions.Validate();
 
         string? loopIntervalValue = GetOptionValue(arguments, "--loop-interval-ms");
+        bool loopIntervalMsSpecified = loopIntervalValue is not null;
         int loopIntervalMs = DetectionDryRunOptions.DefaultLoopIntervalMs;
         if (loopIntervalValue is not null &&
             !int.TryParse(loopIntervalValue, out loopIntervalMs))
@@ -173,6 +190,7 @@ public sealed class AppCommandLineOptions
         DetectionDryRunOptions.ValidateLoopIntervalMs(loopIntervalMs);
 
         string? loopCountValue = GetOptionValue(arguments, "--loop-count");
+        bool loopCountSpecified = loopCountValue is not null;
         int? loopCount = null;
         if (loopCountValue is not null)
         {
@@ -186,6 +204,8 @@ public sealed class AppCommandLineOptions
 
         DetectionDryRunOptions.ValidateLoopCount(loopCount);
 
+        bool matchThresholdSpecified = GetOptionValue(arguments, "--match-threshold") is not null;
+        bool missThresholdSpecified = GetOptionValue(arguments, "--miss-threshold") is not null;
         int matchThreshold = ParseDetectionThreshold(
             arguments,
             "--match-threshold",
@@ -194,11 +214,6 @@ public sealed class AppCommandLineOptions
             arguments,
             "--miss-threshold",
             DetectionStabilityOptions.DefaultMissThreshold);
-
-        if (detectLoop && ocrInputPath is null && processName is null)
-        {
-            throw new ArgumentException("--detect-loop requires --ocr-input <imagePath> or --process <name>.", nameof(arguments));
-        }
 
         if (simulateAudioFromDetection && !detectLoop)
         {
@@ -223,16 +238,6 @@ public sealed class AppCommandLineOptions
         if (detectLoop && useRealAudio && !allowRealAudioFromDetection)
         {
             throw new ArgumentException("--real-audio with --detect-loop requires --allow-real-audio-from-detection.", nameof(arguments));
-        }
-
-        if (allowRealAudioFromDetection && processName is null)
-        {
-            throw new ArgumentException("--allow-real-audio-from-detection requires --process <target>.", nameof(arguments));
-        }
-
-        if (allowRealAudioFromDetection && !ocrRegionSourceOptions.HasEffectiveRegionSource)
-        {
-            throw new ArgumentException("--allow-real-audio-from-detection requires --ocr-region, --ocr-region-config, or --ocr-region-preset.", nameof(arguments));
         }
 
         if (calibrateOcrRegion && useRealAudio)
@@ -276,7 +281,17 @@ public sealed class AppCommandLineOptions
             _realAudioSpecified = useRealAudio,
             _targetProcessSpecified = processName is not null,
             _audioModeSpecified = audioModeSpecified,
-            _volumePercentSpecified = volumePercentSpecified
+            _volumePercentSpecified = volumePercentSpecified,
+            _ocrLanguageSpecified = ocrLanguageSpecified,
+            _tesseractExecutablePathSpecified = tesseractExecutablePathSpecified,
+            _ocrPageSegmentationModeSpecified = ocrPageSegmentationModeSpecified,
+            _ocrRegionSpecified = ocrRegionSpecified,
+            _ocrRegionConfigPathSpecified = ocrRegionConfigPathSpecified,
+            _ocrRegionPresetSpecified = ocrRegionPresetSpecified,
+            _loopIntervalMsSpecified = loopIntervalMsSpecified,
+            _loopCountSpecified = loopCountSpecified,
+            _matchThresholdSpecified = matchThresholdSpecified,
+            _missThresholdSpecified = missThresholdSpecified
         };
     }
 
@@ -286,21 +301,41 @@ public sealed class AppCommandLineOptions
     public AppSettings ApplyOverrides(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        bool ocrRegionSourceSpecified = _ocrRegionSpecified || _ocrRegionConfigPathSpecified || _ocrRegionPresetSpecified;
 
         // CLI only overrides explicitly supplied values; missing arguments preserve JSON or safe defaults.
         AppSettings merged = new()
         {
             TargetProcessName = _targetProcessSpecified ? TargetProcessName : settings.TargetProcessName,
             TargetSpeakers = [.. settings.TargetSpeakers],
-            RealAudioEnabled = _realAudioSpecified || settings.RealAudioEnabled,
+            // v0.12 keeps real audio as CLI-only opt-in; config cannot enable runtime real audio by itself.
+            RealAudioEnabled = _realAudioSpecified,
             AudioFilter = new AudioFilterOptions
             {
                 Mode = _audioModeSpecified ? AudioFilter.Mode : settings.AudioFilter.Mode,
                 VolumePercent = _volumePercentSpecified ? AudioFilter.VolumePercent : settings.AudioFilter.VolumePercent
+            },
+            Ocr = new AppOcrSettings
+            {
+                Engine = settings.Ocr.Engine,
+                TesseractExecutablePath = _tesseractExecutablePathSpecified ? TesseractExecutablePath : settings.Ocr.TesseractExecutablePath,
+                Language = _ocrLanguageSpecified ? OcrLanguage : settings.Ocr.Language,
+                PageSegmentationMode = _ocrPageSegmentationModeSpecified ? OcrPageSegmentationMode : settings.Ocr.PageSegmentationMode,
+                Region = ocrRegionSourceSpecified ? (_ocrRegionSpecified ? OcrRegion : null) : settings.Ocr.Region,
+                RegionConfigPath = ocrRegionSourceSpecified ? (_ocrRegionConfigPathSpecified ? OcrRegionConfigPath : null) : settings.Ocr.RegionConfigPath,
+                RegionPreset = ocrRegionSourceSpecified ? (_ocrRegionPresetSpecified ? ToPresetConfigValue(OcrRegionPreset) : null) : settings.Ocr.RegionPreset
+            },
+            Detection = new AppDetectionSettings
+            {
+                LoopIntervalMs = _loopIntervalMsSpecified ? LoopIntervalMs : settings.Detection.LoopIntervalMs,
+                LoopCount = _loopCountSpecified ? LoopCount : settings.Detection.LoopCount,
+                MatchThreshold = _matchThresholdSpecified ? MatchThreshold : settings.Detection.MatchThreshold,
+                MissThreshold = _missThresholdSpecified ? MissThreshold : settings.Detection.MissThreshold
             }
         };
 
         merged.Validate();
+        ValidateMergedCommandSafety(merged);
         return merged;
     }
 
@@ -326,6 +361,33 @@ public sealed class AppCommandLineOptions
             CalibrationFilePath = OcrRegionConfigPath,
             Preset = OcrRegionPreset
         };
+    }
+
+    private void ValidateMergedCommandSafety(AppSettings merged)
+    {
+        if (!DetectLoop)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(OcrInputPath) &&
+            string.IsNullOrWhiteSpace(merged.TargetProcessName))
+        {
+            throw new ArgumentException("--detect-loop requires --ocr-input <imagePath> or configured TargetProcessName.");
+        }
+
+        if (AllowRealAudioFromDetection &&
+            !merged.Ocr.GetOcrRegionSourceOptions().HasEffectiveRegionSource)
+        {
+            throw new ArgumentException("--allow-real-audio-from-detection requires --ocr-region, --ocr-region-config, --ocr-region-preset, or an OCR region source in config.");
+        }
+    }
+
+    private static string? ToPresetConfigValue(OcrRegionPreset? preset)
+    {
+        return preset is null
+            ? null
+            : OcrRegionPresetRegistry.GetDisplayName(preset.Value);
     }
 
     private static int ParseDetectionThreshold(string[] arguments, string optionName, int defaultValue)

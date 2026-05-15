@@ -237,3 +237,16 @@ Reasoning:
 - Manual calibration remains the fallback when resolution differs or preset data is unavailable.
 - Guarded real audio detection must have a valid OCR region source so full-window OCR does not drive real audio.
 - The behavior does not add automatic UI定位, OpenCV, ONNX, WPF, WinUI, overlay, masking, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.
+
+## 2026-05-15: v0.12 Configuration Integration
+
+Decision: extend local JSON configuration to cover common OCR, detection loop, stability threshold, audio filter, and OCR region source defaults while keeping guarded real audio behind explicit CLI safety flags.
+
+Reasoning:
+
+- Long OCR and detection commands are error-prone, especially once `--ocr-region-config`, Tesseract path, language, loop timing, and stability thresholds are all needed together.
+- `AppSettings` remains the source for safe defaults, while CLI arguments continue to override config values for quick manual testing.
+- `config.example.json` remains safe with `RealAudioEnabled=false`, and `config.local.json` is ignored so users can keep local paths out of the repository.
+- Runtime real audio is not enabled by config alone in v0.12; `--real-audio` and `--allow-real-audio-from-detection` remain explicit CLI safety gates.
+- Existing OCR region source behavior is preserved, including ambiguity rejection for competing region sources.
+- The behavior does not add a GUI settings editor, automatic region detection, OpenCV, ONNX, WPF, WinUI, overlay, masking, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.

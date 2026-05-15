@@ -46,7 +46,7 @@ if (commandLineOptions.DetectSpeakerOnce)
 
 if (commandLineOptions.OcrOnce)
 {
-    await OcrOnceAsync(commandLineOptions);
+    await OcrOnceAsync(settings, commandLineOptions);
     return;
 }
 
@@ -70,7 +70,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.11 OCR Region Source Resolution");
+Console.WriteLine("GenshinCharacterFilter v0.12 Configuration Integration");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");
@@ -129,13 +129,13 @@ static async Task CaptureOnceAsync(AppSettings settings, AppCommandLineOptions c
     }
 }
 
-static async Task OcrOnceAsync(AppCommandLineOptions commandLineOptions)
+static async Task OcrOnceAsync(AppSettings settings, AppCommandLineOptions commandLineOptions)
 {
     Console.WriteLine("OCR mode; this run does not control real system audio.");
 
     try
     {
-        OcrResult result = await ExtractOcrAsync(commandLineOptions);
+        OcrResult result = await ExtractOcrAsync(settings, commandLineOptions);
         PrintOcrResult(result);
     }
     catch (Exception exception) when (exception is OcrException or OcrRegionSourceException or ArgumentException or FileNotFoundException)
@@ -160,7 +160,7 @@ static async Task DetectSpeakerOnceAsync(AppSettings settings, AppCommandLineOpt
         else
         {
             Console.WriteLine("Speaker text source: OCR");
-            OcrResult ocrResult = await ExtractOcrAsync(commandLineOptions);
+            OcrResult ocrResult = await ExtractOcrAsync(settings, commandLineOptions);
             PrintOcrResult(ocrResult);
             rawText = ocrResult.RawText;
         }
@@ -258,21 +258,22 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
         {
             OcrInputPath = commandLineOptions.OcrInputPath,
             TargetProcessName = settings.TargetProcessName,
-            OcrRegion = commandLineOptions.OcrRegion,
-            OcrRegionConfigPath = commandLineOptions.OcrRegionConfigPath,
-            OcrRegionPreset = commandLineOptions.OcrRegionPreset,
-            OcrLanguage = commandLineOptions.OcrLanguage,
-            TesseractExecutablePath = commandLineOptions.TesseractExecutablePath,
-            OcrPageSegmentationMode = commandLineOptions.OcrPageSegmentationMode,
+            OcrRegion = settings.Ocr.Region,
+            OcrRegionConfigPath = settings.Ocr.RegionConfigPath,
+            OcrRegionPreset = settings.Ocr.GetOcrRegionSourceOptions().Preset,
+            OcrEngine = settings.Ocr.Engine,
+            OcrLanguage = settings.Ocr.Language,
+            TesseractExecutablePath = settings.Ocr.TesseractExecutablePath,
+            OcrPageSegmentationMode = settings.Ocr.PageSegmentationMode,
             TargetSpeakers = settings.TargetSpeakers,
-            LoopIntervalMs = commandLineOptions.LoopIntervalMs,
-            LoopCount = commandLineOptions.LoopCount,
+            LoopIntervalMs = settings.Detection.LoopIntervalMs,
+            LoopCount = settings.Detection.LoopCount,
             CaptureOutputDirectory = commandLineOptions.CaptureOutputDirectory,
             CaptureDelayMs = commandLineOptions.CaptureDelayMs,
             Stability = new DetectionStabilityOptions
             {
-                MatchThreshold = commandLineOptions.MatchThreshold,
-                MissThreshold = commandLineOptions.MissThreshold
+                MatchThreshold = settings.Detection.MatchThreshold,
+                MissThreshold = settings.Detection.MissThreshold
             }
         };
 
@@ -322,20 +323,21 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
     }
 }
 
-static async Task<OcrResult> ExtractOcrAsync(AppCommandLineOptions commandLineOptions)
+static async Task<OcrResult> ExtractOcrAsync(AppSettings settings, AppCommandLineOptions commandLineOptions)
 {
     OcrOptions ocrOptions = new()
     {
+        OcrEngine = settings.Ocr.Engine,
         InputImagePath = commandLineOptions.OcrInputPath,
-        Language = commandLineOptions.OcrLanguage,
-        TesseractExecutablePath = commandLineOptions.TesseractExecutablePath,
-        PageSegmentationMode = commandLineOptions.OcrPageSegmentationMode,
+        Language = settings.Ocr.Language,
+        TesseractExecutablePath = settings.Ocr.TesseractExecutablePath,
+        PageSegmentationMode = settings.Ocr.PageSegmentationMode,
         OcrRegion = null
     };
 
     OcrRegionSourceResolver regionSourceResolver = new();
     ResolvedOcrRegion resolvedRegion = regionSourceResolver.ResolveForImage(
-        commandLineOptions.GetOcrRegionSourceOptions(),
+        settings.Ocr.GetOcrRegionSourceOptions(),
         ocrOptions.InputImagePath!);
     ocrOptions.OcrRegion = resolvedRegion.Region;
 

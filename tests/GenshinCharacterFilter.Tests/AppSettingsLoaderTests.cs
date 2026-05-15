@@ -1,5 +1,6 @@
 using GenshinCharacterFilter;
 using GenshinCharacterFilter.Audio;
+using GenshinCharacterFilter.Ocr;
 
 namespace GenshinCharacterFilter.Tests;
 
@@ -17,6 +18,17 @@ public sealed class AppSettingsLoaderTests
         Assert.Equal([DefaultChineseSpeaker, "Wanderer"], settings.TargetSpeakers);
         Assert.Equal(AudioFilterMode.Mute, settings.AudioFilter.Mode);
         Assert.Equal(30, settings.AudioFilter.VolumePercent);
+        Assert.Equal(OcrEngine.TesseractCli, settings.Ocr.Engine);
+        Assert.Equal("tesseract", settings.Ocr.TesseractExecutablePath);
+        Assert.Equal("chi_sim+eng", settings.Ocr.Language);
+        Assert.Equal(7, settings.Ocr.PageSegmentationMode);
+        Assert.Null(settings.Ocr.Region);
+        Assert.Null(settings.Ocr.RegionConfigPath);
+        Assert.Null(settings.Ocr.RegionPreset);
+        Assert.Equal(1000, settings.Detection.LoopIntervalMs);
+        Assert.Null(settings.Detection.LoopCount);
+        Assert.Equal(2, settings.Detection.MatchThreshold);
+        Assert.Equal(2, settings.Detection.MissThreshold);
     }
 
     [Fact]
@@ -31,6 +43,20 @@ public sealed class AppSettingsLoaderTests
               "AudioFilter": {
                 "Mode": "ReduceVolume",
                 "VolumePercent": 25
+              },
+              "Ocr": {
+                "Engine": "TesseractCli",
+                "TesseractExecutablePath": "C:\\Tools\\tesseract.exe",
+                "Language": "chi_sim",
+                "PageSegmentationMode": 7,
+                "RegionConfigPath": "ocr-region.json",
+                "RegionPreset": "none"
+              },
+              "Detection": {
+                "LoopIntervalMs": 500,
+                "LoopCount": 5,
+                "MatchThreshold": 3,
+                "MissThreshold": 4
               }
             }
             """);
@@ -42,6 +68,37 @@ public sealed class AppSettingsLoaderTests
         Assert.Equal(["Furina", "Wanderer"], settings.TargetSpeakers);
         Assert.Equal(AudioFilterMode.ReduceVolume, settings.AudioFilter.Mode);
         Assert.Equal(25, settings.AudioFilter.VolumePercent);
+        Assert.Equal(OcrEngine.TesseractCli, settings.Ocr.Engine);
+        Assert.Equal("C:\\Tools\\tesseract.exe", settings.Ocr.TesseractExecutablePath);
+        Assert.Equal("chi_sim", settings.Ocr.Language);
+        Assert.Equal(7, settings.Ocr.PageSegmentationMode);
+        Assert.Equal("ocr-region.json", settings.Ocr.RegionConfigPath);
+        Assert.Equal("none", settings.Ocr.RegionPreset);
+        Assert.Equal(500, settings.Detection.LoopIntervalMs);
+        Assert.Equal(5, settings.Detection.LoopCount);
+        Assert.Equal(3, settings.Detection.MatchThreshold);
+        Assert.Equal(4, settings.Detection.MissThreshold);
+    }
+
+    [Fact]
+    public void LoadFromFile_ReadsAbsoluteOcrRegion()
+    {
+        using TempJsonFile configFile = TempJsonFile.Create(
+            """
+            {
+              "TargetProcessName": "GenshinImpact",
+              "TargetSpeakers": [ "Wanderer" ],
+              "RealAudioEnabled": false,
+              "AudioFilter": { "Mode": "Mute", "VolumePercent": 30 },
+              "Ocr": {
+                "Region": { "X": 10, "Y": 20, "Width": 30, "Height": 40 }
+              }
+            }
+            """);
+
+        AppSettings settings = new AppSettingsLoader().LoadFromFile(configFile.Path);
+
+        Assert.Equal(new OcrRegion(10, 20, 30, 40), settings.Ocr.Region);
     }
 
     [Fact]
@@ -142,6 +199,69 @@ public sealed class AppSettingsLoaderTests
         Assert.Contains("invalid JSON", exception.Message);
     }
 
+    [Fact]
+    public void LoadFromFile_InvalidOcrPageSegmentationModeIsRejected()
+    {
+        using TempJsonFile configFile = TempJsonFile.Create(
+            """
+            {
+              "TargetProcessName": "GenshinImpact",
+              "TargetSpeakers": [ "Wanderer" ],
+              "RealAudioEnabled": false,
+              "AudioFilter": { "Mode": "Mute", "VolumePercent": 30 },
+              "Ocr": { "PageSegmentationMode": 99 }
+            }
+            """);
+
+        AppSettingsException exception = Assert.Throws<AppSettingsException>(
+            () => new AppSettingsLoader().LoadFromFile(configFile.Path));
+
+        Assert.Contains("PageSegmentationMode", exception.Message);
+    }
+
+    [Fact]
+    public void LoadFromFile_AmbiguousOcrRegionSourcesAreRejected()
+    {
+        using TempJsonFile configFile = TempJsonFile.Create(
+            """
+            {
+              "TargetProcessName": "GenshinImpact",
+              "TargetSpeakers": [ "Wanderer" ],
+              "RealAudioEnabled": false,
+              "AudioFilter": { "Mode": "Mute", "VolumePercent": 30 },
+              "Ocr": {
+                "Region": { "X": 1, "Y": 2, "Width": 3, "Height": 4 },
+                "RegionConfigPath": "ocr-region.json"
+              }
+            }
+            """);
+
+        AppSettingsException exception = Assert.Throws<AppSettingsException>(
+            () => new AppSettingsLoader().LoadFromFile(configFile.Path));
+
+        Assert.Contains("--ocr-region", exception.Message);
+    }
+
+    [Fact]
+    public void LoadFromFile_InvalidDetectionSettingsAreRejected()
+    {
+        using TempJsonFile configFile = TempJsonFile.Create(
+            """
+            {
+              "TargetProcessName": "GenshinImpact",
+              "TargetSpeakers": [ "Wanderer" ],
+              "RealAudioEnabled": false,
+              "AudioFilter": { "Mode": "Mute", "VolumePercent": 30 },
+              "Detection": { "LoopIntervalMs": 1 }
+            }
+            """);
+
+        AppSettingsException exception = Assert.Throws<AppSettingsException>(
+            () => new AppSettingsLoader().LoadFromFile(configFile.Path));
+
+        Assert.Contains("Loop interval", exception.Message);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(101)]
@@ -172,6 +292,17 @@ public sealed class AppSettingsLoaderTests
 
         Assert.False(settings.RealAudioEnabled);
         Assert.Equal([DefaultChineseSpeaker, "Wanderer"], settings.TargetSpeakers);
+        Assert.Equal("ocr-region.json", settings.Ocr.RegionConfigPath);
+        Assert.Equal(500, settings.Detection.LoopIntervalMs);
+    }
+
+    [Fact]
+    public void GitIgnore_IgnoresLocalConfig()
+    {
+        string gitIgnorePath = Path.Combine(FindRepositoryRoot(), ".gitignore");
+        string gitIgnore = File.ReadAllText(gitIgnorePath);
+
+        Assert.Contains("config.local.json", gitIgnore);
     }
 
     private static string FindRepositoryRoot()

@@ -38,6 +38,11 @@ public sealed class DetectionDryRunOptions
     public OcrRegionPreset? OcrRegionPreset { get; set; }
 
     /// <summary>
+    /// Gets or sets the OCR engine used for each iteration.
+    /// </summary>
+    public OcrEngine OcrEngine { get; set; } = OcrEngine.TesseractCli;
+
+    /// <summary>
     /// Gets or sets the OCR language expression passed to Tesseract.
     /// </summary>
     public string OcrLanguage { get; set; } = OcrOptions.DefaultLanguage;
@@ -101,6 +106,11 @@ public sealed class DetectionDryRunOptions
         if (string.IsNullOrWhiteSpace(OcrLanguage))
         {
             throw new ArgumentException("OCR language cannot be empty.", nameof(OcrLanguage));
+        }
+
+        if (!Enum.IsDefined(OcrEngine))
+        {
+            throw new ArgumentException("OCR engine is not supported.", nameof(OcrEngine));
         }
 
         if (string.IsNullOrWhiteSpace(TesseractExecutablePath))
