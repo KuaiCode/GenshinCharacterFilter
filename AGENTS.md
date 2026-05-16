@@ -20,9 +20,9 @@ The agent should prioritize:
 
 ## Current milestone
 
-The current milestone is **v0.13 Usability Hardening**.
+The current milestone is **v0.14 Minimal WinForms Control Panel**.
 
-The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, **v0.5 Speaker Detection from OCR Text Prototype**, **v0.6 OCR-driven Detection Dry Run**, **v0.7 Detection Stability Gate**, **v0.8 Simulated Audio Integration**, **v0.9 Guarded Real Audio Integration**, **v0.9.1 Partial Audio Apply Restore Fix**, **v0.10 Manual OCR Region Calibration**, **v0.11 OCR Region Source Resolution**, and **v0.12 Configuration Integration** are considered implemented and manually verified where applicable:
+The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, **v0.5 Speaker Detection from OCR Text Prototype**, **v0.6 OCR-driven Detection Dry Run**, **v0.7 Detection Stability Gate**, **v0.8 Simulated Audio Integration**, **v0.9 Guarded Real Audio Integration**, **v0.9.1 Partial Audio Apply Restore Fix**, **v0.10 Manual OCR Region Calibration**, **v0.11 OCR Region Source Resolution**, **v0.12 Configuration Integration**, and **v0.13 Usability Hardening** are considered implemented and manually verified where applicable:
 
 - simulated speaker input works;
 - mute coordination works;
@@ -81,23 +81,28 @@ The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Windo
 - CLI values override config values;
 - config alone cannot enable runtime real audio or guarded detection audio;
 - `--config config.local.json --ocr-once` and `--config config.local.json --detect-loop` have been manually verified;
+- `--validate-config` and `--print-effective-config` are available for diagnostics;
+- preflight checks are available for common OCR, image, OCR region config, process, and guarded real-audio region safety problems;
 - default target speakers are `流浪者` and `Wanderer`.
 
-Scope for v0.13:
+Scope for v0.14:
 
 - Console app only.
-- Add configuration validation command.
-- Add effective configuration print command.
-- Preflight-check common runtime dependencies.
-- Improve startup diagnostics.
-- Improve error messages.
-- Reduce duplicate logs such as calibration mode banner.
-- Keep CLI overrides.
-- CLI values should override config values.
-- Default config must remain safe.
-- Real audio must still require explicit CLI opt-in for detection-driven real audio.
-- Do not enable real audio from config alone.
-- Do not control real audio unless existing guarded flags are explicitly supplied.
+- Add an explicit GUI launch mode, such as `--gui`.
+- Use minimal WinForms only.
+- GUI should be a thin wrapper over existing config, OCR, detection, calibration, and audio services.
+- Keep CLI behavior working.
+- Add controls for selecting a config file.
+- Add controls for validating config.
+- Add controls for printing or showing effective config.
+- Add controls for calibrating OCR region.
+- Add controls for testing OCR once.
+- Add controls for starting and stopping dry-run detection.
+- Add controls for starting and stopping simulated detection audio.
+- Guarded real audio may be started only with explicit UI confirmation.
+- Show logs and command output in the UI.
+- Default launch without `--gui` remains existing console behavior.
+- Real audio safety gates must remain conceptually unchanged.
 - Default run must remain safe.
 - Existing v0.1 audio, v0.2 configuration, and v0.3 capture behavior must remain stable.
 - Existing v0.4 OCR behavior must remain stable.
@@ -109,26 +114,25 @@ Scope for v0.13:
 - Existing v0.10 calibration behavior must remain stable.
 - Existing v0.11 OCR region source behavior must remain stable.
 - Existing v0.12 configuration integration behavior must remain stable.
+- Existing v0.13 usability hardening behavior must remain stable.
 - .NET 8.
 - Windows x64.
 - VS Code / Codex / Visual Studio friendly workflow.
 
 Out of scope for the current milestone:
 
-- GUI settings editor.
+- Full GUI redesign.
 - New calibration UI features.
 - Automatic region detection.
 - Fabricated preset coordinates.
-- Full GUI application.
 - WPF.
 - WinUI.
 - Overlay masking.
 - Face detection.
 - ONNX.
 - OpenCV.
-- Persistent settings UI or configuration UI.
 - Automatic real audio without existing guarded real-audio flags.
-- New feature work outside usability hardening.
+- New feature work outside the minimal WinForms control panel.
 - Gameplay automation.
 - Keyboard/mouse automation.
 - Input automation.
@@ -140,19 +144,14 @@ Done when:
 
 - `dotnet build` passes.
 - If tests exist, `dotnet test` passes.
-- `--validate-config` validates configuration success and failure cases.
-- `--print-effective-config` prints the merged effective configuration without exposing sensitive data.
-- OCR commands preflight-check `TesseractExecutablePath` when OCR is requested.
-- OCR and fixed-image detection commands preflight-check OCR input image paths.
-- OCR region config paths are preflight-checked when configured.
-- Process capture and process detection modes preflight-check target process availability where practical.
-- Startup diagnostics clearly distinguish config errors, OCR errors, capture errors, and audio errors.
-- Duplicate logs such as calibration mode banner are reduced.
-- CLI arguments continue to override JSON configuration values clearly.
-- `config.example.json` remains safe with `RealAudioEnabled = false`.
-- `config.local.json` remains gitignored.
-- Config cannot silently enable guarded real audio detection.
-- `--real-audio` and `--allow-real-audio-from-detection` remain explicit CLI safety gates.
+- `--gui` launches a minimal WinForms control panel.
+- Default launch without `--gui` keeps existing console behavior.
+- The GUI delegates to existing shared services or a thin command/application layer instead of duplicating OCR, detection, calibration, or audio logic.
+- The GUI can select a config file, validate config, show effective config, calibrate OCR region, test OCR once, run/stop dry-run detection, and run/stop simulated detection audio.
+- Guarded real audio in the GUI requires a visible warning and explicit confirmation before `WindowsAudioMuteService` can be created.
+- Stop/close attempts restore if simulated or real audio was active.
+- Existing CLI tests keep passing.
+- Tests cover UI-independent command/application services where practical.
 - Default run remains safe and does not control real system audio.
 - No new dependencies are introduced.
 - No WPF, WinUI, OpenCV, ONNX, masking, overlay, gameplay automation, game memory access, hooking, or injection is introduced.
@@ -167,7 +166,8 @@ Do not implement later roadmap phases until this milestone works.
 - Target OS: Windows
 - Target architecture: Windows x64
 - Initial app type: console app
-- Later GUI options: WPF or WinUI, but only after configuration and detection flows are stable and explicitly requested
+- Minimal GUI option for current milestone: WinForms control panel launched explicitly with `--gui`
+- Later GUI options: WPF or WinUI only if explicitly requested in a future milestone
 - Audio control: NAudio or Windows Core Audio APIs
 - Configuration: local JSON using .NET built-in JSON support unless a stronger reason is documented
 - Image processing later: TBD
@@ -176,7 +176,7 @@ Do not implement later roadmap phases until this milestone works.
 
 Do not assume administrator privileges unless explicitly required and explained.
 
-Do not introduce a full GUI application, overlay, gameplay automation, OCR model, image-processing dependency, or model-inference dependency during the v0.13 Usability Hardening milestone. Avoid OpenCV and ONNX for this milestone.
+Do not introduce a full GUI application, overlay, gameplay automation, OCR model, image-processing dependency, or model-inference dependency during the v0.14 Minimal WinForms Control Panel milestone. Minimal WinForms is allowed only as a thin local control panel. Avoid OpenCV and ONNX for this milestone.
 
 ## Tooling workflow
 
@@ -233,8 +233,8 @@ Follow this order unless the user explicitly changes the roadmap:
 12. Manual OCR region calibration.
 13. OCR region source resolution.
 14. Configuration integration.
-15. Stable mute/unmute coordination with debounce and recovery.
-16. Minimal UI.
+15. Minimal WinForms control panel.
+16. Stable mute/unmute coordination with debounce and recovery.
 17. Optional masking.
 
 Do not implement later-phase functionality prematurely.
@@ -264,26 +264,28 @@ Use these module boundaries unless the user asks for a different design:
 - `OcrRegionPreset` / `OcrRegionPresetRegistry`: represent supported preset names and real calibration-backed preset data.
 - `OcrSettings` or equivalent: stores OCR provider, Tesseract, language, page segmentation, and OCR region source defaults.
 - `DetectionSettings` or equivalent: stores loop timing and stability threshold defaults.
+- `Gui/MainForm` or equivalent: hosts the minimal WinForms control panel.
+- `UiLogSink` or equivalent: forwards logs and command output to the UI.
+- A thin application or command service: lets the UI call existing config, OCR, detection, calibration, and audio flows without duplicating logic in the form.
 
-For v0.13, expected work is limited to:
+For v0.14, expected work is limited to:
 
-- adding an explicit `--validate-config` command
-- adding an explicit `--print-effective-config` command
-- adding preflight checks for Tesseract when OCR is requested
-- adding preflight checks for OCR input images in fixed-image OCR/detection modes
-- adding preflight checks for OCR region config files when configured
-- adding target process preflight checks for process capture/detection modes where practical
-- improving startup diagnostics and error messages
-- reducing duplicate logs such as calibration mode banner
+- adding an explicit `--gui` launch mode
+- adding a minimal WinForms main form
+- adding UI controls for config selection, validation, effective config display, OCR region calibration, one-shot OCR testing, dry-run detection, and simulated detection audio
+- keeping GUI code as a thin wrapper over shared services or a command/application layer
+- preserving CLI behavior and existing command-line tests
 - preserving config and CLI merge behavior
 - preserving guarded real audio safety gates
-- adding tests for validation, effective config printing, and preflight checks
+- requiring visible UI warning and explicit confirmation before guarded real audio can start
+- attempting restore on UI stop/close if simulated or real audio was active
+- adding tests for UI-independent command/application logic where practical
 
-Do not create a GUI settings editor, create new calibration UI behavior, detect regions automatically, fabricate preset coordinates, or weaken existing real-audio guard flags during v0.13.
+Do not create a full GUI redesign, create new calibration UI behavior beyond launching the existing calibration flow, detect regions automatically, fabricate preset coordinates, or weaken existing real-audio guard flags during v0.14.
 
 ## OCR region source rules
 
-For v0.13 usability hardening, preserve these rules:
+For v0.14 minimal WinForms control panel, preserve these rules:
 
 - OCR region source priority:
   1. `--ocr-region` absolute pixels.
@@ -306,7 +308,7 @@ For v0.13 usability hardening, preserve these rules:
 
 ## Speaker matching rules
 
-For v0.13 usability hardening, preserve these rules:
+For v0.14 minimal WinForms control panel, preserve these rules:
 
 - Trim whitespace.
 - Handle newlines around text.
@@ -365,12 +367,14 @@ Required behavior:
 - Mute/reduce should be idempotent: repeated target detections while already filtered should not spam the audio API or repeatedly reduce volume.
 - Shutdown, cancellation, and unexpected exceptions should attempt safe restore.
 
-For v0.13:
+For v0.14:
 
-- Configuration integration must not create `WindowsAudioMuteService` by itself.
-- Configuration integration must not control real audio by itself.
-- Configuration integration must not call `MuteCoordinator` in new ways.
-- Configuration integration must not run automatic mute/restore logic.
+- The GUI must not duplicate mute, OCR, detection, calibration, or audio logic.
+- The GUI must call shared services or a thin command/application layer.
+- The GUI must not create `WindowsAudioMuteService` unless the user explicitly starts guarded real audio and confirms a visible warning.
+- The GUI must not control real audio by default.
+- The GUI must not call `MuteCoordinator` except through existing safe simulated or guarded audio flows.
+- Stop/close should attempt restore if simulated or real audio was active.
 - Existing guarded real audio detection must require the current explicit guard flags and a valid OCR region source.
 - Config alone must not enable guarded real audio detection.
 - `--real-audio` and `--allow-real-audio-from-detection` must remain explicit CLI safety gates.
@@ -385,6 +389,8 @@ For v0.13:
 - Existing v0.9 guarded real audio behavior must remain stable.
 - Existing v0.10 calibration behavior must remain stable.
 - Existing v0.11 OCR region source behavior must remain stable.
+- Existing v0.12 configuration integration behavior must remain stable.
+- Existing v0.13 usability hardening behavior must remain stable.
 - Do not add fuzzy matching yet.
 
 ## Safety rules
@@ -407,10 +413,10 @@ For v0.13:
 
 Store user configuration in a local JSON file unless the project already uses another configuration format.
 
-For v0.13:
+For v0.14:
 
 - Local JSON configuration is implemented and should now cover common OCR, detection loop, stability threshold, audio filter, and OCR region source defaults.
-- Do not add a persistent settings UI.
+- The minimal WinForms control panel may select and validate config files, but it must not become a persistent settings editor.
 - Do not store sensitive information.
 - Do not include credentials, cookies, tokens, or game login data.
 - Do not make network requests for configuration.
@@ -451,7 +457,7 @@ Suggested `Detection` fields:
 - `MatchThreshold`
 - `MissThreshold`
 
-v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10/v0.11/v0.12/v0.13 OCR, speaker debug, dry-run, stability-gate, simulated audio, guarded real audio, calibration, region source, configuration integration, and usability hardening may include:
+v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10/v0.11/v0.12/v0.13/v0.14 OCR, speaker debug, dry-run, stability-gate, simulated audio, guarded real audio, calibration, region source, configuration integration, usability hardening, and minimal control panel behavior may include:
 
 - OCR input image path or explicit capture input, only if needed for explicit commands;
 - OCR region;
@@ -467,6 +473,7 @@ v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10/v0.11/v0.12/v0.13 OCR, speaker debug, dry-ru
 - guarded real audio detection options, only if needed for explicit v0.9 behavior, but not the CLI allow safety gate;
 - OCR region calibration output path, source screenshot size, pixel region, and ratio region, only if needed for explicit v0.10 calibration behavior;
 - OCR region source resolver options.
+- minimal UI state needed to start, stop, and display explicit commands, only if it does not duplicate core logic.
 
 Long-term configuration may later include:
 
@@ -545,12 +552,13 @@ Do not add heavy OCR, image-processing, model-inference, overlay, or UI dependen
 
 Do not replace the project framework or UI stack without explicit approval.
 
-For v0.13:
+For v0.14:
 
 - Use built-in .NET JSON support where practical.
 - Existing NAudio dependency for real Windows audio control may remain.
-- Do not add new dependencies for v0.13 unless strongly justified.
+- Do not add new dependencies for v0.14 unless strongly justified.
 - Existing minimal WinForms-based calibration window may remain.
+- Minimal WinForms may be used for the control panel because the project already targets Windows desktop APIs.
 - Do not add external GUI dependencies.
 - Prefer an OCR provider abstraction so the engine can be replaced later.
 - Do not add heavy OCR or model dependencies without explaining why.
@@ -595,19 +603,18 @@ Use fake implementations for:
 - `IGameWindowCapture`
 - `IOcrService`
 
-For v0.13, prioritize tests for:
+For v0.14, prioritize tests for:
 
-- `--validate-config` success and failure cases;
-- `--print-effective-config` output shape and redaction/safety expectations;
-- missing Tesseract executable path producing a clear preflight error without requiring real Tesseract;
-- missing OCR input image producing a clear preflight error;
-- missing OCR region config file producing a clear preflight error;
-- target process preflight behavior using fakes or pure logic where practical;
-- `config.local.json` remaining ignored;
-- clear distinction between config errors, OCR errors, capture errors, and audio errors where practical;
+- existing CLI tests continuing to pass;
+- parsing `--gui` without changing default console behavior;
+- UI-independent command/application services extracted for the control panel;
+- config selection, validation, effective config display, OCR-once, dry-run start/stop, and simulated detection audio start/stop behavior where testable without UI interaction;
+- guarded real audio confirmation logic using fakes only;
+- stop/close restore orchestration using fake audio services only;
+- no test requiring manual UI clicks;
 - no test controlling real audio, requiring real Tesseract, or requiring a real game window.
 
-Manual verification for v0.13 must be explicit, local, and must not run `--real-audio` automatically.
+Manual verification for v0.14 must be explicit, local, and must not run real audio unless the guarded real-audio UI confirmation is intentionally tested.
 
 Existing v0.5 speaker matching tests should continue covering:
 
@@ -657,9 +664,9 @@ For early prototypes:
   4. restore audio;
   5. log state changes.
 
-The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, v0.6 OCR-driven detection dry-run, v0.7 detection stability gate, v0.8 simulated audio integration, v0.9 guarded real audio integration, v0.10 manual OCR region calibration, v0.11 OCR region source resolution, and v0.12 configuration integration are implemented; v0.13 should preserve them while improving daily-use diagnostics and reliability.
+The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, v0.6 OCR-driven detection dry-run, v0.7 detection stability gate, v0.8 simulated audio integration, v0.9 guarded real audio integration, v0.10 manual OCR region calibration, v0.11 OCR region source resolution, v0.12 configuration integration, and v0.13 usability hardening are implemented; v0.14 should preserve them while adding a minimal WinForms control panel as a thin UI layer.
 
-Do not add masking, a full GUI application, persistent settings UI, GUI settings editor, model inference, speaker recognition from image, automatic region detection, fabricated preset coordinates, default real audio behavior, unguarded `WindowsAudioMuteService` integration, or gameplay automation during v0.13.
+Do not add masking, a full GUI application, persistent settings UI, GUI settings editor, model inference, speaker recognition from image, automatic region detection, fabricated preset coordinates, default real audio behavior, unguarded `WindowsAudioMuteService` integration, or gameplay automation during v0.14.
 
 Do not optimize prematurely.
 
@@ -757,7 +764,7 @@ For meaningful behavior changes, update `README.md` or relevant docs.
 
 For important architectural choices, update `docs/DECISIONS.md`.
 
-For v0.13 implementation tasks, `README.md` should document validation, effective config printing, and preflight diagnostics, and `docs/DECISIONS.md` should record usability hardening decisions and safety boundaries.
+For v0.14 implementation tasks, `README.md` should document `--gui`, the minimal control panel workflow, and guarded real-audio confirmation behavior, and `docs/DECISIONS.md` should record why WinForms is used as a minimal local control panel.
 
 Do not add excessive documentation for trivial changes.
 
