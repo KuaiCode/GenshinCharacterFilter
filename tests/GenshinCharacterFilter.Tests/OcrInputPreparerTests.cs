@@ -32,9 +32,51 @@ public sealed class OcrInputPreparerTests
         string preparedPath = new OcrInputPreparer().PrepareInput(options);
 
         Assert.EndsWith(Path.Combine("debug-ocr", "ocr-input-latest.png"), preparedPath);
+        Assert.True(File.Exists(preparedPath));
         using Image croppedImage = Image.FromFile(preparedPath);
         Assert.Equal(5, croppedImage.Width);
         Assert.Equal(4, croppedImage.Height);
+    }
+
+    [Fact]
+    public void PrepareInput_WithDebugOutputAsInputThrowsClearError()
+    {
+        string debugDirectory = Path.GetFullPath(OcrInputPreparer.DefaultDebugOutputDirectory);
+        Directory.CreateDirectory(debugDirectory);
+        string debugOutputPath = Path.Combine(debugDirectory, OcrInputPreparer.DefaultDebugInputFileName);
+        using (Bitmap bitmap = new(20, 10))
+        {
+            bitmap.Save(debugOutputPath);
+        }
+
+        OcrOptions options = new()
+        {
+            InputImagePath = debugOutputPath,
+            OcrRegion = new OcrRegion(0, 0, 5, 4)
+        };
+
+        OcrException exception = Assert.Throws<OcrException>(() => new OcrInputPreparer().PrepareInput(options));
+
+        Assert.Contains("debug OCR output", exception.Message);
+        Assert.Contains("debug-captures", exception.Message);
+    }
+
+    [Fact]
+    public void PrepareInput_WithRegionCanReadSourceWhileImageHandleIsOpen()
+    {
+        using TempImage input = TempImage.Create(20, 10);
+        using Image _ = Image.FromFile(input.Path);
+        OcrOptions options = new()
+        {
+            InputImagePath = input.Path,
+            OcrRegion = new OcrRegion(1, 1, 6, 3)
+        };
+
+        string preparedPath = new OcrInputPreparer().PrepareInput(options);
+
+        using Image croppedImage = Image.FromFile(preparedPath);
+        Assert.Equal(6, croppedImage.Width);
+        Assert.Equal(3, croppedImage.Height);
     }
 
     [Fact]

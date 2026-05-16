@@ -31,16 +31,25 @@ public sealed class OcrInputPreparer
     private static string PrepareDebugImage(OcrOptions options)
     {
         string inputImagePath = options.GetFullInputImagePath();
+        string outputDirectory = Path.GetFullPath(DefaultDebugOutputDirectory);
+        Directory.CreateDirectory(outputDirectory);
+        string outputPath = Path.Combine(outputDirectory, DefaultDebugInputFileName);
+        if (string.Equals(inputImagePath, outputPath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new OcrException(
+                "OCR input image cannot be the debug OCR output image. Do not use debug-ocr/ocr-input-latest.png as OCR input; choose debug-captures/capture-latest.png or another original screenshot.");
+        }
 
         try
         {
-            using Image sourceImage = Image.FromFile(inputImagePath);
+            byte[] inputBytes = File.ReadAllBytes(inputImagePath);
+            using MemoryStream inputStream = new(inputBytes);
+            using Image sourceImage = Image.FromStream(inputStream);
             using Bitmap preparedImage = PrepareBitmap(sourceImage, options);
 
-            string outputDirectory = Path.GetFullPath(DefaultDebugOutputDirectory);
-            Directory.CreateDirectory(outputDirectory);
-            string outputPath = Path.Combine(outputDirectory, DefaultDebugInputFileName);
-            preparedImage.Save(outputPath, ImageFormat.Png);
+            string tempPath = Path.Combine(outputDirectory, $"{Path.GetFileNameWithoutExtension(DefaultDebugInputFileName)}.tmp.png");
+            preparedImage.Save(tempPath, ImageFormat.Png);
+            File.Move(tempPath, outputPath, overwrite: true);
             return outputPath;
         }
         catch (ArgumentOutOfRangeException exception)

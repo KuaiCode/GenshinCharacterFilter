@@ -54,6 +54,15 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Fact]
+    public void Parse_ReadsGui()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--gui"]);
+
+        Assert.True(options.Gui);
+        Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
     public void Parse_ReadsCaptureOnceAndOutputDirectory()
     {
         AppCommandLineOptions options = AppCommandLineOptions.Parse(

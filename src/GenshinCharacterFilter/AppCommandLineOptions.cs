@@ -48,6 +48,8 @@ public sealed class AppCommandLineOptions
 
     public bool PrintEffectiveConfig { get; private init; }
 
+    public bool Gui { get; private init; }
+
     public string TargetProcessName { get; private init; } = "GenshinImpact";
 
     public AudioFilterOptions AudioFilter { get; private init; } = new();
@@ -130,6 +132,7 @@ public sealed class AppCommandLineOptions
         bool calibrateOcrRegion = HasFlag(arguments, "--calibrate-ocr-region");
         bool validateConfig = HasFlag(arguments, "--validate-config");
         bool printEffectiveConfig = HasFlag(arguments, "--print-effective-config");
+        bool gui = HasFlag(arguments, "--gui");
         bool useRealAudio = HasFlag(arguments, "--real-audio");
         string? calibrationOutputPath = GetOptionValue(arguments, "--calibration-output");
         string? ocrInputPath = GetOptionValue(arguments, "--ocr-input");
@@ -269,6 +272,7 @@ public sealed class AppCommandLineOptions
             CalibrateOcrRegion = calibrateOcrRegion,
             ValidateConfig = validateConfig,
             PrintEffectiveConfig = printEffectiveConfig,
+            Gui = gui,
             TargetProcessName = processName ?? "GenshinImpact",
             AudioFilter = audioFilterOptions,
             CaptureOutputDirectory = captureOutputDirectory ?? WindowCaptureOptions.DefaultOutputDirectory,

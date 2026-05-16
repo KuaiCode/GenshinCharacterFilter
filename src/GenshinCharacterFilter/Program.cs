@@ -4,6 +4,7 @@ using GenshinCharacterFilter.Calibration;
 using GenshinCharacterFilter.Capture;
 using GenshinCharacterFilter.Coordination;
 using GenshinCharacterFilter.Detection;
+using GenshinCharacterFilter.Gui;
 using GenshinCharacterFilter.Ocr;
 using GenshinCharacterFilter.Speakers;
 
@@ -14,6 +15,12 @@ bool validateConfigRequested = args.Any(argument => string.Equals(argument, "--v
 try
 {
     commandLineOptions = AppCommandLineOptions.Parse(args);
+    if (commandLineOptions.Gui)
+    {
+        GuiApplication.Run(commandLineOptions.ConfigPath);
+        return;
+    }
+
     AppSettingsLoader settingsLoader = new();
     AppSettings loadedSettings = commandLineOptions.ConfigPath is null
         ? settingsLoader.LoadDefault()
@@ -134,7 +141,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.13 Usability Hardening");
+Console.WriteLine("GenshinCharacterFilter v0.14 Minimal WinForms Control Panel");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");

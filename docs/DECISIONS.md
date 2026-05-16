@@ -263,3 +263,18 @@ Reasoning:
 - Error categories distinguish configuration, OCR preflight, capture preflight, and audio safety problems so users know which setting to fix.
 - Real audio safety rules are unchanged: config alone cannot enable runtime real audio or guarded detection audio.
 - The behavior does not add dependencies, GUI settings editor, automatic region detection, OpenCV, ONNX, WPF, WinUI, overlay, masking, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.
+
+## 2026-05-16: v0.14 Minimal WinForms Control Panel
+
+Decision: add an explicit `--gui` launch mode that opens a minimal WinForms control panel as a thin local UI over existing command services.
+
+Reasoning:
+
+- The core OCR, detection, calibration, configuration, and audio safety paths are already command-line verifiable, but daily use requires fewer long commands.
+- WinForms is already available through the Windows desktop target and the existing calibration window, so no new GUI dependency is needed.
+- The control panel should orchestrate existing services instead of duplicating OCR, detection, or audio logic in form event handlers.
+- Default console startup remains unchanged when `--gui` is not supplied.
+- The first panel exposes config validation, effective config output, calibration, one-shot OCR, dry-run detection, and simulated detection audio.
+- Guarded real audio remains disabled by default and is not exposed without explicit warning and confirmation.
+- Stop/close should cancel running detection and allow simulated audio restore paths to run.
+- The behavior does not add WPF, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.
