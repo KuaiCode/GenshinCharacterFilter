@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.14 Minimal WinForms Control Panel**.
+Current milestone: **v0.15 GUI Hardening**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, v0.12 Configuration Integration, and v0.13 Usability Hardening are implemented. v0.14 adds a minimal WinForms control panel behind `--gui`.
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, v0.12 Configuration Integration, v0.13 Usability Hardening, and v0.14 Minimal WinForms Control Panel are implemented. v0.15 hardens the WinForms panel interaction and error handling behind `--gui`.
 
 ## Current Scope
 
@@ -26,7 +26,7 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Local JSON configuration for OCR, detection loop, stability thresholds, OCR region source, and audio filter defaults.
 - Explicit configuration validation and effective configuration diagnostics.
 - Preflight checks for common OCR, image, region config, and process problems.
-- Explicit minimal WinForms control panel launched with `--gui`.
+- Explicit minimal WinForms control panel launched with `--gui`, now focused on safer status, stop, and error handling.
 
 Out of scope: default automatic real audio, config-only guarded real audio, unguarded real detection audio, production auto mute, automatic OCR region detection, fabricated preset coordinates, GUI settings editor, fuzzy matching, speaker recognition from image, full GUI application, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
 
@@ -65,9 +65,11 @@ dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj --
 
 The panel provides buttons for selecting a config file, validating config, showing effective config, calibrating the OCR region, testing OCR once, starting/stopping dry-run detection, and starting/stopping simulated detection audio. It shows command logs in the window and uses the same underlying config, OCR, calibration, detection, and simulated audio services as the CLI.
 
+The GUI is still a minimal local panel, not a full settings editor. It displays a run status, prevents overlapping detection starts, logs button errors in the panel, auto-scrolls new log output, and lets Stop request cancellation for cancellable operations.
+
 For OCR input, select the original screenshot, such as `debug-captures/capture-latest.png`. Do not use `debug-ocr/ocr-input-latest.png` as OCR input because that file is the generated debug output and may be overwritten by the next OCR run.
 
-The first panel version does not expose guarded real audio. Real audio remains CLI-only and still requires explicit `--real-audio` and `--allow-real-audio-from-detection`.
+The panel remains simulated-audio-focused. Guarded real audio is not exposed as a main GUI action. Real audio remains CLI-only and still requires explicit `--real-audio` and `--allow-real-audio-from-detection`.
 
 ## Debug Screenshot Capture
 
@@ -371,7 +373,7 @@ Supported overrides:
 - `--calibrate-ocr-region`
 - `--calibration-output <path>`
 
-`--real-audio` is the only way to enable runtime real audio. `RealAudioEnabled` in config is kept as a documented setting, but v0.14 does not let config alone enable runtime real audio or guarded detection audio. The WinForms panel does not enable real audio by default.
+`--real-audio` is the only way to enable runtime real audio. `RealAudioEnabled` in config is kept as a documented setting, but v0.15 does not let config alone enable runtime real audio or guarded detection audio. The WinForms panel does not enable real audio by default.
 
 ## Real Audio Mode
 

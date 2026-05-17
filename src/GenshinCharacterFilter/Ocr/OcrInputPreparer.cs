@@ -47,9 +47,11 @@ public sealed class OcrInputPreparer
             using Image sourceImage = Image.FromStream(inputStream);
             using Bitmap preparedImage = PrepareBitmap(sourceImage, options);
 
-            string tempPath = Path.Combine(outputDirectory, $"{Path.GetFileNameWithoutExtension(DefaultDebugInputFileName)}.tmp.png");
+            string tempPath = Path.Combine(
+                outputDirectory,
+                $"{Path.GetFileNameWithoutExtension(DefaultDebugInputFileName)}.{Guid.NewGuid():N}.tmp.png");
             preparedImage.Save(tempPath, ImageFormat.Png);
-            File.Move(tempPath, outputPath, overwrite: true);
+            MoveWithRetry(tempPath, outputPath);
             return outputPath;
         }
         catch (ArgumentOutOfRangeException exception)
@@ -81,5 +83,26 @@ public sealed class OcrInputPreparer
             GraphicsUnit.Pixel);
 
         return cropped;
+    }
+
+    private static void MoveWithRetry(string tempPath, string outputPath)
+    {
+        const int maxAttempts = 5;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                File.Move(tempPath, outputPath, overwrite: true);
+                return;
+            }
+            catch (Exception exception) when (attempt < maxAttempts &&
+                exception is IOException or UnauthorizedAccessException)
+            {
+                // 并行测试或图片预览可能短暂占用旧 debug 图，稍等后再替换。
+                Thread.Sleep(50);
+            }
+        }
+
+        File.Move(tempPath, outputPath, overwrite: true);
     }
 }

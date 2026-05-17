@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Windows.Forms;
 
 namespace GenshinCharacterFilter.Gui;
@@ -12,6 +12,9 @@ public sealed class MainForm : Form
     private readonly TextBox _configPathTextBox = new();
     private readonly TextBox _ocrInputPathTextBox = new();
     private readonly TextBox _logTextBox = new();
+    private readonly Label _statusValueLabel = new();
+    private readonly Button _browseConfigButton = new();
+    private readonly Button _browseOcrInputButton = new();
     private readonly Button _validateConfigButton = new();
     private readonly Button _printEffectiveConfigButton = new();
     private readonly Button _calibrateOcrRegionButton = new();
@@ -19,6 +22,7 @@ public sealed class MainForm : Form
     private readonly Button _startDryRunButton = new();
     private readonly Button _startSimulatedAudioButton = new();
     private readonly Button _stopButton = new();
+    private readonly GuiStateController _stateController = new();
     private CancellationTokenSource? _operationCancellation;
     private Task? _operationTask;
     private bool _closeAfterOperationStops;
@@ -40,9 +44,10 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 5,
             Padding = new Padding(12)
         };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -51,28 +56,33 @@ public sealed class MainForm : Form
         root.Controls.Add(BuildPathRow(
             "Config file",
             _configPathTextBox,
+            _browseConfigButton,
             string.IsNullOrWhiteSpace(initialConfigPath) ? GuiCommandService.GetDefaultConfigPath() : initialConfigPath,
             BrowseConfigFile), 0, 0);
         root.Controls.Add(BuildPathRow(
             "OCR input image",
             _ocrInputPathTextBox,
+            _browseOcrInputButton,
             GuiCommandService.GetDefaultOcrInputPath(),
             BrowseOcrInputImage), 0, 1);
-        root.Controls.Add(BuildButtonPanel(), 0, 2);
+        root.Controls.Add(BuildStatusRow(), 0, 2);
+        root.Controls.Add(BuildButtonPanel(), 0, 3);
 
         _logTextBox.Dock = DockStyle.Fill;
         _logTextBox.Multiline = true;
         _logTextBox.ReadOnly = true;
         _logTextBox.ScrollBars = ScrollBars.Vertical;
         _logTextBox.Font = new Font(FontFamily.GenericMonospace, 9);
-        root.Controls.Add(_logTextBox, 0, 3);
+        root.Controls.Add(_logTextBox, 0, 4);
 
         Controls.Add(root);
+        ApplyUiState(_stateController.Current);
     }
 
     private static Control BuildPathRow(
         string label,
         TextBox textBox,
+        Button browseButton,
         string? initialValue,
         EventHandler browseHandler)
     {
@@ -96,16 +106,40 @@ public sealed class MainForm : Form
         textBox.Dock = DockStyle.Fill;
         textBox.Text = initialValue ?? string.Empty;
 
-        Button browseButton = new()
-        {
-            Text = "Browse",
-            Dock = DockStyle.Fill
-        };
+        browseButton.Text = "Browse";
+        browseButton.Dock = DockStyle.Fill;
         browseButton.Click += browseHandler;
 
         panel.Controls.Add(pathLabel, 0, 0);
         panel.Controls.Add(textBox, 1, 0);
         panel.Controls.Add(browseButton, 2, 0);
+        return panel;
+    }
+
+    private Control BuildStatusRow()
+    {
+        TableLayoutPanel panel = new()
+        {
+            Dock = DockStyle.Top,
+            ColumnCount = 2,
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 8)
+        };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        Label statusLabel = new()
+        {
+            Text = "Status",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+
+        _statusValueLabel.Dock = DockStyle.Fill;
+        _statusValueLabel.TextAlign = ContentAlignment.MiddleLeft;
+
+        panel.Controls.Add(statusLabel, 0, 0);
+        panel.Controls.Add(_statusValueLabel, 1, 0);
         return panel;
     }
 
@@ -119,12 +153,12 @@ public sealed class MainForm : Form
             Margin = new Padding(0, 0, 0, 8)
         };
 
-        ConfigureButton(_validateConfigButton, "Validate Config", async (_, _) => await RunOperationAsync(ValidateConfigAsync));
-        ConfigureButton(_printEffectiveConfigButton, "Print Effective Config", async (_, _) => await RunOperationAsync(PrintEffectiveConfigAsync));
-        ConfigureButton(_calibrateOcrRegionButton, "Calibrate OCR Region", async (_, _) => await RunOperationAsync(CalibrateOcrRegionAsync));
-        ConfigureButton(_testOcrOnceButton, "Test OCR Once", async (_, _) => await RunOperationAsync(TestOcrOnceAsync));
-        ConfigureButton(_startDryRunButton, "Start Dry-run Detection", async (_, _) => await RunOperationAsync(StartDryRunDetectionAsync));
-        ConfigureButton(_startSimulatedAudioButton, "Start Simulated Detection Audio", async (_, _) => await RunOperationAsync(StartSimulatedDetectionAudioAsync));
+        ConfigureButton(_validateConfigButton, "Validate Config", async (_, _) => await RunOperationAsync(ValidateConfigAsync, cancellable: false));
+        ConfigureButton(_printEffectiveConfigButton, "Print Effective Config", async (_, _) => await RunOperationAsync(PrintEffectiveConfigAsync, cancellable: false));
+        ConfigureButton(_calibrateOcrRegionButton, "Calibrate OCR Region", async (_, _) => await RunOperationAsync(CalibrateOcrRegionAsync, cancellable: false));
+        ConfigureButton(_testOcrOnceButton, "Test OCR Once", async (_, _) => await RunOperationAsync(TestOcrOnceAsync, cancellable: true));
+        ConfigureButton(_startDryRunButton, "Start Dry-run Detection", async (_, _) => await RunOperationAsync(StartDryRunDetectionAsync, cancellable: true));
+        ConfigureButton(_startSimulatedAudioButton, "Start Simulated Detection Audio", async (_, _) => await RunOperationAsync(StartSimulatedDetectionAudioAsync, cancellable: true));
 
         _stopButton.Text = "Stop";
         _stopButton.Width = 130;
@@ -203,7 +237,7 @@ public sealed class MainForm : Form
             cancellationToken);
     }
 
-    private async Task RunOperationAsync(Func<CancellationToken, Task> operation)
+    private async Task RunOperationAsync(Func<CancellationToken, Task> operation, bool cancellable)
     {
         if (_operationTask is { IsCompleted: false })
         {
@@ -211,7 +245,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        SetRunningState(true);
+        ApplyUiState(_stateController.StartOperation(cancellable));
         _operationCancellation = new CancellationTokenSource();
         CancellationToken cancellationToken = _operationCancellation.Token;
         _operationTask = RunOperationCoreAsync(operation, cancellationToken);
@@ -225,20 +259,22 @@ public sealed class MainForm : Form
             AppendLogLine($"> {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}");
             await Task.Run(async () => await operation(cancellationToken), cancellationToken);
             AppendLogLine("Operation completed.");
+            ApplyUiState(_stateController.CompleteOperation());
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             AppendLogLine("Operation cancelled.");
+            ApplyUiState(_stateController.CompleteOperation());
         }
         catch (Exception exception)
         {
             AppendLogLine($"Error: {exception.Message}");
+            ApplyUiState(_stateController.FailOperation());
         }
         finally
         {
             _operationCancellation?.Dispose();
             _operationCancellation = null;
-            SetRunningState(false);
         }
     }
 
@@ -250,6 +286,7 @@ public sealed class MainForm : Form
         }
 
         AppendLogLine("Stop requested.");
+        ApplyUiState(_stateController.RequestStop());
         _operationCancellation.Cancel();
     }
 
@@ -264,7 +301,11 @@ public sealed class MainForm : Form
         CancelCurrentOperation();
         try
         {
-            await _operationTask;
+            Task completedTask = await Task.WhenAny(_operationTask, Task.Delay(TimeSpan.FromSeconds(10)));
+            if (completedTask != _operationTask)
+            {
+                AppendLogLine("Close is continuing after waiting for cancellation cleanup.");
+            }
         }
         finally
         {
@@ -273,15 +314,37 @@ public sealed class MainForm : Form
         }
     }
 
-    private void SetRunningState(bool isRunning)
+    private void ApplyUiState(GuiUiState uiState)
     {
-        _validateConfigButton.Enabled = !isRunning;
-        _printEffectiveConfigButton.Enabled = !isRunning;
-        _calibrateOcrRegionButton.Enabled = !isRunning;
-        _testOcrOnceButton.Enabled = !isRunning;
-        _startDryRunButton.Enabled = !isRunning;
-        _startSimulatedAudioButton.Enabled = !isRunning;
-        _stopButton.Enabled = isRunning;
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        if (InvokeRequired)
+        {
+            try
+            {
+                BeginInvoke(new Action(() => ApplyUiState(uiState)));
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            return;
+        }
+
+        _statusValueLabel.Text = uiState.RunState.ToString();
+        _browseConfigButton.Enabled = uiState.CommandButtonsEnabled;
+        _browseOcrInputButton.Enabled = uiState.CommandButtonsEnabled;
+        _validateConfigButton.Enabled = uiState.CommandButtonsEnabled;
+        _printEffectiveConfigButton.Enabled = uiState.CommandButtonsEnabled;
+        _calibrateOcrRegionButton.Enabled = uiState.CommandButtonsEnabled;
+        _testOcrOnceButton.Enabled = uiState.CommandButtonsEnabled;
+        _startDryRunButton.Enabled = uiState.CommandButtonsEnabled;
+        _startSimulatedAudioButton.Enabled = uiState.CommandButtonsEnabled;
+        _stopButton.Enabled = uiState.StopButtonEnabled;
     }
 
     private TextWriter CreateLogWriter()
@@ -314,29 +377,48 @@ public sealed class MainForm : Form
 
     private void BrowseConfigFile(object? sender, EventArgs eventArgs)
     {
-        using OpenFileDialog dialog = new()
+        RunBrowseAction("Config browse", () =>
         {
-            Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
-            FileName = _configPathTextBox.Text
-        };
+            using OpenFileDialog dialog = new()
+            {
+                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                FileName = _configPathTextBox.Text
+            };
 
-        if (dialog.ShowDialog(this) == DialogResult.OK)
-        {
-            _configPathTextBox.Text = dialog.FileName;
-        }
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                _configPathTextBox.Text = dialog.FileName;
+            }
+        });
     }
 
     private void BrowseOcrInputImage(object? sender, EventArgs eventArgs)
     {
-        using OpenFileDialog dialog = new()
+        RunBrowseAction("OCR input browse", () =>
         {
-            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp|All files (*.*)|*.*",
-            FileName = _ocrInputPathTextBox.Text
-        };
+            using OpenFileDialog dialog = new()
+            {
+                Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp|All files (*.*)|*.*",
+                FileName = _ocrInputPathTextBox.Text
+            };
 
-        if (dialog.ShowDialog(this) == DialogResult.OK)
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                _ocrInputPathTextBox.Text = dialog.FileName;
+            }
+        });
+    }
+
+    private void RunBrowseAction(string label, Action action)
+    {
+        try
         {
-            _ocrInputPathTextBox.Text = dialog.FileName;
+            action();
+        }
+        catch (Exception exception)
+        {
+            AppendLogLine($"{label} error: {exception.Message}");
+            ApplyUiState(_stateController.FailOperation());
         }
     }
 
@@ -367,5 +449,7 @@ public sealed class MainForm : Form
         }
 
         _logTextBox.AppendText(text);
+        _logTextBox.SelectionStart = _logTextBox.TextLength;
+        _logTextBox.ScrollToCaret();
     }
 }

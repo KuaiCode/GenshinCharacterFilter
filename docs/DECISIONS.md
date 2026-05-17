@@ -278,3 +278,16 @@ Reasoning:
 - Guarded real audio remains disabled by default and is not exposed without explicit warning and confirmation.
 - Stop/close should cancel running detection and allow simulated audio restore paths to run.
 - The behavior does not add WPF, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.
+
+## 2026-05-17: v0.15 GUI Hardening
+
+Decision: harden the existing minimal WinForms panel instead of adding new GUI features or enabling real audio from the UI.
+
+Reasoning:
+
+- The first panel is useful, but daily use needs clearer status, safer button states, and better cancellation feedback before the GUI grows.
+- A small UI run-state controller keeps Idle, Running, Stopping, and Error transitions testable without launching WinForms.
+- Browse and button failures should go to the GUI log area instead of surfacing as unhandled WinForms dialogs.
+- Stop/Close behavior should request cancellation and let existing detection cleanup and simulated restore paths run.
+- Guarded real audio remains outside the GUI main actions; real audio safety gates are unchanged.
+- The behavior does not add new dependencies, WPF, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.
