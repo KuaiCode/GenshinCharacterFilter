@@ -291,3 +291,18 @@ Reasoning:
 - Stop/Close behavior should request cancellation and let existing detection cleanup and simulated restore paths run.
 - Guarded real audio remains outside the GUI main actions; real audio safety gates are unchanged.
 - The behavior does not add new dependencies, WPF, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.
+
+## 2026-05-17: v0.16 GUI Guarded Real Audio Page
+
+Decision: expose guarded real audio in the minimal WinForms panel only behind explicit enablement, warning, confirmation, and existing detection/audio safety rules.
+
+Reasoning:
+
+- CLI guarded real audio is already manually verified, but GUI users need a local control path that does not require long commands.
+- The GUI must still be a thin wrapper over existing config, preflight, detection, stability, and audio services.
+- `WindowsAudioMuteService` is created only after the user explicitly enables guarded real audio and confirms the warning dialog.
+- Stable detection state drives real audio actions; raw OCR/speaker matches never directly control real audio.
+- The guarded real audio UI requires a valid target process, valid config/preflight, and valid OCR region source before starting.
+- Stop/Close should reuse existing cancellation and restore paths if real audio may have been applied.
+- Default console and default GUI launch remain safe and do not control real system audio.
+- The behavior does not add new dependencies, WPF, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.

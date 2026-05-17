@@ -135,6 +135,71 @@ public sealed class GuiCommandService
         await loop.RunAsync(dryRunOptions, cancellationToken);
     }
 
+    public async Task RunGuardedRealAudioDetectionAsync(
+        string? configPath,
+        string? ocrInputPath,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
+        AppCommandLineOptions options = BuildGuardedRealAudioOptions(configPath, ocrInputPath);
+        AppSettings settings = LoadMergedSettings(options);
+        EnsurePreflightPassed(settings, options);
+
+        log.WriteLine("REAL audio detection mode enabled from GUI after explicit confirmation.");
+        log.WriteLine($"Target process: {settings.TargetProcessName}");
+        log.WriteLine($"Audio mode: {settings.AudioFilter.Mode}");
+        log.WriteLine($"Volume percent: {settings.AudioFilter.VolumePercent}");
+        log.WriteLine("Stable detection, not raw OCR match, drives real audio actions.");
+
+        DetectionDryRunOptions dryRunOptions = BuildDryRunOptions(settings, options);
+        DetectionAudioCoordinator audioCoordinator = new(
+            new WindowsAudioMuteService(settings.TargetProcessName, log, settings.AudioFilter),
+            settings.AudioFilter);
+
+        DetectionDryRunLoop loop = new(
+            new TesseractCliOcrService(),
+            new SpeakerMatcher(),
+            new WindowsGameWindowCapture(log),
+            new OcrInputPreparer(),
+            audioCoordinator: audioCoordinator,
+            audioActionLabel: "Real audio action",
+            log: log);
+
+        await loop.RunAsync(dryRunOptions, cancellationToken);
+    }
+
+    public GuardedRealAudioStatus GetGuardedRealAudioStatus(string? configPath, string? ocrInputPath)
+    {
+        try
+        {
+            AppCommandLineOptions options = BuildGuardedRealAudioOptions(configPath, ocrInputPath);
+            AppSettings settings = LoadMergedSettings(options);
+            RuntimePreflightResult preflightResult = new AppPreflightValidator().Validate(settings, options);
+            List<string> issues = preflightResult.Issues
+                .Select(issue => $"{issue.Category}: {issue.Message}")
+                .ToList();
+            ValidateResolvableOcrRegionForStatus(settings, options, issues);
+            return new GuardedRealAudioStatus(
+                settings.TargetProcessName,
+                settings.AudioFilter.Mode.ToString(),
+                settings.AudioFilter.VolumePercent,
+                settings.Ocr.GetOcrRegionSourceOptions().HasEffectiveRegionSource,
+                preflightResult.Passed && issues.Count == 0,
+                issues);
+        }
+        catch (Exception exception)
+        {
+            AppSettings? fallbackSettings = TryLoadSettings(configPath);
+            return new GuardedRealAudioStatus(
+                TargetProcessName: fallbackSettings?.TargetProcessName ?? string.Empty,
+                AudioMode: fallbackSettings?.AudioFilter.Mode.ToString() ?? "Unknown",
+                VolumePercent: fallbackSettings?.AudioFilter.VolumePercent ?? 0,
+                HasOcrRegionSource: false,
+                PreflightPassed: false,
+                Issues: [exception.Message]);
+        }
+    }
+
     public static string GetDefaultConfigPath()
     {
         if (File.Exists("config.local.json"))
@@ -159,6 +224,18 @@ public sealed class GuiCommandService
             : _settingsLoader.LoadFromFile(configPath.Trim());
     }
 
+    private AppSettings? TryLoadSettings(string? configPath)
+    {
+        try
+        {
+            return LoadSettings(configPath);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private AppSettings LoadMergedSettings(AppCommandLineOptions options)
     {
         AppSettings settings = options.ConfigPath is null
@@ -179,6 +256,47 @@ public sealed class GuiCommandService
 
         parsedArguments.AddRange(arguments);
         return AppCommandLineOptions.Parse([.. parsedArguments]);
+    }
+
+    private static AppCommandLineOptions BuildGuardedRealAudioOptions(string? configPath, string? ocrInputPath)
+    {
+        List<string> arguments =
+        [
+            "--detect-loop",
+            "--real-audio",
+            "--allow-real-audio-from-detection"
+        ];
+
+        if (!string.IsNullOrWhiteSpace(ocrInputPath))
+        {
+            arguments.Add("--ocr-input");
+            arguments.Add(ocrInputPath.Trim());
+        }
+
+        return BuildOptions(configPath, [.. arguments]);
+    }
+
+    private static void ValidateResolvableOcrRegionForStatus(
+        AppSettings settings,
+        AppCommandLineOptions options,
+        List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(options.OcrInputPath) ||
+            !File.Exists(options.OcrInputPath))
+        {
+            return;
+        }
+
+        try
+        {
+            new OcrRegionSourceResolver().ResolveForImage(
+                settings.Ocr.GetOcrRegionSourceOptions(),
+                options.OcrInputPath);
+        }
+        catch (OcrRegionSourceException exception)
+        {
+            issues.Add($"OCR preflight error: {exception.Message}");
+        }
     }
 
     private static void EnsurePreflightPassed(AppSettings settings, AppCommandLineOptions options)

@@ -21,6 +21,11 @@ public sealed class MainForm : Form
     private readonly Button _testOcrOnceButton = new();
     private readonly Button _startDryRunButton = new();
     private readonly Button _startSimulatedAudioButton = new();
+    private readonly CheckBox _enableGuardedRealAudioCheckBox = new();
+    private readonly Label _guardedRealAudioTargetLabel = new();
+    private readonly Label _guardedRealAudioAudioLabel = new();
+    private readonly Label _guardedRealAudioStatusLabel = new();
+    private readonly Button _startGuardedRealAudioButton = new();
     private readonly Button _stopButton = new();
     private readonly GuiStateController _stateController = new();
     private CancellationTokenSource? _operationCancellation;
@@ -44,9 +49,10 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 5,
+            RowCount = 6,
             Padding = new Padding(12)
         };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -67,16 +73,20 @@ public sealed class MainForm : Form
             BrowseOcrInputImage), 0, 1);
         root.Controls.Add(BuildStatusRow(), 0, 2);
         root.Controls.Add(BuildButtonPanel(), 0, 3);
+        root.Controls.Add(BuildGuardedRealAudioPanel(), 0, 4);
 
         _logTextBox.Dock = DockStyle.Fill;
         _logTextBox.Multiline = true;
         _logTextBox.ReadOnly = true;
         _logTextBox.ScrollBars = ScrollBars.Vertical;
         _logTextBox.Font = new Font(FontFamily.GenericMonospace, 9);
-        root.Controls.Add(_logTextBox, 0, 4);
+        root.Controls.Add(_logTextBox, 0, 5);
 
         Controls.Add(root);
+        _configPathTextBox.TextChanged += (_, _) => RefreshGuardedRealAudioStatus();
+        _ocrInputPathTextBox.TextChanged += (_, _) => RefreshGuardedRealAudioStatus();
         ApplyUiState(_stateController.Current);
+        RefreshGuardedRealAudioStatus();
     }
 
     private static Control BuildPathRow(
@@ -165,13 +175,6 @@ public sealed class MainForm : Form
         _stopButton.Enabled = false;
         _stopButton.Click += (_, _) => CancelCurrentOperation();
 
-        Button guardedRealAudioButton = new()
-        {
-            Text = "Guarded Real Audio (disabled)",
-            Width = 190,
-            Enabled = false
-        };
-
         panel.Controls.Add(_validateConfigButton);
         panel.Controls.Add(_printEffectiveConfigButton);
         panel.Controls.Add(_calibrateOcrRegionButton);
@@ -179,8 +182,67 @@ public sealed class MainForm : Form
         panel.Controls.Add(_startDryRunButton);
         panel.Controls.Add(_startSimulatedAudioButton);
         panel.Controls.Add(_stopButton);
-        panel.Controls.Add(guardedRealAudioButton);
         return panel;
+    }
+
+    private Control BuildGuardedRealAudioPanel()
+    {
+        GroupBox groupBox = new()
+        {
+            Text = "Guarded Real Audio",
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            Padding = new Padding(10),
+            Margin = new Padding(0, 0, 0, 8)
+        };
+
+        TableLayoutPanel panel = new()
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            AutoSize = true
+        };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        Label warningLabel = new()
+        {
+            Text = "Warning: guarded real audio controls target process audio only after explicit confirmation. Test reduce mode first; Stop/close will try to restore, but manual mixer recovery may still be needed.",
+            AutoSize = true,
+            MaximumSize = new Size(760, 0),
+            ForeColor = Color.DarkRed
+        };
+
+        _enableGuardedRealAudioCheckBox.Text = "Enable guarded real audio";
+        _enableGuardedRealAudioCheckBox.AutoSize = true;
+        _enableGuardedRealAudioCheckBox.CheckedChanged += (_, _) => RefreshGuardedRealAudioStatus();
+
+        _guardedRealAudioTargetLabel.AutoSize = true;
+        _guardedRealAudioAudioLabel.AutoSize = true;
+        _guardedRealAudioStatusLabel.AutoSize = true;
+        _guardedRealAudioStatusLabel.MaximumSize = new Size(760, 0);
+
+        _startGuardedRealAudioButton.Text = "Start Guarded Real Audio";
+        _startGuardedRealAudioButton.Width = 220;
+        _startGuardedRealAudioButton.Height = 32;
+        _startGuardedRealAudioButton.Enabled = false;
+        _startGuardedRealAudioButton.Click += async (_, _) => await StartGuardedRealAudioWithConfirmationAsync();
+
+        panel.Controls.Add(warningLabel, 0, 0);
+        panel.SetColumnSpan(warningLabel, 2);
+        panel.Controls.Add(_enableGuardedRealAudioCheckBox, 0, 1);
+        panel.SetColumnSpan(_enableGuardedRealAudioCheckBox, 2);
+        panel.Controls.Add(new Label { Text = "Target process", AutoSize = true }, 0, 2);
+        panel.Controls.Add(_guardedRealAudioTargetLabel, 1, 2);
+        panel.Controls.Add(new Label { Text = "Audio filter", AutoSize = true }, 0, 3);
+        panel.Controls.Add(_guardedRealAudioAudioLabel, 1, 3);
+        panel.Controls.Add(new Label { Text = "Readiness", AutoSize = true }, 0, 4);
+        panel.Controls.Add(_guardedRealAudioStatusLabel, 1, 4);
+        panel.Controls.Add(_startGuardedRealAudioButton, 0, 5);
+        panel.SetColumnSpan(_startGuardedRealAudioButton, 2);
+
+        groupBox.Controls.Add(panel);
+        return groupBox;
     }
 
     private static void ConfigureButton(Button button, string text, EventHandler handler)
@@ -235,6 +297,54 @@ public sealed class MainForm : Form
             true,
             CreateLogWriter(),
             cancellationToken);
+    }
+
+    private async Task StartGuardedRealAudioDetectionAsync(CancellationToken cancellationToken)
+    {
+        await _commandService.RunGuardedRealAudioDetectionAsync(
+            GetConfigPath(),
+            GetOptionalOcrInputPath(),
+            CreateLogWriter(),
+            cancellationToken);
+    }
+
+    private async Task StartGuardedRealAudioWithConfirmationAsync()
+    {
+        try
+        {
+            GuardedRealAudioUiEligibility eligibility = GetGuardedRealAudioEligibility();
+            if (!eligibility.CanRequestConfirmation)
+            {
+                AppendLogLine($"Guarded real audio is not ready: {eligibility.DisabledReason}");
+                RefreshGuardedRealAudioStatus();
+                return;
+            }
+
+            DialogResult result = MessageBox.Show(
+                this,
+                "This will control the configured target process audio using stable OCR detection only.\n\n" +
+                "Start with reduce-volume mode before using mute.\n" +
+                "Stop or closing this window will try to restore audio.\n" +
+                "If Windows audio sessions change or restore fails, you may still need to restore the system volume mixer manually.\n\n" +
+                "Start guarded real audio now?",
+                "Confirm Guarded Real Audio",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            if (result != DialogResult.Yes)
+            {
+                AppendLogLine("Guarded real audio start cancelled by user.");
+                return;
+            }
+
+            await RunOperationAsync(StartGuardedRealAudioDetectionAsync, cancellable: true);
+        }
+        catch (Exception exception)
+        {
+            AppendLogLine($"Guarded real audio error: {exception.Message}");
+            ApplyUiState(_stateController.FailOperation());
+        }
     }
 
     private async Task RunOperationAsync(Func<CancellationToken, Task> operation, bool cancellable)
@@ -345,6 +455,74 @@ public sealed class MainForm : Form
         _startDryRunButton.Enabled = uiState.CommandButtonsEnabled;
         _startSimulatedAudioButton.Enabled = uiState.CommandButtonsEnabled;
         _stopButton.Enabled = uiState.StopButtonEnabled;
+        _enableGuardedRealAudioCheckBox.Enabled = uiState.CommandButtonsEnabled;
+        RefreshGuardedRealAudioStatus();
+    }
+
+    private void RefreshGuardedRealAudioStatus()
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        if (InvokeRequired)
+        {
+            try
+            {
+                BeginInvoke(new Action(RefreshGuardedRealAudioStatus));
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            return;
+        }
+
+        GuardedRealAudioStatus status = _commandService.GetGuardedRealAudioStatus(
+            GetConfigPath(),
+            GetOptionalOcrInputPath());
+        GuardedRealAudioUiEligibility eligibility = new(
+            _enableGuardedRealAudioCheckBox.Checked,
+            _stateController.OperationActive,
+            status.PreflightPassed,
+            status.HasOcrRegionSource,
+            !string.IsNullOrWhiteSpace(status.TargetProcessName));
+
+        _guardedRealAudioTargetLabel.Text = string.IsNullOrWhiteSpace(status.TargetProcessName)
+            ? "(missing)"
+            : status.TargetProcessName;
+        _guardedRealAudioAudioLabel.Text = $"{status.AudioMode}, {status.VolumePercent}%";
+        _guardedRealAudioStatusLabel.Text = eligibility.CanRequestConfirmation
+            ? "Ready for confirmation."
+            : BuildGuardedRealAudioStatusText(eligibility, status);
+        _startGuardedRealAudioButton.Enabled = eligibility.CanRequestConfirmation;
+    }
+
+    private GuardedRealAudioUiEligibility GetGuardedRealAudioEligibility()
+    {
+        GuardedRealAudioStatus status = _commandService.GetGuardedRealAudioStatus(
+            GetConfigPath(),
+            GetOptionalOcrInputPath());
+        return new GuardedRealAudioUiEligibility(
+            _enableGuardedRealAudioCheckBox.Checked,
+            _stateController.OperationActive,
+            status.PreflightPassed,
+            status.HasOcrRegionSource,
+            !string.IsNullOrWhiteSpace(status.TargetProcessName));
+    }
+
+    private static string BuildGuardedRealAudioStatusText(
+        GuardedRealAudioUiEligibility eligibility,
+        GuardedRealAudioStatus status)
+    {
+        if (status.Issues.Count == 0)
+        {
+            return eligibility.DisabledReason;
+        }
+
+        return $"{eligibility.DisabledReason} {string.Join(" ", status.Issues)}";
     }
 
     private TextWriter CreateLogWriter()
