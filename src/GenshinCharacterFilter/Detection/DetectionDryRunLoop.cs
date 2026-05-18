@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using GenshinCharacterFilter.Capture;
 using GenshinCharacterFilter.Ocr;
 using GenshinCharacterFilter.Speakers;
@@ -49,6 +50,12 @@ public sealed class DetectionDryRunLoop
         options.Validate();
 
         DetectionStabilityGate stabilityGate = new(options.Stability);
+        using IGameWindowCaptureSession? liveCaptureSession = CreateLiveCaptureSession(options);
+        if (liveCaptureSession is not null)
+        {
+            await liveCaptureSession.InitializeAsync(cancellationToken);
+        }
+
         int iteration = 0;
 
         try
@@ -57,7 +64,12 @@ public sealed class DetectionDryRunLoop
                 (options.LoopCount is null || iteration < options.LoopCount.Value))
             {
                 iteration++;
-                DetectionDryRunResult result = await RunIterationAsync(options, stabilityGate, iteration, cancellationToken);
+                DetectionDryRunResult result = await RunIterationAsync(
+                    options,
+                    stabilityGate,
+                    liveCaptureSession,
+                    iteration,
+                    cancellationToken);
                 WriteResult(result);
 
                 if (options.LoopCount is not null && iteration >= options.LoopCount.Value)
@@ -72,7 +84,7 @@ public sealed class DetectionDryRunLoop
         {
             if (_audioCoordinator is not null)
             {
-                // 退出或取消时仍要尝试恢复，避免检测驱动的音频状态残留。
+                // Cancellation or shutdown must still try restore to avoid leaving detection-driven audio filtered.
                 DetectionAudioActionResult shutdownResult =
                     await _audioCoordinator.RestoreForShutdownAsync(CancellationToken.None);
                 if (shutdownResult.Action != DetectionAudioAction.None)
@@ -86,58 +98,191 @@ public sealed class DetectionDryRunLoop
     private async Task<DetectionDryRunResult> RunIterationAsync(
         DetectionDryRunOptions options,
         DetectionStabilityGate stabilityGate,
+        IGameWindowCaptureSession? liveCaptureSession,
         int iteration,
         CancellationToken cancellationToken)
     {
         _log.WriteLine($"Dry-run iteration {iteration} started.");
-        string inputImagePath = await ResolveInputImagePathAsync(options, cancellationToken);
-        ResolvedOcrRegion resolvedRegion = _ocrRegionSourceResolver.ResolveForImage(
-            options.GetOcrRegionSourceOptions(),
-            inputImagePath);
-        _log.WriteLine($"OCR region source: {resolvedRegion.SourceLabel}");
+        Stopwatch totalStopwatch = Stopwatch.StartNew();
+        Stopwatch captureStopwatch = Stopwatch.StartNew();
+        IterationImageInput input = await ResolveIterationImageInputAsync(options, liveCaptureSession, cancellationToken);
+        captureStopwatch.Stop();
+        _log.WriteLine($"Capture mode: {input.CaptureMode}");
+        string? preparedInputPath = null;
 
-        OcrOptions ocrOptions = BuildOcrOptions(options, inputImagePath, resolvedRegion.Region);
-        string preparedInputPath = _ocrInputPreparer.PrepareInput(ocrOptions);
+        try
+        {
+            Stopwatch ocrStopwatch = Stopwatch.StartNew();
+            _log.WriteLine($"OCR region source: {input.OcrRegionSourceLabel}");
 
-        OcrOptions preparedOptions = BuildOcrOptions(options, preparedInputPath, null);
-        preparedOptions.OcrRegion = null;
+            OcrOptions ocrOptions = BuildOcrOptions(options, input.ImagePath, input.OcrRegion);
+            preparedInputPath = _ocrInputPreparer.PrepareInput(ocrOptions);
 
-        OcrResult ocrResult = await _ocrService.ExtractTextAsync(preparedOptions, cancellationToken);
-        SpeakerMatchResult matchResult = _speakerMatcher.Match(
-            ocrResult.RawText,
-            new SpeakerMatcherOptions
-            {
-                TargetSpeakers = options.TargetSpeakers
-            });
-        DetectionStabilityResult stabilityResult = stabilityGate.Observe(matchResult);
-        DetectionAudioActionResult? audioActionResult = _audioCoordinator is null
-            ? null
-            : await _audioCoordinator.ApplyAsync(stabilityResult, cancellationToken);
+            OcrOptions preparedOptions = BuildOcrOptions(options, preparedInputPath, null);
+            preparedOptions.OcrRegion = null;
 
-        return new DetectionDryRunResult(
-            iteration,
-            ocrResult,
-            matchResult,
-            stabilityResult,
-            resolvedRegion.SourceLabel,
-            audioActionResult);
+            OcrResult ocrResult = await _ocrService.ExtractTextAsync(preparedOptions, cancellationToken);
+            ocrStopwatch.Stop();
+
+            Stopwatch matchStopwatch = Stopwatch.StartNew();
+            SpeakerMatchResult matchResult = _speakerMatcher.Match(
+                ocrResult.RawText,
+                new SpeakerMatcherOptions
+                {
+                    TargetSpeakers = options.TargetSpeakers
+                });
+            DetectionStabilityResult stabilityResult = stabilityGate.Observe(matchResult);
+            matchStopwatch.Stop();
+
+            Stopwatch audioStopwatch = Stopwatch.StartNew();
+            DetectionAudioActionResult? audioActionResult = _audioCoordinator is null
+                ? null
+                : await _audioCoordinator.ApplyAsync(stabilityResult, cancellationToken);
+            audioStopwatch.Stop();
+            totalStopwatch.Stop();
+
+            DetectionIterationTiming timing = new(
+                captureStopwatch.ElapsedMilliseconds,
+                ocrStopwatch.ElapsedMilliseconds,
+                matchStopwatch.ElapsedMilliseconds,
+                audioStopwatch.ElapsedMilliseconds,
+                totalStopwatch.ElapsedMilliseconds);
+
+            return new DetectionDryRunResult(
+                iteration,
+                ocrResult,
+                matchResult,
+                stabilityResult,
+                input.OcrRegionSourceLabel,
+                audioActionResult,
+                timing);
+        }
+        finally
+        {
+            DeleteRealtimeTempFiles(options, input.ImagePath, preparedInputPath, input.DeleteCaptureInputAfterUse);
+        }
     }
 
-    private async Task<string> ResolveInputImagePathAsync(DetectionDryRunOptions options, CancellationToken cancellationToken)
+    private IGameWindowCaptureSession? CreateLiveCaptureSession(DetectionDryRunOptions options)
+    {
+        if (!string.IsNullOrWhiteSpace(options.OcrInputPath) ||
+            _windowCapture is not IGameWindowCaptureSessionFactory sessionFactory)
+        {
+            return null;
+        }
+
+        return sessionFactory.CreateSession(BuildWindowCaptureOptions(options));
+    }
+
+    private async Task<IterationImageInput> ResolveIterationImageInputAsync(
+        DetectionDryRunOptions options,
+        IGameWindowCaptureSession? liveCaptureSession,
+        CancellationToken cancellationToken)
     {
         if (!string.IsNullOrWhiteSpace(options.OcrInputPath))
         {
-            return options.OcrInputPath;
+            ResolvedOcrRegion resolvedRegion = _ocrRegionSourceResolver.ResolveForImage(
+                options.GetOcrRegionSourceOptions(),
+                options.OcrInputPath);
+            return new IterationImageInput(
+                options.OcrInputPath,
+                resolvedRegion.Region,
+                resolvedRegion.SourceLabel,
+                "fixed image",
+                DeleteCaptureInputAfterUse: false);
         }
 
+        if (liveCaptureSession is not null)
+        {
+            IterationImageInput? regionOnlyInput = await TryResolveRegionOnlyInputAsync(
+                options,
+                liveCaptureSession,
+                cancellationToken);
+            if (regionOnlyInput is not null)
+            {
+                return regionOnlyInput;
+            }
+
+            string fullWindowPath = await liveCaptureSession.CaptureAsync(cancellationToken);
+            return ResolveFullWindowInput(options, fullWindowPath, "full-window fallback");
+        }
+
+        string oneShotPath = await _windowCapture.CaptureOnceAsync(BuildWindowCaptureOptions(options), cancellationToken);
+        return ResolveFullWindowInput(options, oneShotPath, "full-window fallback");
+    }
+
+    private async Task<IterationImageInput?> TryResolveRegionOnlyInputAsync(
+        DetectionDryRunOptions options,
+        IGameWindowCaptureSession liveCaptureSession,
+        CancellationToken cancellationToken)
+    {
+        if (!options.GetOcrRegionSourceOptions().HasEffectiveRegionSource)
+        {
+            return null;
+        }
+
+        try
+        {
+            WindowCaptureFrameInfo frameInfo = await liveCaptureSession.GetFrameInfoAsync(cancellationToken);
+            ResolvedOcrRegion resolvedRegion = _ocrRegionSourceResolver.Resolve(
+                options.GetOcrRegionSourceOptions(),
+                frameInfo.Width,
+                frameInfo.Height);
+            if (resolvedRegion.Region is null)
+            {
+                _log.WriteLine("Region-only capture fallback reason: OCR region source resolved to full image.");
+                return null;
+            }
+
+            string regionImagePath = await liveCaptureSession.CaptureRegionAsync(
+                ToCaptureRegion(resolvedRegion.Region.Value),
+                cancellationToken);
+            return new IterationImageInput(
+                regionImagePath,
+                OcrRegion: null,
+                resolvedRegion.SourceLabel,
+                "region-only",
+                DeleteCaptureInputAfterUse: ShouldDeleteRealtimeCaptureInput(options, regionImagePath));
+        }
+        catch (Exception exception) when (exception is OcrRegionSourceException or WindowCaptureException or ArgumentException)
+        {
+            _log.WriteLine($"Region-only capture fallback reason: {exception.Message}");
+            return null;
+        }
+    }
+
+    private IterationImageInput ResolveFullWindowInput(
+        DetectionDryRunOptions options,
+        string inputImagePath,
+        string captureMode)
+    {
+        ResolvedOcrRegion resolvedRegion = _ocrRegionSourceResolver.ResolveForImage(
+            options.GetOcrRegionSourceOptions(),
+            inputImagePath);
+        return new IterationImageInput(
+            inputImagePath,
+            resolvedRegion.Region,
+            resolvedRegion.SourceLabel,
+            captureMode,
+            ShouldDeleteRealtimeCaptureInput(options, inputImagePath));
+    }
+
+    private static CaptureRegion ToCaptureRegion(OcrRegion region)
+    {
+        return new CaptureRegion(region.X, region.Y, region.Width, region.Height);
+    }
+
+    private static WindowCaptureOptions BuildWindowCaptureOptions(DetectionDryRunOptions options)
+    {
         WindowCaptureOptions captureOptions = new()
         {
             TargetProcessName = options.TargetProcessName!,
             OutputDirectory = options.CaptureOutputDirectory,
-            CaptureDelayMs = options.CaptureDelayMs
+            CaptureDelayMs = options.CaptureDelayMs,
+            SaveDebugImage = options.SaveDebugImages
         };
 
-        return await _windowCapture.CaptureOnceAsync(captureOptions, cancellationToken);
+        return captureOptions;
     }
 
     private static OcrOptions BuildOcrOptions(
@@ -152,8 +297,66 @@ public sealed class DetectionDryRunLoop
             Language = options.OcrLanguage,
             TesseractExecutablePath = options.TesseractExecutablePath,
             PageSegmentationMode = options.OcrPageSegmentationMode,
-            OcrRegion = ocrRegion
+            OcrRegion = ocrRegion,
+            SaveDebugImage = options.SaveDebugImages
         };
+    }
+
+    private static bool ShouldDeleteRealtimeCaptureInput(DetectionDryRunOptions options, string inputImagePath)
+    {
+        return !options.SaveDebugImages &&
+            string.IsNullOrWhiteSpace(options.OcrInputPath) &&
+            IsUnderDirectory(inputImagePath, WindowCaptureOptions.GetTempCaptureDirectory());
+    }
+
+    private static void DeleteRealtimeTempFiles(
+        DetectionDryRunOptions options,
+        string inputImagePath,
+        string? preparedInputPath,
+        bool deleteCaptureInputAfterUse)
+    {
+        if (options.SaveDebugImages)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(preparedInputPath) &&
+            !string.Equals(Path.GetFullPath(preparedInputPath), Path.GetFullPath(inputImagePath), StringComparison.OrdinalIgnoreCase) &&
+            IsUnderDirectory(preparedInputPath, OcrInputPreparer.GetTempOcrInputDirectory()))
+        {
+            TryDeleteTempFile(preparedInputPath);
+        }
+
+        if (deleteCaptureInputAfterUse)
+        {
+            TryDeleteTempFile(inputImagePath);
+        }
+    }
+
+    private static bool IsUnderDirectory(string path, string directory)
+    {
+        string fullPath = Path.GetFullPath(path);
+        string fullDirectory = Path.GetFullPath(directory);
+        if (!fullDirectory.EndsWith(Path.DirectorySeparatorChar))
+        {
+            fullDirectory += Path.DirectorySeparatorChar;
+        }
+
+        return fullPath.StartsWith(fullDirectory, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void TryDeleteTempFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     private void WriteResult(DetectionDryRunResult result)
@@ -164,6 +367,7 @@ public sealed class DetectionDryRunLoop
         _log.WriteLine($"OCR region source: {result.OcrRegionSourceLabel}");
         _log.WriteLine($"Normalized text: {result.SpeakerMatchResult.NormalizedText}");
         _log.WriteLine($"Raw matched: {result.SpeakerMatchResult.Matched}");
+        _log.WriteLine($"Raw match kind: {result.SpeakerMatchResult.MatchKind}");
         _log.WriteLine($"Raw matched speaker: {result.SpeakerMatchResult.MatchedSpeaker ?? "(none)"}");
         _log.WriteLine($"Stable matched: {result.StabilityResult.StableState.Matched}");
         _log.WriteLine($"Stable matched speaker: {result.StabilityResult.StableState.MatchedSpeaker ?? "(none)"}");
@@ -175,12 +379,29 @@ public sealed class DetectionDryRunLoop
             _log.WriteLine($"{_audioActionLabel}: {FormatAction(result.DetectionAudioActionResult.Action)}");
         }
 
+        WriteTiming(result.Timing);
+
         if (result.StabilityResult.StableStateChanged)
         {
             _log.WriteLine($"Stable state changed: {result.StabilityResult.PreviousStableState} -> {result.StabilityResult.StableState}");
         }
 
         _log.WriteLine($"Dry-run iteration {result.Iteration} completed.");
+    }
+
+    private void WriteTiming(DetectionIterationTiming? timing)
+    {
+        if (timing is null)
+        {
+            return;
+        }
+
+        _log.WriteLine("Iteration timing:");
+        _log.WriteLine($"  Capture: {timing.CaptureElapsedMs} ms");
+        _log.WriteLine($"  OCR: {timing.OcrElapsedMs} ms");
+        _log.WriteLine($"  Match: {timing.MatchElapsedMs} ms");
+        _log.WriteLine($"  Audio: {timing.AudioElapsedMs} ms");
+        _log.WriteLine($"  Total: {timing.TotalElapsedMs} ms");
     }
 
     private static string FormatAction(DetectionAudioAction action)
@@ -201,4 +422,11 @@ public sealed class DetectionDryRunLoop
             ? $"{actionLabel[..^suffix.Length]} shutdown action"
             : $"{actionLabel} shutdown action";
     }
+
+    private sealed record IterationImageInput(
+        string ImagePath,
+        OcrRegion? OcrRegion,
+        string OcrRegionSourceLabel,
+        string CaptureMode,
+        bool DeleteCaptureInputAfterUse);
 }

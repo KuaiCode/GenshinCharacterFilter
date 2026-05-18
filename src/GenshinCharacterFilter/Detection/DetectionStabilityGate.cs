@@ -40,9 +40,17 @@ public sealed class DetectionStabilityGate
 
         DetectionStableState previousState = StableState;
 
-        if (rawMatch.Matched)
+        if (rawMatch.MatchKind == SpeakerMatchKind.Strong)
         {
             ObserveMatch(rawMatch.MatchedSpeaker);
+        }
+        else if (rawMatch.MatchKind == SpeakerMatchKind.Weak)
+        {
+            ObserveWeakMatch(rawMatch.MatchedSpeaker);
+        }
+        else if (rawMatch.MatchKind == SpeakerMatchKind.Unknown)
+        {
+            ObserveUnknownMiss();
         }
         else
         {
@@ -57,7 +65,8 @@ public sealed class DetectionStabilityGate
             previousState,
             stateChanged,
             ConsecutiveMatchCount,
-            ConsecutiveMissCount);
+            ConsecutiveMissCount,
+            rawMatch.MatchKind);
     }
 
     private void ObserveMatch(string? matchedSpeaker)
@@ -84,6 +93,33 @@ public sealed class DetectionStabilityGate
         ConsecutiveMissCount++;
 
         if (ConsecutiveMissCount >= _options.MissThreshold)
+        {
+            StableState = DetectionStableState.NotMatched;
+        }
+    }
+
+    private void ObserveWeakMatch(string? matchedSpeaker)
+    {
+        _candidateMatchedSpeaker = null;
+        ConsecutiveMatchCount = 0;
+        ConsecutiveMissCount = 0;
+
+        if (StableState.Matched &&
+            string.Equals(StableState.MatchedSpeaker, matchedSpeaker, StringComparison.Ordinal))
+        {
+            return;
+        }
+    }
+
+    private void ObserveUnknownMiss()
+    {
+        _candidateMatchedSpeaker = null;
+        ConsecutiveMatchCount = 0;
+        ConsecutiveMissCount++;
+
+        // Empty or very noisy OCR should not immediately restore real audio after a stable hit.
+        int requiredUnknownMisses = Math.Max(2, _options.MissThreshold);
+        if (ConsecutiveMissCount >= requiredUnknownMisses)
         {
             StableState = DetectionStableState.NotMatched;
         }

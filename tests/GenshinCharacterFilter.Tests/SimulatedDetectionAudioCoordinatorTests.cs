@@ -22,6 +22,25 @@ public sealed class SimulatedDetectionAudioCoordinatorTests
     }
 
     [Fact]
+    public async Task ApplyAsync_WeakMatchDoesNotCallMute()
+    {
+        FakeAudioMuteService audio = new();
+        SimulatedDetectionAudioCoordinator coordinator = new(audio);
+        DetectionStabilityGate gate = new(new DetectionStabilityOptions
+        {
+            MatchThreshold = 1,
+            MissThreshold = 1
+        });
+
+        DetectionAudioActionResult result = await coordinator.ApplyAsync(
+            gate.Observe(new SpeakerMatchResult(true, "Clorinde", "near", "near", SpeakerMatchKind.Weak)),
+            CancellationToken.None);
+
+        Assert.Equal(DetectionAudioAction.None, result.Action);
+        Assert.Equal(0, audio.MuteCalls);
+    }
+
+    [Fact]
     public async Task ApplyAsync_StableMatchedCallsMuteOnce()
     {
         FakeAudioMuteService audio = new();

@@ -11,9 +11,10 @@ public sealed class OcrInputPreparer
 {
     public const string DefaultDebugOutputDirectory = "debug-ocr";
     public const string DefaultDebugInputFileName = "ocr-input-latest.png";
+    public const string TempOcrDirectoryName = "GenshinCharacterFilter";
 
     /// <summary>
-    /// Returns the original image path or a cropped debug image path when an OCR region is configured.
+    /// Returns the original image path, a cropped debug image path, or a cropped temp image path.
     /// </summary>
     public string PrepareInput(OcrOptions options)
     {
@@ -25,16 +26,22 @@ public sealed class OcrInputPreparer
             return options.GetFullInputImagePath();
         }
 
-        return PrepareDebugImage(options);
+        return PrepareRegionImage(options);
     }
 
-    private static string PrepareDebugImage(OcrOptions options)
+    private static string PrepareRegionImage(OcrOptions options)
     {
         string inputImagePath = options.GetFullInputImagePath();
-        string outputDirectory = Path.GetFullPath(DefaultDebugOutputDirectory);
+        string outputDirectory = options.SaveDebugImage
+            ? Path.GetFullPath(DefaultDebugOutputDirectory)
+            : GetTempOcrInputDirectory();
         Directory.CreateDirectory(outputDirectory);
-        string outputPath = Path.Combine(outputDirectory, DefaultDebugInputFileName);
-        if (string.Equals(inputImagePath, outputPath, StringComparison.OrdinalIgnoreCase))
+
+        string debugOutputPath = Path.Combine(Path.GetFullPath(DefaultDebugOutputDirectory), DefaultDebugInputFileName);
+        string outputPath = options.SaveDebugImage
+            ? debugOutputPath
+            : Path.Combine(outputDirectory, $"ocr-input-{Guid.NewGuid():N}.png");
+        if (options.SaveDebugImage && string.Equals(inputImagePath, outputPath, StringComparison.OrdinalIgnoreCase))
         {
             throw new OcrException(
                 "OCR input image cannot be the debug OCR output image. Do not use debug-ocr/ocr-input-latest.png as OCR input; choose debug-captures/capture-latest.png or another original screenshot.");
@@ -47,11 +54,19 @@ public sealed class OcrInputPreparer
             using Image sourceImage = Image.FromStream(inputStream);
             using Bitmap preparedImage = PrepareBitmap(sourceImage, options);
 
-            string tempPath = Path.Combine(
-                outputDirectory,
-                $"{Path.GetFileNameWithoutExtension(DefaultDebugInputFileName)}.{Guid.NewGuid():N}.tmp.png");
-            preparedImage.Save(tempPath, ImageFormat.Png);
-            MoveWithRetry(tempPath, outputPath);
+            if (options.SaveDebugImage)
+            {
+                string tempPath = Path.Combine(
+                    outputDirectory,
+                    $"{Path.GetFileNameWithoutExtension(DefaultDebugInputFileName)}.{Guid.NewGuid():N}.tmp.png");
+                preparedImage.Save(tempPath, ImageFormat.Png);
+                MoveWithRetry(tempPath, outputPath);
+            }
+            else
+            {
+                preparedImage.Save(outputPath, ImageFormat.Png);
+            }
+
             return outputPath;
         }
         catch (ArgumentOutOfRangeException exception)
@@ -98,11 +113,19 @@ public sealed class OcrInputPreparer
             catch (Exception exception) when (attempt < maxAttempts &&
                 exception is IOException or UnauthorizedAccessException)
             {
-                // 并行测试或图片预览可能短暂占用旧 debug 图，稍等后再替换。
+                // A previewer or parallel test may briefly hold the old debug image.
                 Thread.Sleep(50);
             }
         }
 
         File.Move(tempPath, outputPath, overwrite: true);
+    }
+
+    /// <summary>
+    /// Returns the temp directory used for cropped OCR engine input during realtime loops.
+    /// </summary>
+    public static string GetTempOcrInputDirectory()
+    {
+        return Path.Combine(Path.GetTempPath(), TempOcrDirectoryName);
     }
 }

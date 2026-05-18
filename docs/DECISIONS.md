@@ -303,6 +303,21 @@ Reasoning:
 - `WindowsAudioMuteService` is created only after the user explicitly enables guarded real audio and confirms the warning dialog.
 - Stable detection state drives real audio actions; raw OCR/speaker matches never directly control real audio.
 - The guarded real audio UI requires a valid target process, valid config/preflight, and valid OCR region source before starting.
+- GUI detection loops use live target-process capture by default; fixed-image detection is an explicit dry-run/simulated debug option only.
+- Guarded real audio rejects fixed-image detection so a stale screenshot cannot drive real audio.
+- GUI-started detection loops default to running until Stop; an optional GUI loop count can override config for short manual tests without changing CLI/config behavior.
+- GUI detection tuning defaults are biased toward live dialogue responsiveness: loop interval 200 ms, capture delay 100 ms, match threshold 2, and miss threshold 1.
+- GUI tuning overrides apply only to the current GUI run and are not written back to local JSON config.
+- The main GUI preserves its bounds around OCR region calibration so the calibration form does not leave the control panel resized.
+- WinForms GUI and calibration windows use explicit DPI/scaling settings to avoid repeated autoscale/layout shrink after calibration closes.
+- OCR speaker matching now distinguishes strong matches, weak near-matches, clear misses, and unknown/noisy misses so real audio is not restored from a single OCR jitter frame.
+- Weak near-matches for the current stable speaker and short/empty OCR noise can hold the stable matched state, while clear non-target text remains eligible for fast restore through the miss threshold.
+- Real audio is still driven only by stability-gated state, not by raw OCR match frames.
+- Live detection now reports per-iteration timing for capture, OCR, match, audio action, and total elapsed time so responsiveness problems can be diagnosed without changing safety gates.
+- Live target-window capture uses a reusable capture session where available: it activates/acquires the target window once at loop startup, reuses the cached window handle for subsequent frames, and reacquires only if the handle is invalid, minimized, or capture fails.
+- Realtime detection disables debug image writes by default so each loop does not save `debug-captures/capture-latest.png` and `debug-ocr/ocr-input-latest.png`; Tesseract still receives a local temporary OCR input file when a cropped region is required.
+- Debug image saving remains available through configuration or GUI tuning for troubleshooting, but it is treated as diagnostic output because it can dominate capture/OCR latency.
+- Realtime live detection now prefers region-only capture: configured OCR region sources are resolved against the current target window size, and only that small rectangle is captured for OCR. Full-window capture remains a fallback when region-only capture cannot be resolved or applied.
 - Stop/Close should reuse existing cancellation and restore paths if real audio may have been applied.
 - Default console and default GUI launch remain safe and do not control real system audio.
 - The behavior does not add new dependencies, WPF, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.

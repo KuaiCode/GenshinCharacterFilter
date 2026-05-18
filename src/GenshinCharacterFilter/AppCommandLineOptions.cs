@@ -342,7 +342,8 @@ public sealed class AppCommandLineOptions
                 LoopIntervalMs = _loopIntervalMsSpecified ? LoopIntervalMs : settings.Detection.LoopIntervalMs,
                 LoopCount = _loopCountSpecified ? LoopCount : settings.Detection.LoopCount,
                 MatchThreshold = _matchThresholdSpecified ? MatchThreshold : settings.Detection.MatchThreshold,
-                MissThreshold = _missThresholdSpecified ? MissThreshold : settings.Detection.MissThreshold
+                MissThreshold = _missThresholdSpecified ? MissThreshold : settings.Detection.MissThreshold,
+                SaveDebugImages = settings.Detection.SaveDebugImages
             }
         };
 

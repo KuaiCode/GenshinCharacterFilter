@@ -384,7 +384,7 @@ public sealed class AppCommandLineOptionsTests
     }
 
     [Theory]
-    [InlineData("99")]
+    [InlineData("49")]
     [InlineData("10001")]
     public void Parse_RejectsLoopIntervalOutsideRange(string loopIntervalMs)
     {

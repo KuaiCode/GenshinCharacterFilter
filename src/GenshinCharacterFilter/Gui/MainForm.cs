@@ -21,6 +21,14 @@ public sealed class MainForm : Form
     private readonly Button _testOcrOnceButton = new();
     private readonly Button _startDryRunButton = new();
     private readonly Button _startSimulatedAudioButton = new();
+    private readonly CheckBox _useFixedImageForDetectionCheckBox = new();
+    private readonly CheckBox _runUntilStopCheckBox = new();
+    private readonly TextBox _loopCountTextBox = new();
+    private readonly TextBox _loopIntervalTextBox = new();
+    private readonly TextBox _captureDelayTextBox = new();
+    private readonly TextBox _matchThresholdTextBox = new();
+    private readonly TextBox _missThresholdTextBox = new();
+    private readonly CheckBox _saveDebugImagesCheckBox = new();
     private readonly CheckBox _enableGuardedRealAudioCheckBox = new();
     private readonly Label _guardedRealAudioTargetLabel = new();
     private readonly Label _guardedRealAudioAudioLabel = new();
@@ -32,11 +40,29 @@ public sealed class MainForm : Form
     private Task? _operationTask;
     private bool _closeAfterOperationStops;
 
+    private readonly record struct GuiDetectionTuningInput(
+        bool RunUntilStop,
+        string LoopCount,
+        string LoopIntervalMs,
+        string CaptureDelayMs,
+        string MatchThreshold,
+        string MissThreshold,
+        bool SaveDebugImages);
+
+    private readonly record struct MainFormPlacement(
+        Rectangle Bounds,
+        Rectangle RestoreBounds,
+        Size ClientSize,
+        Size MinimumSize,
+        FormWindowState WindowState);
+
     public MainForm(string? initialConfigPath)
     {
         Text = "GenshinCharacterFilter";
-        MinimumSize = new Size(920, 620);
-        Size = new Size(1040, 720);
+        AutoScaleMode = AutoScaleMode.None;
+        AutoSize = false;
+        MinimumSize = new Size(1100, 700);
+        Size = new Size(1120, 760);
         StartPosition = FormStartPosition.CenterScreen;
 
         BuildLayout(initialConfigPath);
@@ -49,9 +75,11 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 6,
+            RowCount = 8,
             Padding = new Padding(12)
         };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -71,20 +99,23 @@ public sealed class MainForm : Form
             _browseOcrInputButton,
             GuiCommandService.GetDefaultOcrInputPath(),
             BrowseOcrInputImage), 0, 1);
-        root.Controls.Add(BuildStatusRow(), 0, 2);
-        root.Controls.Add(BuildButtonPanel(), 0, 3);
-        root.Controls.Add(BuildGuardedRealAudioPanel(), 0, 4);
+        root.Controls.Add(BuildDetectionInputRow(), 0, 2);
+        root.Controls.Add(BuildDetectionTuningRow(), 0, 3);
+        root.Controls.Add(BuildStatusRow(), 0, 4);
+        root.Controls.Add(BuildButtonPanel(), 0, 5);
+        root.Controls.Add(BuildGuardedRealAudioPanel(), 0, 6);
 
         _logTextBox.Dock = DockStyle.Fill;
         _logTextBox.Multiline = true;
         _logTextBox.ReadOnly = true;
         _logTextBox.ScrollBars = ScrollBars.Vertical;
         _logTextBox.Font = new Font(FontFamily.GenericMonospace, 9);
-        root.Controls.Add(_logTextBox, 0, 5);
+        root.Controls.Add(_logTextBox, 0, 7);
 
         Controls.Add(root);
         _configPathTextBox.TextChanged += (_, _) => RefreshGuardedRealAudioStatus();
         _ocrInputPathTextBox.TextChanged += (_, _) => RefreshGuardedRealAudioStatus();
+        _useFixedImageForDetectionCheckBox.CheckedChanged += (_, _) => RefreshGuardedRealAudioStatus();
         ApplyUiState(_stateController.Current);
         RefreshGuardedRealAudioStatus();
     }
@@ -185,6 +216,102 @@ public sealed class MainForm : Form
         return panel;
     }
 
+    private Control BuildDetectionInputRow()
+    {
+        _useFixedImageForDetectionCheckBox.Text = "Use fixed image for detection loop (debug only)";
+        _useFixedImageForDetectionCheckBox.AutoSize = true;
+        _useFixedImageForDetectionCheckBox.Checked = false;
+
+        Label helpLabel = new()
+        {
+            Text = "Unchecked: detection loops capture the target process live each iteration. Checked: dry-run/simulated loops OCR the image path above.",
+            AutoSize = true,
+            MaximumSize = new Size(760, 0)
+        };
+
+        FlowLayoutPanel panel = new()
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Margin = new Padding(0, 0, 0, 8)
+        };
+        panel.Controls.Add(_useFixedImageForDetectionCheckBox);
+        panel.Controls.Add(helpLabel);
+        return panel;
+    }
+
+    private Control BuildDetectionTuningRow()
+    {
+        TableLayoutPanel panel = new()
+        {
+            Dock = DockStyle.Top,
+            ColumnCount = 8,
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 8)
+        };
+        for (int i = 0; i < 8; i++)
+        {
+            panel.ColumnStyles.Add(new ColumnStyle(i % 2 == 0 ? SizeType.AutoSize : SizeType.Absolute, i % 2 == 0 ? 0 : 90));
+        }
+
+        _runUntilStopCheckBox.Text = "Run until Stop";
+        _runUntilStopCheckBox.AutoSize = true;
+        _runUntilStopCheckBox.Checked = true;
+        _runUntilStopCheckBox.CheckedChanged += (_, _) => UpdateLoopCountInputState();
+
+        _loopCountTextBox.Text = string.Empty;
+        _loopCountTextBox.Enabled = false;
+        _loopIntervalTextBox.Text = GuiDetectionTuningOptions.DefaultLoopIntervalMs.ToString();
+        _captureDelayTextBox.Text = GuiDetectionTuningOptions.DefaultCaptureDelayMs.ToString();
+        _matchThresholdTextBox.Text = GuiDetectionTuningOptions.DefaultMatchThreshold.ToString();
+        _missThresholdTextBox.Text = GuiDetectionTuningOptions.DefaultMissThreshold.ToString();
+        _saveDebugImagesCheckBox.Text = "Save debug images";
+        _saveDebugImagesCheckBox.AutoSize = true;
+        _saveDebugImagesCheckBox.Checked = false;
+
+        Label helpLabel = new()
+        {
+            Text = "Runtime tuning below overrides config.local.json for this run only and is not saved. Run until Stop checked ignores config LoopCount. Save debug images writes per-iteration debug files and can slow realtime detection.",
+            AutoSize = true,
+            MaximumSize = new Size(980, 0)
+        };
+
+        panel.Controls.Add(_runUntilStopCheckBox, 0, 0);
+        panel.SetColumnSpan(_runUntilStopCheckBox, 8);
+        AddLabeledTuningTextBox(panel, "Loop count", _loopCountTextBox, 0, 1);
+        AddLabeledTuningTextBox(panel, "Loop interval ms", _loopIntervalTextBox, 2, 1);
+        AddLabeledTuningTextBox(panel, "Capture delay ms", _captureDelayTextBox, 4, 1);
+        AddLabeledTuningTextBox(panel, "Match threshold", _matchThresholdTextBox, 0, 2);
+        AddLabeledTuningTextBox(panel, "Miss threshold", _missThresholdTextBox, 2, 2);
+        panel.Controls.Add(_saveDebugImagesCheckBox, 4, 2);
+        panel.SetColumnSpan(_saveDebugImagesCheckBox, 2);
+        panel.Controls.Add(helpLabel, 0, 3);
+        panel.SetColumnSpan(helpLabel, 8);
+        return panel;
+    }
+
+    private static void AddLabeledTuningTextBox(
+        TableLayoutPanel panel,
+        string label,
+        TextBox textBox,
+        int column,
+        int row)
+    {
+        Label inputLabel = new()
+        {
+            Text = label,
+            AutoSize = true,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Margin = new Padding(0, 4, 6, 0)
+        };
+        textBox.Width = 80;
+        textBox.Margin = new Padding(0, 0, 12, 4);
+        panel.Controls.Add(inputLabel, column, row);
+        panel.Controls.Add(textBox, column + 1, row);
+    }
+
     private Control BuildGuardedRealAudioPanel()
     {
         GroupBox groupBox = new()
@@ -270,7 +397,15 @@ public sealed class MainForm : Form
 
     private async Task CalibrateOcrRegionAsync(CancellationToken cancellationToken)
     {
-        await _commandService.CalibrateOcrRegionAsync(GetConfigPath(), CreateLogWriter(), cancellationToken);
+        MainFormPlacement placement = GetCurrentPlacement();
+        try
+        {
+            await _commandService.CalibrateOcrRegionAsync(GetConfigPath(), CreateLogWriter(), cancellationToken);
+        }
+        finally
+        {
+            RestoreMainWindowPlacement(placement, scheduleSecondPass: true);
+        }
     }
 
     private async Task TestOcrOnceAsync(CancellationToken cancellationToken)
@@ -284,6 +419,8 @@ public sealed class MainForm : Form
         await _commandService.RunDetectionLoopAsync(
             GetConfigPath(),
             GetOptionalOcrInputPath(),
+            _useFixedImageForDetectionCheckBox.Checked,
+            ParseGuiDetectionTuning(),
             false,
             CreateLogWriter(),
             cancellationToken);
@@ -294,6 +431,8 @@ public sealed class MainForm : Form
         await _commandService.RunDetectionLoopAsync(
             GetConfigPath(),
             GetOptionalOcrInputPath(),
+            _useFixedImageForDetectionCheckBox.Checked,
+            ParseGuiDetectionTuning(),
             true,
             CreateLogWriter(),
             cancellationToken);
@@ -303,7 +442,8 @@ public sealed class MainForm : Form
     {
         await _commandService.RunGuardedRealAudioDetectionAsync(
             GetConfigPath(),
-            GetOptionalOcrInputPath(),
+            _useFixedImageForDetectionCheckBox.Checked,
+            ParseGuiDetectionTuning(),
             CreateLogWriter(),
             cancellationToken);
     }
@@ -455,6 +595,14 @@ public sealed class MainForm : Form
         _startDryRunButton.Enabled = uiState.CommandButtonsEnabled;
         _startSimulatedAudioButton.Enabled = uiState.CommandButtonsEnabled;
         _stopButton.Enabled = uiState.StopButtonEnabled;
+        _useFixedImageForDetectionCheckBox.Enabled = uiState.CommandButtonsEnabled;
+        _runUntilStopCheckBox.Enabled = uiState.CommandButtonsEnabled;
+        UpdateLoopCountInputState(uiState.CommandButtonsEnabled);
+        _loopIntervalTextBox.Enabled = uiState.CommandButtonsEnabled;
+        _captureDelayTextBox.Enabled = uiState.CommandButtonsEnabled;
+        _matchThresholdTextBox.Enabled = uiState.CommandButtonsEnabled;
+        _missThresholdTextBox.Enabled = uiState.CommandButtonsEnabled;
+        _saveDebugImagesCheckBox.Enabled = uiState.CommandButtonsEnabled;
         _enableGuardedRealAudioCheckBox.Enabled = uiState.CommandButtonsEnabled;
         RefreshGuardedRealAudioStatus();
     }
@@ -480,12 +628,11 @@ public sealed class MainForm : Form
             return;
         }
 
-        GuardedRealAudioStatus status = _commandService.GetGuardedRealAudioStatus(
-            GetConfigPath(),
-            GetOptionalOcrInputPath());
+        GuardedRealAudioStatus status = _commandService.GetGuardedRealAudioStatus(GetConfigPath());
         GuardedRealAudioUiEligibility eligibility = new(
             _enableGuardedRealAudioCheckBox.Checked,
             _stateController.OperationActive,
+            _useFixedImageForDetectionCheckBox.Checked,
             status.PreflightPassed,
             status.HasOcrRegionSource,
             !string.IsNullOrWhiteSpace(status.TargetProcessName));
@@ -502,12 +649,11 @@ public sealed class MainForm : Form
 
     private GuardedRealAudioUiEligibility GetGuardedRealAudioEligibility()
     {
-        GuardedRealAudioStatus status = _commandService.GetGuardedRealAudioStatus(
-            GetConfigPath(),
-            GetOptionalOcrInputPath());
+        GuardedRealAudioStatus status = _commandService.GetGuardedRealAudioStatus(GetConfigPath());
         return new GuardedRealAudioUiEligibility(
             _enableGuardedRealAudioCheckBox.Checked,
             _stateController.OperationActive,
+            _useFixedImageForDetectionCheckBox.Checked,
             status.PreflightPassed,
             status.HasOcrRegionSource,
             !string.IsNullOrWhiteSpace(status.TargetProcessName));
@@ -551,6 +697,137 @@ public sealed class MainForm : Form
     {
         string value = _ocrInputPathTextBox.Text.Trim();
         return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private GuiDetectionTuningOptions ParseGuiDetectionTuning()
+    {
+        GuiDetectionTuningInput input = GetDetectionTuningInput();
+        return GuiDetectionTuningOptions.Parse(
+            input.RunUntilStop,
+            input.LoopCount,
+            input.LoopIntervalMs,
+            input.CaptureDelayMs,
+            input.MatchThreshold,
+            input.MissThreshold,
+            input.SaveDebugImages);
+    }
+
+    private GuiDetectionTuningInput GetDetectionTuningInput()
+    {
+        if (!InvokeRequired)
+        {
+            return new GuiDetectionTuningInput(
+                _runUntilStopCheckBox.Checked,
+                _loopCountTextBox.Text,
+                _loopIntervalTextBox.Text,
+                _captureDelayTextBox.Text,
+                _matchThresholdTextBox.Text,
+                _missThresholdTextBox.Text,
+                _saveDebugImagesCheckBox.Checked);
+        }
+
+        return (GuiDetectionTuningInput)Invoke(new Func<GuiDetectionTuningInput>(GetDetectionTuningInput));
+    }
+
+    private MainFormPlacement GetCurrentPlacement()
+    {
+        if (!InvokeRequired)
+        {
+            return new MainFormPlacement(Bounds, RestoreBounds, ClientSize, MinimumSize, WindowState);
+        }
+
+        return (MainFormPlacement)Invoke(new Func<MainFormPlacement>(GetCurrentPlacement));
+    }
+
+    private void RestoreMainWindowPlacement(MainFormPlacement placement, bool scheduleSecondPass)
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        if (InvokeRequired)
+        {
+            try
+            {
+                BeginInvoke(new Action(() => RestoreMainWindowPlacement(placement, scheduleSecondPass)));
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            return;
+        }
+
+        ApplyMainFormPlacement(placement);
+        if (!scheduleSecondPass)
+        {
+            return;
+        }
+
+        BeginInvoke(new Action(() => RestoreMainWindowPlacement(placement, scheduleSecondPass: false)));
+    }
+
+    private void ApplyMainFormPlacement(MainFormPlacement placement)
+    {
+        SuspendLayout();
+        try
+        {
+            AutoScaleMode = AutoScaleMode.None;
+            AutoSize = false;
+            MinimumSize = placement.MinimumSize;
+
+            FormWindowState restoredState = placement.WindowState == FormWindowState.Minimized
+                ? FormWindowState.Normal
+                : placement.WindowState;
+
+            WindowState = FormWindowState.Normal;
+            if (restoredState == FormWindowState.Maximized)
+            {
+                if (!placement.RestoreBounds.IsEmpty)
+                {
+                    Bounds = placement.RestoreBounds;
+                }
+            }
+            else
+            {
+                Bounds = placement.Bounds;
+                ClientSize = placement.ClientSize;
+                Bounds = placement.Bounds;
+            }
+
+            WindowState = restoredState;
+        }
+        finally
+        {
+            ResumeLayout(true);
+            PerformLayout();
+        }
+    }
+
+    private void UpdateLoopCountInputState()
+    {
+        UpdateLoopCountInputState(_stateController.Current.CommandButtonsEnabled);
+    }
+
+    private void UpdateLoopCountInputState(bool commandButtonsEnabled)
+    {
+        if (InvokeRequired)
+        {
+            try
+            {
+                BeginInvoke(new Action(() => UpdateLoopCountInputState(commandButtonsEnabled)));
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            return;
+        }
+
+        _loopCountTextBox.Enabled = commandButtonsEnabled && !_runUntilStopCheckBox.Checked;
     }
 
     private void BrowseConfigFile(object? sender, EventArgs eventArgs)

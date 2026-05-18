@@ -69,9 +69,21 @@ The GUI is still a minimal local panel, not a full settings editor. It displays 
 
 For OCR input, select the original screenshot, such as `debug-captures/capture-latest.png`. Do not use `debug-ocr/ocr-input-latest.png` as OCR input because that file is the generated debug output and may be overwritten by the next OCR run.
 
+The OCR input image field is used by Test OCR Once. Detection loops use live target-process capture by default, so each iteration captures the current target window before OCR. The `Use fixed image for detection loop` checkbox is only for dry-run or simulated fixed-image debugging; leave it unchecked for real-time game/window detection.
+
+In the GUI, the detection tuning fields override `config.local.json` for the current run only and are not saved. The default GUI tuning is meant for live dialogue testing: Run until Stop is checked, Loop interval ms is `200`, Capture delay ms is `100`, Match threshold is `2`, Miss threshold is `1`, and Save debug images is unchecked. When Run until Stop is checked, GUI detection ignores config `LoopCount` for that run. When it is unchecked, enter a positive Loop count for a short fixed-count test; other tuning fields still override config only for that run.
+
+Loop interval is the delay after one iteration completes, not the full detection cycle time. The actual cycle also includes live screenshot capture, OCR, speaker matching, and any audio action. Detection logs include per-iteration timing for capture, OCR, match, audio, and total elapsed time so you can identify the slow step before changing thresholds.
+
+Save debug images is useful for troubleshooting OCR regions, but it writes `debug-captures/capture-latest.png` and `debug-ocr/ocr-input-latest.png` during loops and can make realtime detection slower. Leave it unchecked for realtime GUI dry-run, simulated detection audio, and guarded real audio; the loop will use temporary OCR input files only as needed by Tesseract.
+
+Live detection prefers region-only capture when an OCR region source is configured. In that mode the loop resolves the calibration ratio or absolute OCR region against the current target window size, captures only that small region, and passes that small temporary image to Tesseract. Logs show `Capture mode: region-only`; if region-only capture cannot be used, logs show `Capture mode: full-window fallback` with the reason. If OCR timing still dominates after region-only capture, the remaining bottleneck is likely Tesseract CLI startup/recognition time.
+
 The Guarded Real Audio section is disabled by default. To start it, enable the guarded real audio checkbox, pass config/preflight checks, provide a valid OCR region source, and confirm the warning dialog. The GUI uses stable detection results only; raw OCR/speaker matches never directly control real audio. Stop or closing the window requests cancellation and attempts restore through the existing cleanup path, but Windows audio sessions can still require manual mixer recovery if restore fails.
 
-Use reduce-volume mode for the first real audio test. The GUI does not create `WindowsAudioMuteService` until the guarded real audio start action is explicitly confirmed.
+Use reduce-volume mode for the first real audio test. The GUI does not create `WindowsAudioMuteService` until the guarded real audio start action is explicitly confirmed. Guarded real audio does not allow fixed-image detection mode, because a static screenshot must not drive real system audio.
+
+Guarded real audio includes OCR jitter tolerance for near target-speaker text. Strong OCR matches can enter the stable matched state, while weak near-matches and short/empty noisy OCR are used to avoid rapid restore/reduce flicker after a stable target hit. Clear non-target text can still restore quickly according to the configured miss threshold.
 
 ## Debug Screenshot Capture
 
@@ -283,7 +295,8 @@ Example shape:
     "LoopIntervalMs": 500,
     "LoopCount": 5,
     "MatchThreshold": 2,
-    "MissThreshold": 2
+    "MissThreshold": 2,
+    "SaveDebugImages": false
   }
 }
 ```
@@ -327,7 +340,8 @@ Reduce-volume configuration remains available through `AudioFilter`:
   "Detection": {
     "LoopIntervalMs": 500,
     "MatchThreshold": 2,
-    "MissThreshold": 2
+    "MissThreshold": 2,
+    "SaveDebugImages": false
   }
 }
 ```

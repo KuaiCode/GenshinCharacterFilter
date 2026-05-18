@@ -38,6 +38,7 @@ public sealed class EffectiveConfigPrinter
         writer.WriteLine($"Detection.LoopCount: {settings.Detection.LoopCount?.ToString() ?? "(until Ctrl+C)"}");
         writer.WriteLine($"Detection.MatchThreshold: {settings.Detection.MatchThreshold}");
         writer.WriteLine($"Detection.MissThreshold: {settings.Detection.MissThreshold}");
+        writer.WriteLine($"Detection.SaveDebugImages: {settings.Detection.SaveDebugImages}");
     }
 
     private static string DescribeRegionSource(OcrRegionSourceOptions options)

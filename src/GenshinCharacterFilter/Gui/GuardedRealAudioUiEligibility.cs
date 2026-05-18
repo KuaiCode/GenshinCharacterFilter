@@ -6,6 +6,7 @@ namespace GenshinCharacterFilter.Gui;
 public readonly record struct GuardedRealAudioUiEligibility(
     bool EnableChecked,
     bool OperationActive,
+    bool FixedImageMode,
     bool PreflightPassed,
     bool HasOcrRegionSource,
     bool HasTargetProcess)
@@ -13,6 +14,7 @@ public readonly record struct GuardedRealAudioUiEligibility(
     public bool CanRequestConfirmation =>
         EnableChecked &&
         !OperationActive &&
+        !FixedImageMode &&
         PreflightPassed &&
         HasOcrRegionSource &&
         HasTargetProcess;
@@ -29,6 +31,11 @@ public readonly record struct GuardedRealAudioUiEligibility(
             if (OperationActive)
             {
                 return "Another operation is running.";
+            }
+
+            if (FixedImageMode)
+            {
+                return "Guarded real audio does not allow fixed-image detection.";
             }
 
             if (!HasTargetProcess)

@@ -9,8 +9,9 @@ namespace GenshinCharacterFilter.Detection;
 public sealed class DetectionDryRunOptions
 {
     public const int DefaultLoopIntervalMs = 1000;
-    public const int MinLoopIntervalMs = 100;
+    public const int MinLoopIntervalMs = 50;
     public const int MaxLoopIntervalMs = 10000;
+    public const bool DefaultSaveDebugImages = false;
 
     /// <summary>
     /// Gets or sets the optional fixed image path used for repeated OCR.
@@ -81,6 +82,11 @@ public sealed class DetectionDryRunOptions
     /// Gets or sets the capture foreground activation delay when process capture mode is used.
     /// </summary>
     public int CaptureDelayMs { get; set; } = WindowCaptureOptions.DefaultCaptureDelayMs;
+
+    /// <summary>
+    /// Gets or sets whether realtime detection loops save stable debug screenshot/OCR image files.
+    /// </summary>
+    public bool SaveDebugImages { get; set; } = DefaultSaveDebugImages;
 
     /// <summary>
     /// Gets or sets the stability gate options used by the dry-run loop.

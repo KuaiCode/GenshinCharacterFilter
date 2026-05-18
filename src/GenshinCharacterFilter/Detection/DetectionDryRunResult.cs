@@ -12,4 +12,5 @@ public sealed record DetectionDryRunResult(
     SpeakerMatchResult SpeakerMatchResult,
     DetectionStabilityResult StabilityResult,
     string OcrRegionSourceLabel = "none/full image",
-    DetectionAudioActionResult? DetectionAudioActionResult = null);
+    DetectionAudioActionResult? DetectionAudioActionResult = null,
+    DetectionIterationTiming? Timing = null);

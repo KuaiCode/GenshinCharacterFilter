@@ -3,6 +3,7 @@ using GenshinCharacterFilter.Detection;
 using GenshinCharacterFilter.Ocr;
 using GenshinCharacterFilter.Speakers;
 using GenshinCharacterFilter.Audio;
+using System.Drawing;
 
 namespace GenshinCharacterFilter.Tests;
 
@@ -37,6 +38,79 @@ public sealed class DetectionDryRunLoopTests
     }
 
     [Fact]
+    public async Task RunAsync_LiveModeInitializesSessionOnceAndReusesIt()
+    {
+        using TempFile firstCapture = TempFile.Create();
+        using TempFile secondCapture = TempFile.Create();
+        FakeSessionWindowCapture capture = new([firstCapture.Path, secondCapture.Path]);
+        DetectionDryRunLoop loop = new(new FakeOcrService(["target", "target"]), new FakeSpeakerMatcher(), capture);
+
+        await loop.RunAsync(CreateLiveOptions(), CancellationToken.None);
+
+        Assert.Equal(1, capture.SessionCreateCount);
+        Assert.Equal(1, capture.Session.InitializeCount);
+        Assert.Equal(2, capture.Session.CaptureCount);
+        Assert.Equal(0, capture.OneShotCaptureCount);
+        Assert.False(capture.LastSessionOptions!.SaveDebugImage);
+    }
+
+    [Fact]
+    public async Task RunAsync_LiveModePassesDebugSaveOptionWhenEnabled()
+    {
+        using TempFile firstCapture = TempFile.Create();
+        FakeSessionWindowCapture capture = new([firstCapture.Path]);
+        DetectionDryRunOptions options = CreateLiveOptions();
+        options.LoopCount = 1;
+        options.SaveDebugImages = true;
+        DetectionDryRunLoop loop = new(new FakeOcrService(["target"]), new FakeSpeakerMatcher(), capture);
+
+        await loop.RunAsync(options, CancellationToken.None);
+
+        Assert.True(capture.LastSessionOptions!.SaveDebugImage);
+    }
+
+    [Fact]
+    public async Task RunAsync_LiveModeWithOcrRegionUsesRegionOnlyCapture()
+    {
+        using TempFile regionCapture = TempFile.Create();
+        FakeSessionWindowCapture capture = new([regionCapture.Path]);
+        DetectionDryRunOptions options = CreateLiveOptions();
+        options.LoopCount = 1;
+        options.OcrRegion = new OcrRegion(1, 2, 3, 4);
+        StringWriter log = new();
+        DetectionDryRunLoop loop = new(new FakeOcrService(["target"]), new FakeSpeakerMatcher(), capture, log: log);
+
+        await loop.RunAsync(options, CancellationToken.None);
+
+        Assert.Equal(1, capture.Session.RegionCaptureCount);
+        Assert.Equal(0, capture.Session.CaptureCount);
+        Assert.Equal(new CaptureRegion(1, 2, 3, 4), capture.Session.LastRegion);
+        Assert.Contains("Capture mode: region-only", log.ToString());
+    }
+
+    [Fact]
+    public async Task RunAsync_LiveModeFallsBackToFullWindowWhenRegionCaptureFails()
+    {
+        using TempFile regionCapture = TempFile.Create();
+        using TempFile fullCapture = TempFile.Create();
+        FakeSessionWindowCapture capture = new([regionCapture.Path, fullCapture.Path]);
+        capture.Session.ThrowRegionCapture = true;
+        DetectionDryRunOptions options = CreateLiveOptions();
+        options.LoopCount = 1;
+        options.OcrRegion = new OcrRegion(1, 2, 3, 4);
+        StringWriter log = new();
+        DetectionDryRunLoop loop = new(new FakeOcrService(["target"]), new FakeSpeakerMatcher(), capture, log: log);
+
+        await loop.RunAsync(options, CancellationToken.None);
+
+        Assert.Equal(1, capture.Session.RegionCaptureCount);
+        Assert.Equal(1, capture.Session.CaptureCount);
+        string output = log.ToString();
+        Assert.Contains("Capture mode: full-window fallback", output);
+        Assert.Contains("Region-only capture fallback reason:", output);
+    }
+
+    [Fact]
     public async Task RunAsync_ReportsStableStateChangeWhenThresholdIsReached()
     {
         using TempFile input = TempFile.Create();
@@ -53,6 +127,12 @@ public sealed class DetectionDryRunLoopTests
         Assert.Contains("Raw matched: True", output);
         Assert.Contains("Stable matched: True", output);
         Assert.Contains("Consecutive match count: 2", output);
+        Assert.Contains("Iteration timing:", output);
+        Assert.Contains("  Capture:", output);
+        Assert.Contains("  OCR:", output);
+        Assert.Contains("  Match:", output);
+        Assert.Contains("  Audio:", output);
+        Assert.Contains("  Total:", output);
         Assert.Contains("Stable state changed: NotMatched -> Matched(Wanderer)", output);
     }
 
@@ -83,6 +163,22 @@ public sealed class DetectionDryRunLoopTests
         return new DetectionDryRunOptions
         {
             OcrInputPath = inputPath,
+            LoopCount = 2,
+            LoopIntervalMs = DetectionDryRunOptions.MinLoopIntervalMs,
+            TargetSpeakers = ["Wanderer"],
+            Stability = new DetectionStabilityOptions
+            {
+                MatchThreshold = 2,
+                MissThreshold = 2
+            }
+        };
+    }
+
+    private static DetectionDryRunOptions CreateLiveOptions()
+    {
+        return new DetectionDryRunOptions
+        {
+            TargetProcessName = "fake",
             LoopCount = 2,
             LoopIntervalMs = DetectionDryRunOptions.MinLoopIntervalMs,
             TargetSpeakers = ["Wanderer"],
@@ -138,6 +234,88 @@ public sealed class DetectionDryRunLoopTests
         }
     }
 
+    private sealed class FakeSessionWindowCapture : IGameWindowCapture, IGameWindowCaptureSessionFactory
+    {
+        public FakeSessionWindowCapture(IEnumerable<string> paths)
+        {
+            Session = new FakeGameWindowCaptureSession(paths);
+        }
+
+        public int OneShotCaptureCount { get; private set; }
+
+        public int SessionCreateCount { get; private set; }
+
+        public WindowCaptureOptions? LastSessionOptions { get; private set; }
+
+        public FakeGameWindowCaptureSession Session { get; }
+
+        public Task<string> CaptureOnceAsync(WindowCaptureOptions options, CancellationToken cancellationToken)
+        {
+            OneShotCaptureCount++;
+            return Task.FromResult("one-shot.png");
+        }
+
+        public IGameWindowCaptureSession CreateSession(WindowCaptureOptions options)
+        {
+            SessionCreateCount++;
+            LastSessionOptions = options;
+            return Session;
+        }
+    }
+
+    private sealed class FakeGameWindowCaptureSession : IGameWindowCaptureSession
+    {
+        private readonly Queue<string> _paths;
+
+        public FakeGameWindowCaptureSession(IEnumerable<string> paths)
+        {
+            _paths = new Queue<string>(paths);
+        }
+
+        public int InitializeCount { get; private set; }
+
+        public int CaptureCount { get; private set; }
+
+        public int RegionCaptureCount { get; private set; }
+
+        public CaptureRegion? LastRegion { get; private set; }
+
+        public bool ThrowRegionCapture { get; set; }
+
+        public Task InitializeAsync(CancellationToken cancellationToken)
+        {
+            InitializeCount++;
+            return Task.CompletedTask;
+        }
+
+        public Task<string> CaptureAsync(CancellationToken cancellationToken)
+        {
+            CaptureCount++;
+            return Task.FromResult(_paths.Count > 0 ? _paths.Dequeue() : "capture.png");
+        }
+
+        public Task<WindowCaptureFrameInfo> GetFrameInfoAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new WindowCaptureFrameInfo(20, 20));
+        }
+
+        public Task<string> CaptureRegionAsync(CaptureRegion region, CancellationToken cancellationToken)
+        {
+            RegionCaptureCount++;
+            LastRegion = region;
+            if (ThrowRegionCapture)
+            {
+                throw new WindowCaptureException("fake region capture failed");
+            }
+
+            return Task.FromResult(_paths.Count > 0 ? _paths.Dequeue() : "region-capture.png");
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
     private sealed class FakeAudioMuteService : IAudioMuteService
     {
         public int MuteCalls { get; private set; }
@@ -171,7 +349,9 @@ public sealed class DetectionDryRunLoopTests
         public static TempFile Create()
         {
             string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"{Guid.NewGuid():N}.png");
-            File.WriteAllText(path, "fake image placeholder");
+            using Bitmap bitmap = new(20, 20);
+            bitmap.SetPixel(0, 0, Color.Black);
+            bitmap.Save(path);
             return new TempFile(path);
         }
 

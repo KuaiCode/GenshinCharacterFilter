@@ -6,8 +6,7 @@ namespace GenshinCharacterFilter.Calibration;
 
 internal sealed class CalibrationSelectionForm : Form
 {
-    private const int MaxInitialWidth = 1200;
-    private const int MaxInitialHeight = 800;
+    private const double InitialWorkingAreaRatio = 0.9;
 
     private readonly Image _image;
     private bool _dragging;
@@ -19,10 +18,12 @@ internal sealed class CalibrationSelectionForm : Form
         _image = image;
 
         Text = "OCR Region Calibration - drag to select, Enter to save, Esc to cancel";
+        AutoScaleMode = AutoScaleMode.None;
+        AutoSize = false;
         DoubleBuffered = true;
         KeyPreview = true;
-        MinimumSize = new Size(480, 320);
-        ClientSize = FitSize(image.Width, image.Height, MaxInitialWidth, MaxInitialHeight);
+        MinimumSize = new Size(640, 420);
+        ClientSize = CalculateInitialClientSize(image.Size, Screen.FromPoint(Cursor.Position).WorkingArea);
         StartPosition = FormStartPosition.CenterScreen;
     }
 
@@ -177,13 +178,14 @@ internal sealed class CalibrationSelectionForm : Form
             Math.Max(1, (int)Math.Round(region.Height * scaleY)));
     }
 
-    private static Size FitSize(int imageWidth, int imageHeight, int maxWidth, int maxHeight)
+    private static Size CalculateInitialClientSize(Size imageSize, Rectangle workingArea)
     {
-        double scale = Math.Min(maxWidth / (double)imageWidth, maxHeight / (double)imageHeight);
-        scale = Math.Min(scale, 1.0);
+        int maxWidth = Math.Max(640, (int)Math.Round(workingArea.Width * InitialWorkingAreaRatio));
+        int maxHeight = Math.Max(420, (int)Math.Round(workingArea.Height * InitialWorkingAreaRatio));
+        double scale = Math.Min(maxWidth / (double)imageSize.Width, maxHeight / (double)imageSize.Height);
         return new Size(
-            Math.Max(480, (int)Math.Round(imageWidth * scale)),
-            Math.Max(320, (int)Math.Round(imageHeight * scale)));
+            Math.Max(640, (int)Math.Round(imageSize.Width * scale)),
+            Math.Max(420, (int)Math.Round(imageSize.Height * scale)));
     }
 
     private void DrawStatus(Graphics graphics, Rectangle displayRectangle)

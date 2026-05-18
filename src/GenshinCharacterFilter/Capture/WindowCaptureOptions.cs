@@ -9,6 +9,7 @@ public sealed class WindowCaptureOptions
     public const string DefaultOutputFileName = "capture-latest.png";
     public const int DefaultCaptureDelayMs = 500;
     public const int MaxCaptureDelayMs = 5000;
+    public const string TempCaptureDirectoryName = "GenshinCharacterFilter";
 
     /// <summary>
     /// Gets or sets the process name used to locate the target window.
@@ -34,6 +35,11 @@ public sealed class WindowCaptureOptions
     /// Gets or sets the delay after foreground activation before pixels are captured.
     /// </summary>
     public int CaptureDelayMs { get; set; } = DefaultCaptureDelayMs;
+
+    /// <summary>
+    /// Gets or sets whether capture should save the stable debug screenshot path.
+    /// </summary>
+    public bool SaveDebugImage { get; set; } = true;
 
     /// <summary>
     /// Validates options before capture starts.
@@ -95,5 +101,23 @@ public sealed class WindowCaptureOptions
     {
         Validate();
         return Path.GetFullPath(Path.Combine(OutputDirectory.Trim(), OutputFileName.Trim()));
+    }
+
+    /// <summary>
+    /// Builds the file path used by the capture implementation.
+    /// </summary>
+    public string GetCaptureOutputPath()
+    {
+        return SaveDebugImage
+            ? GetOutputPath()
+            : Path.Combine(GetTempCaptureDirectory(), $"capture-{Guid.NewGuid():N}.png");
+    }
+
+    /// <summary>
+    /// Returns the temp directory used for non-debug realtime capture inputs.
+    /// </summary>
+    public static string GetTempCaptureDirectory()
+    {
+        return Path.Combine(Path.GetTempPath(), TempCaptureDirectoryName);
     }
 }

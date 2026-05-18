@@ -29,6 +29,7 @@ public sealed class AppSettingsLoaderTests
         Assert.Null(settings.Detection.LoopCount);
         Assert.Equal(2, settings.Detection.MatchThreshold);
         Assert.Equal(2, settings.Detection.MissThreshold);
+        Assert.False(settings.Detection.SaveDebugImages);
     }
 
     [Fact]
@@ -56,7 +57,8 @@ public sealed class AppSettingsLoaderTests
                 "LoopIntervalMs": 500,
                 "LoopCount": 5,
                 "MatchThreshold": 3,
-                "MissThreshold": 4
+                "MissThreshold": 4,
+                "SaveDebugImages": true
               }
             }
             """);
@@ -78,6 +80,7 @@ public sealed class AppSettingsLoaderTests
         Assert.Equal(5, settings.Detection.LoopCount);
         Assert.Equal(3, settings.Detection.MatchThreshold);
         Assert.Equal(4, settings.Detection.MissThreshold);
+        Assert.True(settings.Detection.SaveDebugImages);
     }
 
     [Fact]
@@ -295,6 +298,7 @@ public sealed class AppSettingsLoaderTests
         Assert.Null(settings.Ocr.RegionConfigPath);
         Assert.Equal("none", settings.Ocr.RegionPreset);
         Assert.Equal(500, settings.Detection.LoopIntervalMs);
+        Assert.False(settings.Detection.SaveDebugImages);
     }
 
     [Fact]

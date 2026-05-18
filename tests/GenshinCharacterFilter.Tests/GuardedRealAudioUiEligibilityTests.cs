@@ -10,6 +10,7 @@ public sealed class GuardedRealAudioUiEligibilityTests
         GuardedRealAudioUiEligibility eligibility = new(
             EnableChecked: true,
             OperationActive: false,
+            FixedImageMode: false,
             PreflightPassed: true,
             HasOcrRegionSource: true,
             HasTargetProcess: true);
@@ -24,6 +25,7 @@ public sealed class GuardedRealAudioUiEligibilityTests
         GuardedRealAudioUiEligibility eligibility = new(
             EnableChecked: false,
             OperationActive: false,
+            FixedImageMode: false,
             PreflightPassed: true,
             HasOcrRegionSource: true,
             HasTargetProcess: true);
@@ -38,6 +40,7 @@ public sealed class GuardedRealAudioUiEligibilityTests
         GuardedRealAudioUiEligibility eligibility = new(
             EnableChecked: true,
             OperationActive: true,
+            FixedImageMode: false,
             PreflightPassed: true,
             HasOcrRegionSource: true,
             HasTargetProcess: true);
@@ -52,6 +55,7 @@ public sealed class GuardedRealAudioUiEligibilityTests
         GuardedRealAudioUiEligibility eligibility = new(
             EnableChecked: true,
             OperationActive: false,
+            FixedImageMode: false,
             PreflightPassed: false,
             HasOcrRegionSource: true,
             HasTargetProcess: true);
@@ -61,11 +65,27 @@ public sealed class GuardedRealAudioUiEligibilityTests
     }
 
     [Fact]
+    public void CannotRequestConfirmation_WhenFixedImageModeIsEnabled()
+    {
+        GuardedRealAudioUiEligibility eligibility = new(
+            EnableChecked: true,
+            OperationActive: false,
+            FixedImageMode: true,
+            PreflightPassed: true,
+            HasOcrRegionSource: true,
+            HasTargetProcess: true);
+
+        Assert.False(eligibility.CanRequestConfirmation);
+        Assert.Contains("fixed-image", eligibility.DisabledReason);
+    }
+
+    [Fact]
     public void CannotRequestConfirmation_WhenTargetProcessIsMissing()
     {
         GuardedRealAudioUiEligibility eligibility = new(
             EnableChecked: true,
             OperationActive: false,
+            FixedImageMode: false,
             PreflightPassed: true,
             HasOcrRegionSource: true,
             HasTargetProcess: false);
@@ -80,6 +100,7 @@ public sealed class GuardedRealAudioUiEligibilityTests
         GuardedRealAudioUiEligibility eligibility = new(
             EnableChecked: true,
             OperationActive: false,
+            FixedImageMode: false,
             PreflightPassed: true,
             HasOcrRegionSource: false,
             HasTargetProcess: true);

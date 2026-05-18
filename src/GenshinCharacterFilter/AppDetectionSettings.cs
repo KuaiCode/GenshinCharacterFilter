@@ -15,6 +15,8 @@ public sealed class AppDetectionSettings
 
     public int MissThreshold { get; set; } = DetectionStabilityOptions.DefaultMissThreshold;
 
+    public bool SaveDebugImages { get; set; } = DetectionDryRunOptions.DefaultSaveDebugImages;
+
     /// <summary>
     /// Validates detection timing and stability settings.
     /// </summary>

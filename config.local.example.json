@@ -20,6 +20,7 @@
     "LoopIntervalMs": 500,
     "LoopCount": 5,
     "MatchThreshold": 2,
-    "MissThreshold": 2
+    "MissThreshold": 2,
+    "SaveDebugImages": false
   }
 }

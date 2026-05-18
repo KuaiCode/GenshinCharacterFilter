@@ -9,7 +9,7 @@ namespace GenshinCharacterFilter.Capture;
 /// <summary>
 /// Captures a Windows target process main window using Win32 APIs.
 /// </summary>
-public sealed class WindowsGameWindowCapture : IGameWindowCapture
+public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCaptureSessionFactory
 {
     private const int Srccopy = 0x00CC0020;
     private const int Captureblt = 0x40000000;
@@ -42,6 +42,19 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture
         IntPtr windowHandle = FindTargetWindow(normalizedProcessName);
         await RestoreAndActivateTargetWindowAsync(windowHandle, normalizedProcessName, options.CaptureDelayMs, cancellationToken);
 
+        return CaptureWindow(windowHandle, normalizedProcessName, options);
+    }
+
+    public IGameWindowCaptureSession CreateSession(WindowCaptureOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        EnsureDpiAwareness();
+        options.Validate();
+        return new WindowsGameWindowCaptureSession(this, options);
+    }
+
+    private string CaptureWindow(IntPtr windowHandle, string normalizedProcessName, WindowCaptureOptions options)
+    {
         WindowRect windowRect = GetCaptureBounds(windowHandle, normalizedProcessName);
         int windowWidth = windowRect.Width;
         int windowHeight = windowRect.Height;
@@ -60,7 +73,7 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture
             throw new WindowCaptureException($"Capture region {region} does not fit within window size {windowWidth}x{windowHeight}.", exception);
         }
 
-        string outputPath = options.GetOutputPath();
+        string outputPath = options.GetCaptureOutputPath();
         string? outputDirectory = Path.GetDirectoryName(outputPath);
         if (string.IsNullOrWhiteSpace(outputDirectory))
         {
@@ -77,7 +90,11 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture
         }
 
         CaptureScreenRegion(windowRect.Left + region.X, windowRect.Top + region.Y, region.Width, region.Height, outputPath);
-        _log.WriteLine($"Debug screenshot saved: {outputPath}");
+        if (options.SaveDebugImage)
+        {
+            _log.WriteLine($"Debug screenshot saved: {outputPath}");
+        }
+
         return outputPath;
     }
 
@@ -85,7 +102,7 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture
     {
         try
         {
-            // Win32/DWM 返回物理像素坐标，先设置 DPI awareness 以避免缩放偏移。
+            // Win32/DWM bounds are physical pixels; set DPI awareness before reading them.
             SetProcessDpiAwarenessContext(DpiAwarenessContextPerMonitorAwareV2);
         }
         catch (EntryPointNotFoundException)
@@ -152,6 +169,11 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture
         }
 
         return processWithWindow.MainWindowHandle;
+    }
+
+    private static bool IsWindowHandleValid(IntPtr windowHandle)
+    {
+        return windowHandle != IntPtr.Zero && IsWindow(windowHandle);
     }
 
     private static bool HasMainWindow(Process process)
@@ -283,6 +305,9 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture
     [DllImport("user32.dll")]
     private static extern bool IsIconic(IntPtr hWnd);
 
+    [DllImport("user32.dll")]
+    private static extern bool IsWindow(IntPtr hWnd);
+
     [DllImport("gdi32.dll", SetLastError = true)]
     private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
 
@@ -332,6 +357,127 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture
             {
                 process.Dispose();
             }
+        }
+    }
+
+    private sealed class WindowsGameWindowCaptureSession : IGameWindowCaptureSession
+    {
+        private readonly WindowsGameWindowCapture _owner;
+        private readonly WindowCaptureOptions _options;
+        private readonly string _normalizedProcessName;
+        private IntPtr _windowHandle;
+        private bool _disposed;
+
+        public WindowsGameWindowCaptureSession(WindowsGameWindowCapture owner, WindowCaptureOptions options)
+        {
+            _owner = owner;
+            _options = new WindowCaptureOptions
+            {
+                TargetProcessName = options.TargetProcessName,
+                CaptureRegion = options.CaptureRegion,
+                OutputDirectory = options.OutputDirectory,
+                OutputFileName = options.OutputFileName,
+                CaptureDelayMs = options.CaptureDelayMs,
+                SaveDebugImage = options.SaveDebugImage
+            };
+            _normalizedProcessName = WindowCaptureOptions.NormalizeProcessName(_options.TargetProcessName);
+            _owner._log.WriteLine($"Live capture session initialized for process: {_normalizedProcessName}");
+        }
+
+        public async Task InitializeAsync(CancellationToken cancellationToken)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (!IsWindowHandleValid(_windowHandle))
+            {
+                await ReacquireAsync("initializing live capture session", cancellationToken);
+            }
+        }
+
+        public async Task<string> CaptureAsync(CancellationToken cancellationToken)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return await CaptureCoreAsync(null, cancellationToken);
+        }
+
+        public async Task<WindowCaptureFrameInfo> GetFrameInfoAsync(CancellationToken cancellationToken)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await EnsureReadyAsync(cancellationToken);
+            WindowRect bounds = GetCaptureBounds(_windowHandle, _normalizedProcessName);
+            return new WindowCaptureFrameInfo(bounds.Width, bounds.Height);
+        }
+
+        public async Task<string> CaptureRegionAsync(CaptureRegion region, CancellationToken cancellationToken)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return await CaptureCoreAsync(region, cancellationToken);
+        }
+
+        private async Task<string> CaptureCoreAsync(CaptureRegion? region, CancellationToken cancellationToken)
+        {
+            await EnsureReadyAsync(cancellationToken);
+
+            try
+            {
+                return _owner.CaptureWindow(_windowHandle, _normalizedProcessName, CreateCaptureOptions(region));
+            }
+            catch (WindowCaptureException exception)
+            {
+                await ReacquireAsync(exception.Message, cancellationToken);
+                return _owner.CaptureWindow(_windowHandle, _normalizedProcessName, CreateCaptureOptions(region));
+            }
+        }
+
+        private async Task EnsureReadyAsync(CancellationToken cancellationToken)
+        {
+            if (!IsWindowHandleValid(_windowHandle))
+            {
+                await ReacquireAsync("no cached target window is available", cancellationToken);
+            }
+            else if (IsIconic(_windowHandle))
+            {
+                await ReacquireAsync("cached target window is minimized", cancellationToken);
+            }
+            else
+            {
+                _owner._log.WriteLine("Reusing target window handle.");
+            }
+        }
+
+        public void Dispose()
+        {
+            _disposed = true;
+        }
+
+        private WindowCaptureOptions CreateCaptureOptions(CaptureRegion? region)
+        {
+            return new WindowCaptureOptions
+            {
+                TargetProcessName = _options.TargetProcessName,
+                CaptureRegion = region ?? _options.CaptureRegion,
+                OutputDirectory = _options.OutputDirectory,
+                OutputFileName = _options.OutputFileName,
+                CaptureDelayMs = _options.CaptureDelayMs,
+                SaveDebugImage = _options.SaveDebugImage
+            };
+        }
+
+        private async Task ReacquireAsync(string reason, CancellationToken cancellationToken)
+        {
+            _owner._log.WriteLine($"Reacquiring target window because {reason}.");
+            _owner._log.WriteLine($"Looking for target window from process '{_normalizedProcessName}'.");
+            _windowHandle = FindTargetWindow(_normalizedProcessName);
+            await _owner.RestoreAndActivateTargetWindowAsync(
+                _windowHandle,
+                _normalizedProcessName,
+                _options.CaptureDelayMs,
+                cancellationToken);
         }
     }
 }

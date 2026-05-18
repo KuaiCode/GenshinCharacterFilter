@@ -47,6 +47,58 @@ public sealed class DetectionStabilityGateTests
     }
 
     [Fact]
+    public void Observe_WeakMatchAfterStableMatchedDoesNotRestore()
+    {
+        DetectionStabilityGate gate = CreateGate(matchThreshold: 1, missThreshold: 1);
+        gate.Observe(Matched("Clorinde"));
+
+        DetectionStabilityResult result = gate.Observe(WeakMatched("Clorinde", "\u5492\u6D1B\u7433\u5FB7"));
+
+        Assert.True(result.StableState.Matched);
+        Assert.Equal("Clorinde", result.StableState.MatchedSpeaker);
+        Assert.False(result.StableStateChanged);
+        Assert.Equal(0, result.ConsecutiveMissCount);
+    }
+
+    [Fact]
+    public void Observe_UnknownMissAfterStableMatchedDoesNotImmediatelyRestore()
+    {
+        DetectionStabilityGate gate = CreateGate(matchThreshold: 1, missThreshold: 1);
+        gate.Observe(Matched("Clorinde"));
+
+        DetectionStabilityResult result = gate.Observe(UnknownMiss());
+
+        Assert.True(result.StableState.Matched);
+        Assert.Equal("Clorinde", result.StableState.MatchedSpeaker);
+        Assert.False(result.StableStateChanged);
+        Assert.Equal(1, result.ConsecutiveMissCount);
+    }
+
+    [Fact]
+    public void Observe_StrongMissAfterStableMatchedCanRestoreWithMissThresholdOne()
+    {
+        DetectionStabilityGate gate = CreateGate(matchThreshold: 1, missThreshold: 1);
+        gate.Observe(Matched("Clorinde"));
+
+        DetectionStabilityResult result = gate.Observe(NotMatched("\u91CD\u4E91"));
+
+        Assert.False(result.StableState.Matched);
+        Assert.True(result.StableStateChanged);
+    }
+
+    [Fact]
+    public void Observe_WeakMatchDoesNotTriggerNewStableMatched()
+    {
+        DetectionStabilityGate gate = CreateGate(matchThreshold: 1, missThreshold: 1);
+
+        DetectionStabilityResult result = gate.Observe(WeakMatched("Clorinde", "\u5492\u6D1B\u7433\u5FB7"));
+
+        Assert.False(result.StableState.Matched);
+        Assert.False(result.StableStateChanged);
+        Assert.Equal(0, result.ConsecutiveMatchCount);
+    }
+
+    [Fact]
     public void Observe_RepeatedMissesWhileAlreadyNotMatchedDoNotEmitStateChanged()
     {
         DetectionStabilityGate gate = CreateGate(matchThreshold: 2, missThreshold: 2);
@@ -133,8 +185,18 @@ public sealed class DetectionStabilityGateTests
         return new SpeakerMatchResult(true, speaker, speaker, speaker);
     }
 
-    private static SpeakerMatchResult NotMatched()
+    private static SpeakerMatchResult WeakMatched(string speaker, string rawText)
     {
-        return new SpeakerMatchResult(false, null, "unknown", "unknown");
+        return new SpeakerMatchResult(true, speaker, rawText, rawText, SpeakerMatchKind.Weak);
+    }
+
+    private static SpeakerMatchResult UnknownMiss()
+    {
+        return new SpeakerMatchResult(false, null, string.Empty, string.Empty, SpeakerMatchKind.Unknown);
+    }
+
+    private static SpeakerMatchResult NotMatched(string rawText = "unknown")
+    {
+        return new SpeakerMatchResult(false, null, rawText, rawText);
     }
 }

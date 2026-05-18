@@ -15,10 +15,11 @@ public sealed class DetectionDryRunOptionsTests
         Assert.Null(options.OcrInputPath);
         Assert.Null(options.TargetProcessName);
         Assert.Empty(options.TargetSpeakers);
+        Assert.False(options.SaveDebugImages);
     }
 
     [Theory]
-    [InlineData(100)]
+    [InlineData(50)]
     [InlineData(500)]
     [InlineData(10000)]
     public void ValidateLoopIntervalMs_AcceptsAllowedRange(int intervalMs)
@@ -27,7 +28,7 @@ public sealed class DetectionDryRunOptionsTests
     }
 
     [Theory]
-    [InlineData(99)]
+    [InlineData(49)]
     [InlineData(10001)]
     public void ValidateLoopIntervalMs_RejectsOutOfRangeValues(int intervalMs)
     {

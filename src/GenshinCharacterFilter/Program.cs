@@ -340,6 +340,7 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
             LoopCount = settings.Detection.LoopCount,
             CaptureOutputDirectory = commandLineOptions.CaptureOutputDirectory,
             CaptureDelayMs = commandLineOptions.CaptureDelayMs,
+            SaveDebugImages = settings.Detection.SaveDebugImages,
             Stability = new DetectionStabilityOptions
             {
                 MatchThreshold = settings.Detection.MatchThreshold,
@@ -351,6 +352,7 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
         Console.WriteLine($"Loop count: {(dryRunOptions.LoopCount?.ToString() ?? "until Ctrl+C")}");
         Console.WriteLine($"Match threshold: {dryRunOptions.Stability.MatchThreshold}");
         Console.WriteLine($"Miss threshold: {dryRunOptions.Stability.MissThreshold}");
+        Console.WriteLine($"Save debug images: {dryRunOptions.SaveDebugImages}");
 
         DetectionAudioCoordinator? audioCoordinator = null;
         string audioActionLabel = "Simulated audio action";
@@ -453,6 +455,7 @@ static void PrintSpeakerMatchResult(SpeakerMatchResult result)
     Console.WriteLine(result.RawText);
     Console.WriteLine($"Normalized text: {result.NormalizedText}");
     Console.WriteLine($"Matched: {result.Matched}");
+    Console.WriteLine($"Match kind: {result.MatchKind}");
     Console.WriteLine($"Matched speaker: {result.MatchedSpeaker ?? "(none)"}");
 }
 

@@ -70,8 +70,9 @@ public sealed class WindowsOcrRegionCalibrator
         {
             try
             {
+                TrySetHighDpiMode();
                 Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
+                TrySetCompatibleTextRenderingDefault();
                 using Bitmap uiBitmap = new(screenshot);
                 using CalibrationSelectionForm form = new(uiBitmap);
                 DialogResult result = form.ShowDialog();
@@ -96,5 +97,29 @@ public sealed class WindowsOcrRegionCalibrator
         }
 
         return selectedRegion;
+    }
+
+    private static void TrySetHighDpiMode()
+    {
+        try
+        {
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+        }
+        catch (InvalidOperationException)
+        {
+            // GUI may have already initialized DPI mode; reuse the current process setting.
+        }
+    }
+
+    private static void TrySetCompatibleTextRenderingDefault()
+    {
+        try
+        {
+            Application.SetCompatibleTextRenderingDefault(false);
+        }
+        catch (InvalidOperationException)
+        {
+            // The main GUI may have created controls already; keep the existing process setting.
+        }
     }
 }

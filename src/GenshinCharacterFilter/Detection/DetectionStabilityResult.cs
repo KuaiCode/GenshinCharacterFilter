@@ -1,3 +1,5 @@
+using GenshinCharacterFilter.Speakers;
+
 namespace GenshinCharacterFilter.Detection;
 
 /// <summary>
@@ -10,4 +12,5 @@ public sealed record DetectionStabilityResult(
     DetectionStableState PreviousStableState,
     bool StableStateChanged,
     int ConsecutiveMatchCount,
-    int ConsecutiveMissCount);
+    int ConsecutiveMissCount,
+    SpeakerMatchKind RawMatchKind = SpeakerMatchKind.None);

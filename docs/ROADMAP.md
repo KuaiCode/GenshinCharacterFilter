@@ -13,6 +13,14 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - requiring valid config/preflight, valid OCR region source, and target process before real audio starts;
 - reusing the existing guarded real audio path and safety rules;
 - driving GUI real audio only from stable detection state, not raw match state;
+- using live target-process capture by default for GUI detection loops;
+- keeping fixed-image detection as an explicit dry-run/simulated debug option only;
+- letting GUI detection loops run until Stop by default, with an optional fixed loop count for short tests;
+- adding GUI-only tuning for loop interval, capture delay, match threshold, and miss threshold without writing config files;
+- disabling realtime loop debug image writes by default, with a Save debug images option for troubleshooting;
+- preferring region-only capture for realtime live detection when an OCR region source is configured;
+- preserving the main GUI window size around OCR region calibration;
+- hardening WinForms DPI/autoscale behavior so calibration does not shrink the main panel;
 - sharing Stop with existing long-running operations and attempting restore on Stop/Close;
 - preserving existing simulated detection audio GUI behavior;
 - preserving existing CLI behavior;

@@ -42,6 +42,11 @@ public sealed class OcrOptions
     public OcrRegion? OcrRegion { get; set; }
 
     /// <summary>
+    /// Gets or sets whether cropped OCR input should also be saved to the stable debug path.
+    /// </summary>
+    public bool SaveDebugImage { get; set; } = true;
+
+    /// <summary>
     /// Validates options before invoking OCR.
     /// </summary>
     public void Validate()

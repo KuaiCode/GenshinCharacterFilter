@@ -94,6 +94,8 @@ public sealed class GuiCommandService
     public async Task RunDetectionLoopAsync(
         string? configPath,
         string? ocrInputPath,
+        bool useFixedImageForDetection,
+        GuiDetectionTuningOptions tuningOptions,
         bool simulateAudio,
         TextWriter log,
         CancellationToken cancellationToken)
@@ -104,21 +106,27 @@ public sealed class GuiCommandService
             arguments.Add("--simulate-audio-from-detection");
         }
 
-        if (!string.IsNullOrWhiteSpace(ocrInputPath))
+        string? detectionOcrInputPath = ResolveDetectionLoopOcrInputPath(ocrInputPath, useFixedImageForDetection);
+        if (!string.IsNullOrWhiteSpace(detectionOcrInputPath))
         {
             arguments.Add("--ocr-input");
-            arguments.Add(ocrInputPath.Trim());
+            arguments.Add(detectionOcrInputPath);
         }
 
         AppCommandLineOptions options = BuildOptions(configPath, [.. arguments]);
         AppSettings settings = LoadMergedSettings(options);
+        ApplyGuiDetectionTuningOverrides(settings, tuningOptions);
         EnsurePreflightPassed(settings, options);
 
         log.WriteLine(simulateAudio
             ? "Simulated detection audio mode; this run does not control real system audio."
             : "OCR-driven detection dry-run mode; this run does not control real system audio.");
+        log.WriteLine(detectionOcrInputPath is null
+            ? $"Live capture from process: {settings.TargetProcessName}"
+            : $"Fixed OCR input image: {detectionOcrInputPath}");
 
-        DetectionDryRunOptions dryRunOptions = BuildDryRunOptions(settings, options);
+        DetectionDryRunOptions dryRunOptions = BuildDryRunOptions(settings, options, tuningOptions);
+        WriteDetectionTuning(dryRunOptions, tuningOptions, log);
         DetectionAudioCoordinator? audioCoordinator = simulateAudio
             ? new DetectionAudioCoordinator(new LoggingAudioMuteService(log, settings.AudioFilter), settings.AudioFilter)
             : null;
@@ -137,21 +145,26 @@ public sealed class GuiCommandService
 
     public async Task RunGuardedRealAudioDetectionAsync(
         string? configPath,
-        string? ocrInputPath,
+        bool useFixedImageForDetection,
+        GuiDetectionTuningOptions tuningOptions,
         TextWriter log,
         CancellationToken cancellationToken)
     {
-        AppCommandLineOptions options = BuildGuardedRealAudioOptions(configPath, ocrInputPath);
+        EnsureGuardedRealAudioAllowsDetectionInput(useFixedImageForDetection);
+        AppCommandLineOptions options = BuildGuardedRealAudioOptions(configPath);
         AppSettings settings = LoadMergedSettings(options);
+        ApplyGuiDetectionTuningOverrides(settings, tuningOptions);
         EnsurePreflightPassed(settings, options);
 
         log.WriteLine("REAL audio detection mode enabled from GUI after explicit confirmation.");
         log.WriteLine($"Target process: {settings.TargetProcessName}");
+        log.WriteLine($"Live capture from process: {settings.TargetProcessName}");
         log.WriteLine($"Audio mode: {settings.AudioFilter.Mode}");
         log.WriteLine($"Volume percent: {settings.AudioFilter.VolumePercent}");
         log.WriteLine("Stable detection, not raw OCR match, drives real audio actions.");
 
-        DetectionDryRunOptions dryRunOptions = BuildDryRunOptions(settings, options);
+        DetectionDryRunOptions dryRunOptions = BuildDryRunOptions(settings, options, tuningOptions);
+        WriteDetectionTuning(dryRunOptions, tuningOptions, log);
         DetectionAudioCoordinator audioCoordinator = new(
             new WindowsAudioMuteService(settings.TargetProcessName, log, settings.AudioFilter),
             settings.AudioFilter);
@@ -168,17 +181,16 @@ public sealed class GuiCommandService
         await loop.RunAsync(dryRunOptions, cancellationToken);
     }
 
-    public GuardedRealAudioStatus GetGuardedRealAudioStatus(string? configPath, string? ocrInputPath)
+    public GuardedRealAudioStatus GetGuardedRealAudioStatus(string? configPath)
     {
         try
         {
-            AppCommandLineOptions options = BuildGuardedRealAudioOptions(configPath, ocrInputPath);
+            AppCommandLineOptions options = BuildGuardedRealAudioOptions(configPath);
             AppSettings settings = LoadMergedSettings(options);
             RuntimePreflightResult preflightResult = new AppPreflightValidator().Validate(settings, options);
             List<string> issues = preflightResult.Issues
                 .Select(issue => $"{issue.Category}: {issue.Message}")
                 .ToList();
-            ValidateResolvableOcrRegionForStatus(settings, options, issues);
             return new GuardedRealAudioStatus(
                 settings.TargetProcessName,
                 settings.AudioFilter.Mode.ToString(),
@@ -215,6 +227,58 @@ public sealed class GuiCommandService
     public static string GetDefaultOcrInputPath()
     {
         return Path.Combine("debug-captures", "capture-latest.png");
+    }
+
+    public static string? ResolveDetectionLoopOcrInputPath(string? ocrInputPath, bool useFixedImageForDetection)
+    {
+        if (!useFixedImageForDetection)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(ocrInputPath))
+        {
+            throw new ArgumentException("OCR input image path is required when fixed-image detection mode is enabled.");
+        }
+
+        return ocrInputPath.Trim();
+    }
+
+    public static void EnsureGuardedRealAudioAllowsDetectionInput(bool useFixedImageForDetection)
+    {
+        if (useFixedImageForDetection)
+        {
+            throw new InvalidOperationException(
+                "Guarded real audio does not allow fixed-image detection. Disable fixed-image detection to use live capture.");
+        }
+    }
+
+    public static void ApplyGuiDetectionTuningOverrides(AppSettings settings, GuiDetectionTuningOptions tuningOptions)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(tuningOptions);
+
+        settings.Detection.LoopCount = tuningOptions.RunUntilStop
+            ? null
+            : tuningOptions.LoopCount ?? settings.Detection.LoopCount;
+
+        if (tuningOptions.LoopIntervalMs is not null)
+        {
+            settings.Detection.LoopIntervalMs = tuningOptions.LoopIntervalMs.Value;
+        }
+
+        if (tuningOptions.MatchThreshold is not null)
+        {
+            settings.Detection.MatchThreshold = tuningOptions.MatchThreshold.Value;
+        }
+
+        if (tuningOptions.MissThreshold is not null)
+        {
+            settings.Detection.MissThreshold = tuningOptions.MissThreshold.Value;
+        }
+
+        settings.Detection.SaveDebugImages = tuningOptions.SaveDebugImages;
+        settings.Validate();
     }
 
     private AppSettings LoadSettings(string? configPath)
@@ -258,7 +322,7 @@ public sealed class GuiCommandService
         return AppCommandLineOptions.Parse([.. parsedArguments]);
     }
 
-    private static AppCommandLineOptions BuildGuardedRealAudioOptions(string? configPath, string? ocrInputPath)
+    private static AppCommandLineOptions BuildGuardedRealAudioOptions(string? configPath)
     {
         List<string> arguments =
         [
@@ -267,36 +331,7 @@ public sealed class GuiCommandService
             "--allow-real-audio-from-detection"
         ];
 
-        if (!string.IsNullOrWhiteSpace(ocrInputPath))
-        {
-            arguments.Add("--ocr-input");
-            arguments.Add(ocrInputPath.Trim());
-        }
-
         return BuildOptions(configPath, [.. arguments]);
-    }
-
-    private static void ValidateResolvableOcrRegionForStatus(
-        AppSettings settings,
-        AppCommandLineOptions options,
-        List<string> issues)
-    {
-        if (string.IsNullOrWhiteSpace(options.OcrInputPath) ||
-            !File.Exists(options.OcrInputPath))
-        {
-            return;
-        }
-
-        try
-        {
-            new OcrRegionSourceResolver().ResolveForImage(
-                settings.Ocr.GetOcrRegionSourceOptions(),
-                options.OcrInputPath);
-        }
-        catch (OcrRegionSourceException exception)
-        {
-            issues.Add($"OCR preflight error: {exception.Message}");
-        }
     }
 
     private static void EnsurePreflightPassed(AppSettings settings, AppCommandLineOptions options)
@@ -362,7 +397,10 @@ public sealed class GuiCommandService
         return await new TesseractCliOcrService().ExtractTextAsync(preparedOptions, cancellationToken);
     }
 
-    private static DetectionDryRunOptions BuildDryRunOptions(AppSettings settings, AppCommandLineOptions options)
+    private static DetectionDryRunOptions BuildDryRunOptions(
+        AppSettings settings,
+        AppCommandLineOptions options,
+        GuiDetectionTuningOptions? tuningOptions = null)
     {
         return new DetectionDryRunOptions
         {
@@ -379,13 +417,32 @@ public sealed class GuiCommandService
             LoopIntervalMs = settings.Detection.LoopIntervalMs,
             LoopCount = settings.Detection.LoopCount,
             CaptureOutputDirectory = options.CaptureOutputDirectory,
-            CaptureDelayMs = options.CaptureDelayMs,
+            CaptureDelayMs = ResolveGuiCaptureDelayMs(options.CaptureDelayMs, tuningOptions),
+            SaveDebugImages = settings.Detection.SaveDebugImages,
             Stability = new DetectionStabilityOptions
             {
                 MatchThreshold = settings.Detection.MatchThreshold,
                 MissThreshold = settings.Detection.MissThreshold
             }
         };
+    }
+
+    private static void WriteDetectionTuning(
+        DetectionDryRunOptions dryRunOptions,
+        GuiDetectionTuningOptions tuningOptions,
+        TextWriter log)
+    {
+        log.WriteLine($"Loop count: {tuningOptions.FormatLoopCount(dryRunOptions.LoopCount)}");
+        log.WriteLine($"Loop interval ms: {dryRunOptions.LoopIntervalMs}");
+        log.WriteLine($"Capture delay ms: {dryRunOptions.CaptureDelayMs}");
+        log.WriteLine($"Match threshold: {dryRunOptions.Stability.MatchThreshold}");
+        log.WriteLine($"Miss threshold: {dryRunOptions.Stability.MissThreshold}");
+        log.WriteLine($"Save debug images: {dryRunOptions.SaveDebugImages}");
+    }
+
+    public static int ResolveGuiCaptureDelayMs(int baseCaptureDelayMs, GuiDetectionTuningOptions? tuningOptions)
+    {
+        return tuningOptions?.CaptureDelayMs ?? baseCaptureDelayMs;
     }
 
     private static void WritePreflightIssues(RuntimePreflightResult preflightResult, TextWriter log)

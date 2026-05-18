@@ -39,6 +39,31 @@ public sealed class OcrInputPreparerTests
     }
 
     [Fact]
+    public void PrepareInput_WithRegionAndDebugDisabledWritesCroppedTempImage()
+    {
+        using TempImage input = TempImage.Create(20, 10);
+        OcrOptions options = new()
+        {
+            InputImagePath = input.Path,
+            OcrRegion = new OcrRegion(2, 3, 5, 4),
+            SaveDebugImage = false
+        };
+
+        string preparedPath = new OcrInputPreparer().PrepareInput(options);
+
+        Assert.StartsWith(OcrInputPreparer.GetTempOcrInputDirectory(), preparedPath, StringComparison.OrdinalIgnoreCase);
+        Assert.False(preparedPath.EndsWith(Path.Combine("debug-ocr", "ocr-input-latest.png"), StringComparison.OrdinalIgnoreCase));
+        Assert.True(File.Exists(preparedPath));
+        using (Image croppedImage = Image.FromFile(preparedPath))
+        {
+            Assert.Equal(5, croppedImage.Width);
+            Assert.Equal(4, croppedImage.Height);
+        }
+
+        File.Delete(preparedPath);
+    }
+
+    [Fact]
     public void PrepareInput_WithDebugOutputAsInputThrowsClearError()
     {
         string debugDirectory = Path.GetFullPath(OcrInputPreparer.DefaultDebugOutputDirectory);
