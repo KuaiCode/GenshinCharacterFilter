@@ -20,9 +20,9 @@ The agent should prioritize:
 
 ## Current milestone
 
-The current milestone is **v0.16 GUI Guarded Real Audio Page**.
+The current milestone is **v0.17 GUI Layout Refresh**.
 
-The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, **v0.5 Speaker Detection from OCR Text Prototype**, **v0.6 OCR-driven Detection Dry Run**, **v0.7 Detection Stability Gate**, **v0.8 Simulated Audio Integration**, **v0.9 Guarded Real Audio Integration**, **v0.9.1 Partial Audio Apply Restore Fix**, **v0.10 Manual OCR Region Calibration**, **v0.11 OCR Region Source Resolution**, **v0.12 Configuration Integration**, **v0.13 Usability Hardening**, **v0.14 Minimal WinForms Control Panel**, and **v0.15 GUI Hardening** are considered implemented and manually verified where applicable:
+The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, **v0.5 Speaker Detection from OCR Text Prototype**, **v0.6 OCR-driven Detection Dry Run**, **v0.7 Detection Stability Gate**, **v0.8 Simulated Audio Integration**, **v0.9 Guarded Real Audio Integration**, **v0.9.1 Partial Audio Apply Restore Fix**, **v0.10 Manual OCR Region Calibration**, **v0.11 OCR Region Source Resolution**, **v0.12 Configuration Integration**, **v0.13 Usability Hardening**, **v0.14 Minimal WinForms Control Panel**, **v0.15 GUI Hardening**, and **v0.16 GUI Guarded Real Audio Page** are considered implemented and manually verified where applicable:
 
 - simulated speaker input works;
 - mute coordination works;
@@ -97,24 +97,37 @@ The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Windo
 - Stop logs `Stop requested` and `Operation cancelled`;
 - the GUI does not create `WindowsAudioMuteService` by default;
 - the GUI does not control real system audio by default;
+- GUI guarded real audio is available behind explicit checkbox and confirmation;
+- GUI guarded real audio reuses stable detection and existing guarded real audio paths;
+- fixed-image mode no longer drives detection loops by default;
+- guarded real audio rejects fixed-image mode;
+- GUI tuning parameters are available;
+- `SaveDebugImages` is disabled by default for live detection;
+- live detection can use region-only capture;
+- timing logs show capture latency has been reduced substantially, and Tesseract CLI OCR is now the main observed bottleneck;
 - real audio safety gates remain unchanged;
 - default target speakers are `流浪者` and `Wanderer`.
 
-Scope for v0.16:
+Scope for v0.17:
 
 - Console app remains supported.
 - GUI remains explicit via `--gui`.
-- Add a guarded real audio section, page, group box, or equivalent area in the WinForms UI.
-- Real audio GUI action must require an explicit checkbox.
-- Real audio GUI action must show a visible warning.
-- Real audio GUI action must require a confirmation dialog.
-- Real audio GUI action must require valid config and preflight checks.
-- Real audio GUI action must require a valid OCR region source.
-- Real audio GUI action must require a target process from config or UI.
-- GUI real audio must reuse existing guarded real audio paths and safety rules.
-- GUI real audio must use stable detection results, not raw match results.
-- Stop/Close must attempt restore if real audio action may have been applied.
+- Keep existing CLI behavior.
+- Refresh the WinForms GUI layout using container controls such as `TableLayoutPanel`, `SplitContainer`, `FlowLayoutPanel`, `GroupBox`, `Dock`, and `Anchor`.
+- Separate GUI sections clearly:
+  - Config;
+  - OCR;
+  - Detection;
+  - Simulated Audio;
+  - Guarded Real Audio Danger Zone;
+  - Logs.
+- Make Guarded Real Audio visually separated as a danger zone.
+- Improve high-DPI behavior.
+- Avoid clipped button text.
+- Keep logs readable and large enough.
+- Keep existing GUI functions working.
 - Existing simulated audio GUI mode must continue working.
+- Existing guarded real audio GUI mode must continue working behind explicit checkbox and confirmation.
 - Default GUI launch must not start real audio.
 - Keep CLI behavior working.
 - Default launch without `--gui` remains existing console behavior.
@@ -133,13 +146,16 @@ Scope for v0.16:
 - Existing v0.13 usability hardening behavior must remain stable.
 - Existing v0.14 minimal WinForms control panel behavior must remain stable.
 - Existing v0.15 GUI hardening behavior must remain stable.
+- Existing v0.16 GUI guarded real audio behavior must remain stable.
 - .NET 8.
 - Windows x64.
 - VS Code / Codex / Visual Studio friendly workflow.
 
 Out of scope for the current milestone:
 
-- Full GUI redesign.
+- GUI config editor.
+- Saving edited config.
+- Full GUI redesign beyond a focused WinForms layout refresh.
 - New major features.
 - Real audio enabled by default.
 - Bypassing `--real-audio` / `--allow-real-audio-from-detection` semantics conceptually.
@@ -153,7 +169,7 @@ Out of scope for the current milestone:
 - ONNX.
 - OpenCV.
 - Automatic real audio without existing guarded real-audio flags.
-- New feature work outside the guarded real audio GUI page.
+- New feature work outside the GUI layout refresh.
 - Gameplay automation.
 - Keyboard/mouse automation.
 - Input automation.
@@ -167,7 +183,12 @@ Done when:
 - If tests exist, `dotnet test` passes.
 - Default launch without `--gui` keeps existing console behavior.
 - `--gui` still launches the minimal WinForms control panel.
-- The GUI includes a guarded real audio section, page, group box, or equivalent area.
+- The GUI layout is organized with WinForms container controls instead of an ad hoc crowded panel.
+- Config, OCR, Detection, Simulated Audio, Guarded Real Audio Danger Zone, and Logs are visually separated.
+- Guarded Real Audio remains visually separated as a danger zone.
+- High-DPI behavior is improved.
+- Button text is not clipped at typical Windows scaling settings.
+- Logs remain readable and have sufficient space.
 - Guarded real audio cannot start without an explicit checkbox, visible warning, and confirmation dialog.
 - Guarded real audio cannot start without valid config/preflight, a valid OCR region source, and a target process from config or UI.
 - GUI real audio uses existing guarded real audio paths and safety rules.
@@ -194,7 +215,7 @@ Do not implement later roadmap phases until this milestone works.
 - Target OS: Windows
 - Target architecture: Windows x64
 - Initial app type: console app
-- Minimal GUI option for current milestone: add a guarded real audio section to the existing WinForms control panel launched explicitly with `--gui`
+- Minimal GUI option for current milestone: refresh the existing WinForms control panel layout launched explicitly with `--gui`
 - Later GUI options: WPF or WinUI only if explicitly requested in a future milestone
 - Audio control: NAudio or Windows Core Audio APIs
 - Configuration: local JSON using .NET built-in JSON support unless a stronger reason is documented
@@ -204,7 +225,7 @@ Do not implement later roadmap phases until this milestone works.
 
 Do not assume administrator privileges unless explicitly required and explained.
 
-Do not introduce a full GUI application, overlay, gameplay automation, OCR model, image-processing dependency, or model-inference dependency during the v0.16 GUI Guarded Real Audio Page milestone. Minimal WinForms remains allowed only as a thin local control panel. Avoid OpenCV and ONNX for this milestone.
+Do not introduce a full GUI application, GUI config editor, overlay, gameplay automation, OCR model, image-processing dependency, or model-inference dependency during the v0.17 GUI Layout Refresh milestone. Minimal WinForms remains allowed only as a thin local control panel. Avoid OpenCV and ONNX for this milestone.
 
 ## Tooling workflow
 
@@ -264,8 +285,9 @@ Follow this order unless the user explicitly changes the roadmap:
 15. Minimal WinForms control panel.
 16. GUI hardening.
 17. GUI guarded real audio page.
-18. Stable mute/unmute coordination with debounce and recovery.
-19. Optional masking.
+18. GUI layout refresh.
+19. Stable mute/unmute coordination with debounce and recovery.
+20. Optional masking.
 
 Do not implement later-phase functionality prematurely.
 
@@ -300,31 +322,28 @@ Use these module boundaries unless the user asks for a different design:
 - `GuiRunState` or equivalent: represents UI state such as Idle, Running, Stopping, and Error if useful.
 - `GuiRealAudioConfirmationState` or equivalent: represents UI confirmation and enablement state for guarded real audio if useful.
 - Guarded real audio UI command/service: lets the GUI reuse existing guarded real audio paths without duplicating detection or audio logic.
+- WinForms layout container structure: keeps Config, OCR, Detection, Simulated Audio, Guarded Real Audio Danger Zone, and Logs organized without duplicating core behavior.
 
-For v0.16, expected work is limited to:
+For v0.17, expected work is limited to:
 
-- adding a guarded real audio section, page, group box, or equivalent UI area
-- adding an explicit enable-real-audio checkbox
-- showing clear real audio warning text before guarded real audio can start
-- requiring a confirmation dialog before guarded real audio can start
-- requiring valid config/preflight, a valid OCR region source, and target process before guarded real audio can start
-- reusing existing guarded real audio paths and safety rules
-- driving real audio only from stable detection results, not raw matches
-- logging real audio mode, target process, audio mode, volume percent, stable state, and action
-- sharing Stop with existing long-running operations
-- attempting restore on Stop/Close if real audio may have been applied
+- reorganizing `MainForm` layout with WinForms container controls
+- separating Config, OCR, Detection, Simulated Audio, Guarded Real Audio Danger Zone, and Logs
+- making the guarded real audio area visually distinct as a danger zone
+- improving high-DPI behavior and reducing clipped controls
+- keeping logs readable and large enough for operational diagnostics
 - keeping GUI code as a thin wrapper over shared services or a command/application layer
 - preserving CLI behavior and existing command-line tests
 - preserving config and CLI merge behavior
 - preserving guarded real audio safety gates
 - preserving existing simulated audio GUI mode
+- preserving existing guarded real audio GUI mode
 - adding tests for UI-independent command/application logic where practical
 
-Do not create a full GUI redesign, enable real audio by default, create new calibration UI behavior beyond launching the existing calibration flow, detect regions automatically, fabricate preset coordinates, or weaken existing real-audio guard flags during v0.16.
+Do not create a GUI config editor, save edited config, enable real audio by default, create new calibration UI behavior beyond launching the existing calibration flow, detect regions automatically, fabricate preset coordinates, or weaken existing real-audio guard flags during v0.17.
 
 ## OCR region source rules
 
-For v0.16 GUI guarded real audio page, preserve these rules:
+For v0.17 GUI layout refresh, preserve these rules:
 
 - OCR region source priority:
   1. `--ocr-region` absolute pixels.
@@ -347,7 +366,7 @@ For v0.16 GUI guarded real audio page, preserve these rules:
 
 ## Speaker matching rules
 
-For v0.16 GUI guarded real audio page, preserve these rules:
+For v0.17 GUI layout refresh, preserve these rules:
 
 - Trim whitespace.
 - Handle newlines around text.
@@ -406,10 +425,13 @@ Required behavior:
 - Mute/reduce should be idempotent: repeated target detections while already filtered should not spam the audio API or repeatedly reduce volume.
 - Shutdown, cancellation, and unexpected exceptions should attempt safe restore.
 
-For v0.16:
+For v0.17:
 
 - The GUI must not duplicate mute, OCR, detection, calibration, or audio logic.
 - The GUI must call shared services or a thin command/application layer.
+- `MainForm` may be reorganized for layout, but core services and command paths must remain outside UI event handlers.
+- Use WinForms container controls and anchoring/docking for layout stability.
+- Keep Guarded Real Audio visually separated as a danger zone.
 - The GUI must not create `WindowsAudioMuteService` until the user explicitly starts guarded real audio.
 - The GUI must not start guarded real audio without an explicit checkbox, visible warning, and confirmation dialog.
 - The GUI must not control real audio by default.
@@ -443,6 +465,7 @@ For v0.16:
 - Existing v0.13 usability hardening behavior must remain stable.
 - Existing v0.14 minimal WinForms control panel behavior must remain stable.
 - Existing v0.15 GUI hardening behavior must remain stable.
+- Existing v0.16 GUI guarded real audio behavior must remain stable.
 - Do not add fuzzy matching yet.
 
 ## Safety rules
@@ -465,10 +488,11 @@ For v0.16:
 
 Store user configuration in a local JSON file unless the project already uses another configuration format.
 
-For v0.16:
+For v0.17:
 
 - Local JSON configuration is implemented and should now cover common OCR, detection loop, stability threshold, audio filter, and OCR region source defaults.
 - The minimal WinForms control panel may select and validate config files, but it must not become a persistent settings editor.
+- The GUI layout refresh must not add config editing or saving behavior.
 - Do not store sensitive information.
 - Do not include credentials, cookies, tokens, or game login data.
 - Do not make network requests for configuration.
@@ -511,7 +535,7 @@ Suggested `Detection` fields:
 - `MatchThreshold`
 - `MissThreshold`
 
-v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10/v0.11/v0.12/v0.13/v0.14/v0.15/v0.16 OCR, speaker debug, dry-run, stability-gate, simulated audio, guarded real audio, calibration, region source, configuration integration, usability hardening, minimal control panel, GUI hardening, and GUI guarded real audio behavior may include:
+v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10/v0.11/v0.12/v0.13/v0.14/v0.15/v0.16/v0.17 OCR, speaker debug, dry-run, stability-gate, simulated audio, guarded real audio, calibration, region source, configuration integration, usability hardening, minimal control panel, GUI hardening, GUI guarded real audio, and GUI layout refresh behavior may include:
 
 - OCR input image path or explicit capture input, only if needed for explicit commands;
 - OCR region;
@@ -530,6 +554,7 @@ v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10/v0.11/v0.12/v0.13/v0.14/v0.15/v0.16 OCR, spe
 - minimal UI state needed to start, stop, and display explicit commands, only if it does not duplicate core logic.
 - GUI run-state and button-state preferences needed for reliable local control panel behavior.
 - GUI guarded real audio confirmation state needed to prevent accidental real audio activation.
+- GUI layout container preferences needed to keep the WinForms control panel readable and extensible.
 
 Long-term configuration may later include:
 
@@ -608,13 +633,14 @@ Do not add heavy OCR, image-processing, model-inference, overlay, or UI dependen
 
 Do not replace the project framework or UI stack without explicit approval.
 
-For v0.16:
+For v0.17:
 
 - Use built-in .NET JSON support where practical.
 - Existing NAudio dependency for real Windows audio control may remain.
-- Do not add new dependencies for v0.16 unless strongly justified.
+- Do not add new dependencies for v0.17 unless strongly justified.
 - Existing minimal WinForms-based calibration window may remain.
-- Minimal WinForms may be used for the control panel because the project already targets Windows desktop APIs.
+- Minimal WinForms remains the control panel UI because the project already targets Windows desktop APIs.
+- Use built-in WinForms layout containers instead of external UI dependencies.
 - Do not add external GUI dependencies.
 - Prefer an OCR provider abstraction so the engine can be replaced later.
 - Do not add heavy OCR or model dependencies without explaining why.
@@ -659,21 +685,21 @@ Use fake implementations for:
 - `IGameWindowCapture`
 - `IOcrService`
 
-For v0.16, prioritize tests for:
+For v0.17, prioritize tests for:
 
 - existing CLI tests continuing to pass;
 - parsing `--gui` without changing default console behavior;
-- pure confirmation and guarded-real-audio UI state logic if extracted;
-- guarded real audio start eligibility requiring explicit checkbox, valid preflight, valid OCR region source, and target process where testable without UI interaction;
-- confirmation flow logic if it is separated from actual WinForms dialogs;
+- pure layout/state helper logic if extracted;
+- guarded real audio start eligibility and confirmation behavior continuing to pass;
 - existing simulated detection audio GUI behavior continuing to work;
+- existing guarded real audio GUI behavior continuing to work;
 - CLI/core real audio safety behavior remaining unchanged;
 - stop/close restore orchestration using fake audio services only;
 - no automated test instantiating real `WindowsAudioMuteService` for system audio control;
 - no test requiring manual UI clicks;
 - no test controlling real audio, requiring real Tesseract, or requiring a real game window.
 
-Manual verification for v0.16 must be explicit and local. Default GUI launch must not run real audio. Guarded real audio manual verification may only be done intentionally with explicit UI confirmation and must preserve restore behavior.
+Manual verification for v0.17 must be explicit and local. Default GUI launch must not run real audio. Guarded real audio manual verification may only be done intentionally with explicit UI confirmation and must preserve restore behavior.
 
 Existing v0.5 speaker matching tests should continue covering:
 
@@ -723,9 +749,9 @@ For early prototypes:
   4. restore audio;
   5. log state changes.
 
-The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, v0.6 OCR-driven detection dry-run, v0.7 detection stability gate, v0.8 simulated audio integration, v0.9 guarded real audio integration, v0.10 manual OCR region calibration, v0.11 OCR region source resolution, v0.12 configuration integration, v0.13 usability hardening, v0.14 minimal WinForms control panel, and v0.15 GUI hardening are implemented; v0.16 should preserve them while adding guarded real audio UI behind explicit confirmation.
+The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, v0.6 OCR-driven detection dry-run, v0.7 detection stability gate, v0.8 simulated audio integration, v0.9 guarded real audio integration, v0.10 manual OCR region calibration, v0.11 OCR region source resolution, v0.12 configuration integration, v0.13 usability hardening, v0.14 minimal WinForms control panel, v0.15 GUI hardening, and v0.16 GUI guarded real audio page are implemented; v0.17 should preserve them while refreshing the WinForms GUI layout.
 
-Do not add masking, a full GUI application, persistent settings UI, GUI settings editor, model inference, speaker recognition from image, automatic region detection, fabricated preset coordinates, default real audio behavior, unguarded `WindowsAudioMuteService` integration, or gameplay automation during v0.16.
+Do not add masking, a full GUI application, persistent settings UI, GUI settings editor, config editing/saving, model inference, speaker recognition from image, automatic region detection, fabricated preset coordinates, default real audio behavior, unguarded `WindowsAudioMuteService` integration, or gameplay automation during v0.17.
 
 Do not optimize prematurely.
 
@@ -823,7 +849,7 @@ For meaningful behavior changes, update `README.md` or relevant docs.
 
 For important architectural choices, update `docs/DECISIONS.md`.
 
-For v0.16 implementation tasks, `README.md` should document the GUI guarded real audio safety flow, and `docs/DECISIONS.md` should record that v0.16 exposes real audio in the GUI only behind explicit confirmation and existing safety gates.
+For v0.17 implementation tasks, `README.md` should document the refreshed GUI structure, and `docs/DECISIONS.md` should record why v0.17 focuses on layout before adding a GUI config editor.
 
 Do not add excessive documentation for trivial changes.
 
