@@ -20,7 +20,7 @@ The agent should prioritize:
 
 ## Current milestone
 
-The current milestone is **v0.17 GUI Layout Refresh**.
+The current milestone is **v0.17 WPF Modern GUI Shell**.
 
 The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, **v0.5 Speaker Detection from OCR Text Prototype**, **v0.6 OCR-driven Detection Dry Run**, **v0.7 Detection Stability Gate**, **v0.8 Simulated Audio Integration**, **v0.9 Guarded Real Audio Integration**, **v0.9.1 Partial Audio Apply Restore Fix**, **v0.10 Manual OCR Region Calibration**, **v0.11 OCR Region Source Resolution**, **v0.12 Configuration Integration**, **v0.13 Usability Hardening**, **v0.14 Minimal WinForms Control Panel**, **v0.15 GUI Hardening**, and **v0.16 GUI Guarded Real Audio Page** are considered implemented and manually verified where applicable:
 
@@ -113,17 +113,27 @@ Scope for v0.17:
 - Console app remains supported.
 - GUI remains explicit via `--gui`.
 - Keep existing CLI behavior.
-- Refresh the WinForms GUI layout using container controls such as `TableLayoutPanel`, `SplitContainer`, `FlowLayoutPanel`, `GroupBox`, `Dock`, and `Anchor`.
-- Separate GUI sections clearly:
-  - Config;
-  - OCR;
-  - Detection;
-  - Simulated Audio;
-  - Guarded Real Audio Danger Zone;
-  - Logs.
-- Make Guarded Real Audio visually separated as a danger zone.
-- Improve high-DPI behavior.
-- Avoid clipped button text.
+- Add a WPF GUI shell while keeping existing core services.
+- Existing WinForms calibration selector may remain if migrating it is too large for the milestone.
+- Existing WinForms `MainForm` can remain temporarily as fallback, but new `--gui` should launch the modern WPF shell if implemented.
+- Use WindowsDesktop/WPF support already available in the .NET desktop stack.
+- Build a BetterGI-inspired local tool interface:
+  - left navigation;
+  - top status bar;
+  - card-style content panels;
+  - dedicated Logs page or large log panel;
+  - visually separated Guarded Real Audio Danger Zone;
+  - dark/light theme adaptation;
+  - optional translucent, Mica-like, or Acrylic-like top-level window effect if feasible without new dependencies.
+- Detect the current Windows app theme or system theme at startup.
+- Provide light and dark theme palettes.
+- Apply theme colors consistently to window background, navigation, cards, buttons, text boxes, log panel, and danger zone.
+- Avoid unreadable dark text on dark backgrounds or light text on light backgrounds.
+- Live theme switching while the app is open is optional for v0.17; startup detection is sufficient.
+- Do not use raw default WinForms-looking controls for the main shell.
+- Use clear spacing, hierarchy, and modern button styles.
+- Avoid clipped text at high DPI.
+- Keep the window scaling reasonably.
 - Keep logs readable and large enough.
 - Keep existing GUI functions working.
 - Existing simulated audio GUI mode must continue working.
@@ -155,21 +165,20 @@ Out of scope for the current milestone:
 
 - GUI config editor.
 - Saving edited config.
-- Full GUI redesign beyond a focused WinForms layout refresh.
+- New OCR backend.
+- New feature work outside the modern GUI shell.
 - New major features.
 - Real audio enabled by default.
 - Bypassing `--real-audio` / `--allow-real-audio-from-detection` semantics conceptually.
 - New calibration UI features.
 - Automatic region detection.
 - Fabricated preset coordinates.
-- WPF.
 - WinUI.
 - Overlay masking.
 - Face detection.
 - ONNX.
 - OpenCV.
 - Automatic real audio without existing guarded real-audio flags.
-- New feature work outside the GUI layout refresh.
 - Gameplay automation.
 - Keyboard/mouse automation.
 - Input automation.
@@ -182,13 +191,15 @@ Done when:
 - `dotnet build` passes.
 - If tests exist, `dotnet test` passes.
 - Default launch without `--gui` keeps existing console behavior.
-- `--gui` still launches the minimal WinForms control panel.
-- The GUI layout is organized with WinForms container controls instead of an ad hoc crowded panel.
-- Config, OCR, Detection, Simulated Audio, Guarded Real Audio Danger Zone, and Logs are visually separated.
-- Guarded Real Audio remains visually separated as a danger zone.
-- High-DPI behavior is improved.
-- Button text is not clipped at typical Windows scaling settings.
-- Logs remain readable and have sufficient space.
+- `--gui` launches the modern WPF shell if implemented.
+- Existing WinForms control panel may remain only as temporary fallback.
+- The WPF shell keeps Validate Config, Print Effective Config, Calibrate OCR Region, Test OCR Once, Start Dry-run Detection, Start Simulated Detection Audio, Start Guarded Real Audio, and Stop accessible.
+- The WPF shell has left navigation, top status, card-style content panels, and a readable logs page or large log panel.
+- Guarded Real Audio is visually separated as a danger zone.
+- Light and dark theme palettes are applied consistently.
+- Startup theme detection uses the current Windows app or system theme where practical.
+- High-DPI behavior is improved and text is not clipped.
+- Logs remain readable, large enough, and copyable.
 - Guarded real audio cannot start without an explicit checkbox, visible warning, and confirmation dialog.
 - Guarded real audio cannot start without valid config/preflight, a valid OCR region source, and a target process from config or UI.
 - GUI real audio uses existing guarded real audio paths and safety rules.
@@ -203,7 +214,7 @@ Done when:
 - Tests cover UI-independent command/application services where practical.
 - Default run remains safe and does not control real system audio.
 - No new dependencies are introduced.
-- No WPF, WinUI, OpenCV, ONNX, masking, overlay, gameplay automation, game memory access, hooking, or injection is introduced.
+- No third-party UI dependencies, WinUI, OpenCV, ONNX, masking, overlay, gameplay automation, game memory access, hooking, or injection are introduced.
 - The final response reports changed files, verification commands, assumptions, and limitations.
 
 Do not implement later roadmap phases until this milestone works.
@@ -215,8 +226,9 @@ Do not implement later roadmap phases until this milestone works.
 - Target OS: Windows
 - Target architecture: Windows x64
 - Initial app type: console app
-- Minimal GUI option for current milestone: refresh the existing WinForms control panel layout launched explicitly with `--gui`
-- Later GUI options: WPF or WinUI only if explicitly requested in a future milestone
+- GUI option for current milestone: modern WPF shell launched explicitly with `--gui`
+- WinForms may remain for the existing calibration selector or temporary fallback only.
+- Later GUI options: WinUI only if explicitly requested in a future milestone
 - Audio control: NAudio or Windows Core Audio APIs
 - Configuration: local JSON using .NET built-in JSON support unless a stronger reason is documented
 - Image processing later: TBD
@@ -225,7 +237,7 @@ Do not implement later roadmap phases until this milestone works.
 
 Do not assume administrator privileges unless explicitly required and explained.
 
-Do not introduce a full GUI application, GUI config editor, overlay, gameplay automation, OCR model, image-processing dependency, or model-inference dependency during the v0.17 GUI Layout Refresh milestone. Minimal WinForms remains allowed only as a thin local control panel. Avoid OpenCV and ONNX for this milestone.
+Do not introduce a GUI config editor, config saving, overlay, gameplay automation, OCR model, image-processing dependency, or model-inference dependency during the v0.17 WPF Modern GUI Shell milestone. WPF is allowed only as a thin shell over existing services. Avoid OpenCV, ONNX, WinUI, and third-party UI dependencies for this milestone.
 
 ## Tooling workflow
 
@@ -245,7 +257,8 @@ Use this division of responsibility:
 - Visual Studio:
   - debugging;
   - breakpoint inspection;
-  - WPF / WinUI work later;
+  - WPF GUI diagnostics;
+  - WinUI work later if explicitly requested;
   - NuGet inspection;
   - Windows-specific diagnostics;
   - audio API / COM debugging;
@@ -285,7 +298,7 @@ Follow this order unless the user explicitly changes the roadmap:
 15. Minimal WinForms control panel.
 16. GUI hardening.
 17. GUI guarded real audio page.
-18. GUI layout refresh.
+18. WPF modern GUI shell.
 19. Stable mute/unmute coordination with debounce and recovery.
 20. Optional masking.
 
@@ -316,20 +329,24 @@ Use these module boundaries unless the user asks for a different design:
 - `OcrRegionPreset` / `OcrRegionPresetRegistry`: represent supported preset names and real calibration-backed preset data.
 - `OcrSettings` or equivalent: stores OCR provider, Tesseract, language, page segmentation, and OCR region source defaults.
 - `DetectionSettings` or equivalent: stores loop timing and stability threshold defaults.
-- `Gui/MainForm` or equivalent: hosts the minimal WinForms control panel.
+- `Gui/MainForm`, WPF shell, or equivalent: hosts the explicit GUI control panel.
 - `UiLogSink` or equivalent: forwards logs and command output to the UI.
 - A thin application or command service: lets the UI call existing config, OCR, detection, calibration, and audio flows without duplicating logic in the form.
 - `GuiRunState` or equivalent: represents UI state such as Idle, Running, Stopping, and Error if useful.
 - `GuiRealAudioConfirmationState` or equivalent: represents UI confirmation and enablement state for guarded real audio if useful.
 - Guarded real audio UI command/service: lets the GUI reuse existing guarded real audio paths without duplicating detection or audio logic.
-- WinForms layout container structure: keeps Config, OCR, Detection, Simulated Audio, Guarded Real Audio Danger Zone, and Logs organized without duplicating core behavior.
+- WPF modern shell: presents the existing config, OCR, detection, simulated audio, guarded real audio, and logging flows without duplicating core behavior.
+- Theme service or equivalent: detects startup light/dark theme and applies readable palettes if needed.
 
 For v0.17, expected work is limited to:
 
-- reorganizing `MainForm` layout with WinForms container controls
-- separating Config, OCR, Detection, Simulated Audio, Guarded Real Audio Danger Zone, and Logs
-- making the guarded real audio area visually distinct as a danger zone
-- improving high-DPI behavior and reducing clipped controls
+- adding a WPF GUI shell launched by `--gui`
+- using existing core services and `GuiCommandService` or an equivalent shared application service
+- keeping existing WinForms calibration selector if migration is too large
+- allowing the existing WinForms `MainForm` to remain temporarily as fallback, while the implemented `--gui` path should prefer the modern WPF shell
+- building a BetterGI-inspired tool interface with left navigation, top status, cards, logs, and a guarded real audio danger zone
+- adding light/dark theme palettes and startup theme detection
+- optionally adding a translucent, Mica-like, or Acrylic-like top-level effect if feasible without new dependencies
 - keeping logs readable and large enough for operational diagnostics
 - keeping GUI code as a thin wrapper over shared services or a command/application layer
 - preserving CLI behavior and existing command-line tests
@@ -339,11 +356,11 @@ For v0.17, expected work is limited to:
 - preserving existing guarded real audio GUI mode
 - adding tests for UI-independent command/application logic where practical
 
-Do not create a GUI config editor, save edited config, enable real audio by default, create new calibration UI behavior beyond launching the existing calibration flow, detect regions automatically, fabricate preset coordinates, or weaken existing real-audio guard flags during v0.17.
+Do not create a GUI config editor, save edited config, add a new OCR backend, enable real audio by default, create new calibration UI behavior beyond launching the existing calibration flow, detect regions automatically, fabricate preset coordinates, or weaken existing real-audio guard flags during v0.17.
 
 ## OCR region source rules
 
-For v0.17 GUI layout refresh, preserve these rules:
+For v0.17 WPF modern GUI shell, preserve these rules:
 
 - OCR region source priority:
   1. `--ocr-region` absolute pixels.
@@ -366,7 +383,7 @@ For v0.17 GUI layout refresh, preserve these rules:
 
 ## Speaker matching rules
 
-For v0.17 GUI layout refresh, preserve these rules:
+For v0.17 WPF modern GUI shell, preserve these rules:
 
 - Trim whitespace.
 - Handle newlines around text.
@@ -429,8 +446,10 @@ For v0.17:
 
 - The GUI must not duplicate mute, OCR, detection, calibration, or audio logic.
 - The GUI must call shared services or a thin command/application layer.
-- `MainForm` may be reorganized for layout, but core services and command paths must remain outside UI event handlers.
-- Use WinForms container controls and anchoring/docking for layout stability.
+- WPF code-behind must remain UI orchestration only; core services and command paths must remain outside UI event handlers.
+- The WPF shell should call `GuiCommandService` or an equivalent shared application service.
+- WPF styles, resources, and view models may be introduced when they keep UI state readable and testable.
+- Theme resources must maintain readable text/background contrast in light and dark modes.
 - Keep Guarded Real Audio visually separated as a danger zone.
 - The GUI must not create `WindowsAudioMuteService` until the user explicitly starts guarded real audio.
 - The GUI must not start guarded real audio without an explicit checkbox, visible warning, and confirmation dialog.
@@ -491,8 +510,8 @@ Store user configuration in a local JSON file unless the project already uses an
 For v0.17:
 
 - Local JSON configuration is implemented and should now cover common OCR, detection loop, stability threshold, audio filter, and OCR region source defaults.
-- The minimal WinForms control panel may select and validate config files, but it must not become a persistent settings editor.
-- The GUI layout refresh must not add config editing or saving behavior.
+- The modern WPF shell may select and validate config files, but it must not become a persistent settings editor.
+- The WPF shell milestone must not add config editing or saving behavior.
 - Do not store sensitive information.
 - Do not include credentials, cookies, tokens, or game login data.
 - Do not make network requests for configuration.
@@ -535,7 +554,7 @@ Suggested `Detection` fields:
 - `MatchThreshold`
 - `MissThreshold`
 
-v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10/v0.11/v0.12/v0.13/v0.14/v0.15/v0.16/v0.17 OCR, speaker debug, dry-run, stability-gate, simulated audio, guarded real audio, calibration, region source, configuration integration, usability hardening, minimal control panel, GUI hardening, GUI guarded real audio, and GUI layout refresh behavior may include:
+v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10/v0.11/v0.12/v0.13/v0.14/v0.15/v0.16/v0.17 OCR, speaker debug, dry-run, stability-gate, simulated audio, guarded real audio, calibration, region source, configuration integration, usability hardening, minimal control panel, GUI hardening, GUI guarded real audio, and WPF modern shell behavior may include:
 
 - OCR input image path or explicit capture input, only if needed for explicit commands;
 - OCR region;
@@ -554,7 +573,7 @@ v0.4/v0.5/v0.6/v0.7/v0.8/v0.9/v0.10/v0.11/v0.12/v0.13/v0.14/v0.15/v0.16/v0.17 OC
 - minimal UI state needed to start, stop, and display explicit commands, only if it does not duplicate core logic.
 - GUI run-state and button-state preferences needed for reliable local control panel behavior.
 - GUI guarded real audio confirmation state needed to prevent accidental real audio activation.
-- GUI layout container preferences needed to keep the WinForms control panel readable and extensible.
+- WPF shell theme and navigation state needed to keep the modern control panel readable and extensible.
 
 Long-term configuration may later include:
 
@@ -639,8 +658,9 @@ For v0.17:
 - Existing NAudio dependency for real Windows audio control may remain.
 - Do not add new dependencies for v0.17 unless strongly justified.
 - Existing minimal WinForms-based calibration window may remain.
-- Minimal WinForms remains the control panel UI because the project already targets Windows desktop APIs.
-- Use built-in WinForms layout containers instead of external UI dependencies.
+- WPF may be used for the modern GUI shell because the project already targets Windows desktop APIs.
+- Existing WinForms code may remain as calibration selector or fallback while WPF shell is introduced.
+- Use built-in WPF styling, templates, resources, and Windows APIs where practical instead of external UI dependencies.
 - Do not add external GUI dependencies.
 - Prefer an OCR provider abstraction so the engine can be replaced later.
 - Do not add heavy OCR or model dependencies without explaining why.
@@ -649,7 +669,8 @@ For v0.17:
 - Do not send screenshots to cloud OCR services.
 - Do not add OpenCV.
 - Do not add ONNX Runtime.
-- Do not add WPF or WinUI dependencies.
+- Do not add third-party WPF control libraries.
+- Do not add WinUI dependencies.
 - Do not add global hotkey libraries.
 - Do not add configuration frameworks unless strongly justified.
 - Do not add logging frameworks unless explicitly requested.
@@ -689,7 +710,7 @@ For v0.17, prioritize tests for:
 
 - existing CLI tests continuing to pass;
 - parsing `--gui` without changing default console behavior;
-- pure layout/state helper logic if extracted;
+- pure theme, layout, view-model, or navigation helper logic if extracted;
 - guarded real audio start eligibility and confirmation behavior continuing to pass;
 - existing simulated detection audio GUI behavior continuing to work;
 - existing guarded real audio GUI behavior continuing to work;
@@ -699,7 +720,7 @@ For v0.17, prioritize tests for:
 - no test requiring manual UI clicks;
 - no test controlling real audio, requiring real Tesseract, or requiring a real game window.
 
-Manual verification for v0.17 must be explicit and local. Default GUI launch must not run real audio. Guarded real audio manual verification may only be done intentionally with explicit UI confirmation and must preserve restore behavior.
+Manual verification for v0.17 must be explicit and local. Default GUI launch must not run real audio. Guarded real audio manual verification may only be done intentionally with explicit UI confirmation and must preserve restore behavior. Visual verification should include light/dark readability, high-DPI text clipping, logs readability, and danger-zone separation.
 
 Existing v0.5 speaker matching tests should continue covering:
 
@@ -749,9 +770,9 @@ For early prototypes:
   4. restore audio;
   5. log state changes.
 
-The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, v0.6 OCR-driven detection dry-run, v0.7 detection stability gate, v0.8 simulated audio integration, v0.9 guarded real audio integration, v0.10 manual OCR region calibration, v0.11 OCR region source resolution, v0.12 configuration integration, v0.13 usability hardening, v0.14 minimal WinForms control panel, v0.15 GUI hardening, and v0.16 GUI guarded real audio page are implemented; v0.17 should preserve them while refreshing the WinForms GUI layout.
+The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, v0.6 OCR-driven detection dry-run, v0.7 detection stability gate, v0.8 simulated audio integration, v0.9 guarded real audio integration, v0.10 manual OCR region calibration, v0.11 OCR region source resolution, v0.12 configuration integration, v0.13 usability hardening, v0.14 minimal WinForms control panel, v0.15 GUI hardening, and v0.16 GUI guarded real audio page are implemented; v0.17 should preserve them while introducing a modern WPF GUI shell.
 
-Do not add masking, a full GUI application, persistent settings UI, GUI settings editor, config editing/saving, model inference, speaker recognition from image, automatic region detection, fabricated preset coordinates, default real audio behavior, unguarded `WindowsAudioMuteService` integration, or gameplay automation during v0.17.
+Do not add masking, persistent settings UI, GUI settings editor, config editing/saving, new OCR backend, model inference, speaker recognition from image, automatic region detection, fabricated preset coordinates, default real audio behavior, unguarded `WindowsAudioMuteService` integration, or gameplay automation during v0.17.
 
 Do not optimize prematurely.
 
@@ -849,7 +870,7 @@ For meaningful behavior changes, update `README.md` or relevant docs.
 
 For important architectural choices, update `docs/DECISIONS.md`.
 
-For v0.17 implementation tasks, `README.md` should document the refreshed GUI structure, and `docs/DECISIONS.md` should record why v0.17 focuses on layout before adding a GUI config editor.
+For v0.17 implementation tasks, `README.md` should document the modern WPF GUI shell, and `docs/DECISIONS.md` should record why WPF was introduced after WinForms visual limitations.
 
 Do not add excessive documentation for trivial changes.
 
