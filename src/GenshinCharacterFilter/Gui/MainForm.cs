@@ -61,8 +61,8 @@ public sealed class MainForm : Form
         Text = "GenshinCharacterFilter";
         AutoScaleMode = AutoScaleMode.None;
         AutoSize = false;
-        MinimumSize = new Size(1100, 700);
-        Size = new Size(1120, 760);
+        MinimumSize = new Size(1180, 760);
+        Size = new Size(1280, 820);
         StartPosition = FormStartPosition.CenterScreen;
 
         BuildLayout(initialConfigPath);
@@ -75,42 +75,14 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 8,
+            RowCount = 2,
             Padding = new Padding(12)
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        root.Controls.Add(BuildPathRow(
-            "Config file",
-            _configPathTextBox,
-            _browseConfigButton,
-            string.IsNullOrWhiteSpace(initialConfigPath) ? GuiCommandService.GetDefaultConfigPath() : initialConfigPath,
-            BrowseConfigFile), 0, 0);
-        root.Controls.Add(BuildPathRow(
-            "OCR input image",
-            _ocrInputPathTextBox,
-            _browseOcrInputButton,
-            GuiCommandService.GetDefaultOcrInputPath(),
-            BrowseOcrInputImage), 0, 1);
-        root.Controls.Add(BuildDetectionInputRow(), 0, 2);
-        root.Controls.Add(BuildDetectionTuningRow(), 0, 3);
-        root.Controls.Add(BuildStatusRow(), 0, 4);
-        root.Controls.Add(BuildButtonPanel(), 0, 5);
-        root.Controls.Add(BuildGuardedRealAudioPanel(), 0, 6);
-
-        _logTextBox.Dock = DockStyle.Fill;
-        _logTextBox.Multiline = true;
-        _logTextBox.ReadOnly = true;
-        _logTextBox.ScrollBars = ScrollBars.Vertical;
-        _logTextBox.Font = new Font(FontFamily.GenericMonospace, 9);
-        root.Controls.Add(_logTextBox, 0, 7);
+        root.Controls.Add(BuildHeaderPanel(), 0, 0);
+        root.Controls.Add(BuildMainSplitPanel(initialConfigPath), 0, 1);
 
         Controls.Add(root);
         _configPathTextBox.TextChanged += (_, _) => RefreshGuardedRealAudioStatus();
@@ -118,6 +90,195 @@ public sealed class MainForm : Form
         _useFixedImageForDetectionCheckBox.CheckedChanged += (_, _) => RefreshGuardedRealAudioStatus();
         ApplyUiState(_stateController.Current);
         RefreshGuardedRealAudioStatus();
+    }
+
+    private Control BuildHeaderPanel()
+    {
+        TableLayoutPanel panel = new()
+        {
+            Dock = DockStyle.Top,
+            ColumnCount = 5,
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 10)
+        };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        Label titleLabel = new()
+        {
+            Text = "GenshinCharacterFilter",
+            AutoSize = true,
+            Font = new Font(Font, FontStyle.Bold),
+            Margin = new Padding(0, 5, 16, 0)
+        };
+
+        Label statusLabel = new()
+        {
+            Text = "Status",
+            AutoSize = true,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Margin = new Padding(0, 6, 8, 0)
+        };
+
+        _statusValueLabel.AutoSize = true;
+        _statusValueLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _statusValueLabel.Margin = new Padding(0, 6, 16, 0);
+
+        _stopButton.Text = "Stop";
+        _stopButton.AutoSize = false;
+        _stopButton.Width = 140;
+        _stopButton.Height = 34;
+        _stopButton.Enabled = false;
+        _stopButton.Margin = new Padding(8, 0, 0, 0);
+        _stopButton.Click += (_, _) => CancelCurrentOperation();
+
+        panel.Controls.Add(titleLabel, 0, 0);
+        panel.Controls.Add(new Label
+        {
+            Text = "Explicit local control panel. Real audio remains disabled until guarded confirmation.",
+            AutoSize = true,
+            ForeColor = SystemColors.GrayText,
+            Margin = new Padding(0, 7, 0, 0)
+        }, 1, 0);
+        panel.Controls.Add(statusLabel, 2, 0);
+        panel.Controls.Add(_statusValueLabel, 3, 0);
+        panel.Controls.Add(_stopButton, 4, 0);
+        return panel;
+    }
+
+    private Control BuildMainSplitPanel(string? initialConfigPath)
+    {
+        SplitContainer splitContainer = new()
+        {
+            Dock = DockStyle.Fill,
+            FixedPanel = FixedPanel.Panel1,
+            IsSplitterFixed = false,
+            Orientation = Orientation.Vertical,
+            SplitterDistance = 520,
+            SplitterWidth = 8
+        };
+
+        splitContainer.Panel1.Controls.Add(BuildControlTabs(initialConfigPath));
+        splitContainer.Panel2.Controls.Add(BuildLogPanel());
+        return splitContainer;
+    }
+
+    private Control BuildControlTabs(string? initialConfigPath)
+    {
+        TabControl tabs = new()
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Point(16, 6)
+        };
+
+        tabs.TabPages.Add(CreateTabPage("Config", BuildConfigGroup(initialConfigPath)));
+        tabs.TabPages.Add(CreateTabPage("OCR", BuildOcrGroup()));
+        tabs.TabPages.Add(CreateTabPage("Detection", BuildDetectionGroup()));
+        tabs.TabPages.Add(CreateTabPage("Audio", BuildAudioGroup()));
+        return tabs;
+    }
+
+    private static TabPage CreateTabPage(string title, Control content)
+    {
+        TabPage tabPage = new(title)
+        {
+            Padding = new Padding(10)
+        };
+        tabPage.Controls.Add(content);
+        return tabPage;
+    }
+
+    private static TableLayoutPanel CreateStackPanel()
+    {
+        return new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 0,
+            GrowStyle = TableLayoutPanelGrowStyle.AddRows,
+            AutoScroll = true
+        };
+    }
+
+    private Control BuildConfigGroup(string? initialConfigPath)
+    {
+        TableLayoutPanel stack = CreateStackPanel();
+        stack.Controls.Add(BuildPathRow(
+            "Config file",
+            _configPathTextBox,
+            _browseConfigButton,
+            string.IsNullOrWhiteSpace(initialConfigPath) ? GuiCommandService.GetDefaultConfigPath() : initialConfigPath,
+            BrowseConfigFile), 0, 0);
+        stack.Controls.Add(BuildConfigActions(), 0, 1);
+
+        GroupBox groupBox = CreateGroupBox("Config", stack);
+        return groupBox;
+    }
+
+    private Control BuildOcrGroup()
+    {
+        TableLayoutPanel stack = CreateStackPanel();
+        stack.Controls.Add(BuildPathRow(
+            "OCR input image",
+            _ocrInputPathTextBox,
+            _browseOcrInputButton,
+            GuiCommandService.GetDefaultOcrInputPath(),
+            BrowseOcrInputImage), 0, 0);
+        stack.Controls.Add(BuildDetectionInputRow(), 0, 1);
+        stack.Controls.Add(BuildOcrOptionsRow(), 0, 2);
+        stack.Controls.Add(BuildOcrActions(), 0, 3);
+
+        return CreateGroupBox("OCR", stack);
+    }
+
+    private Control BuildDetectionGroup()
+    {
+        TableLayoutPanel stack = CreateStackPanel();
+        stack.Controls.Add(BuildDetectionTuningRow(), 0, 0);
+        stack.Controls.Add(BuildDetectionActions(), 0, 1);
+        return CreateGroupBox("Detection", stack);
+    }
+
+    private Control BuildAudioGroup()
+    {
+        TableLayoutPanel stack = CreateStackPanel();
+        stack.Controls.Add(BuildSimulatedAudioPanel(), 0, 0);
+        stack.Controls.Add(BuildGuardedRealAudioPanel(), 0, 1);
+        return stack;
+    }
+
+    private Control BuildLogPanel()
+    {
+        GroupBox groupBox = new()
+        {
+            Text = "Logs",
+            Dock = DockStyle.Fill,
+            Padding = new Padding(10)
+        };
+
+        _logTextBox.Dock = DockStyle.Fill;
+        _logTextBox.Multiline = true;
+        _logTextBox.ReadOnly = true;
+        _logTextBox.ScrollBars = ScrollBars.Both;
+        _logTextBox.WordWrap = false;
+        _logTextBox.Font = new Font(FontFamily.GenericMonospace, 9);
+        groupBox.Controls.Add(_logTextBox);
+        return groupBox;
+    }
+
+    private static GroupBox CreateGroupBox(string title, Control content)
+    {
+        GroupBox groupBox = new()
+        {
+            Text = title,
+            Dock = DockStyle.Fill,
+            Padding = new Padding(10)
+        };
+        groupBox.Controls.Add(content);
+        return groupBox;
     }
 
     private static Control BuildPathRow(
@@ -157,63 +318,61 @@ public sealed class MainForm : Form
         return panel;
     }
 
-    private Control BuildStatusRow()
+    private Control BuildConfigActions()
     {
-        TableLayoutPanel panel = new()
-        {
-            Dock = DockStyle.Top,
-            ColumnCount = 2,
-            AutoSize = true,
-            Margin = new Padding(0, 0, 0, 8)
-        };
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        Label statusLabel = new()
-        {
-            Text = "Status",
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-
-        _statusValueLabel.Dock = DockStyle.Fill;
-        _statusValueLabel.TextAlign = ContentAlignment.MiddleLeft;
-
-        panel.Controls.Add(statusLabel, 0, 0);
-        panel.Controls.Add(_statusValueLabel, 1, 0);
+        FlowLayoutPanel panel = CreateActionPanel();
+        ConfigureButton(_validateConfigButton, "Validate Config", async (_, _) => await RunOperationAsync(ValidateConfigAsync, cancellable: false));
+        ConfigureButton(_printEffectiveConfigButton, "Print Effective Config", async (_, _) => await RunOperationAsync(PrintEffectiveConfigAsync, cancellable: false));
+        panel.Controls.Add(_validateConfigButton);
+        panel.Controls.Add(_printEffectiveConfigButton);
         return panel;
     }
 
-    private Control BuildButtonPanel()
+    private Control BuildOcrActions()
     {
-        FlowLayoutPanel panel = new()
+        FlowLayoutPanel panel = CreateActionPanel();
+        ConfigureButton(_calibrateOcrRegionButton, "Calibrate OCR Region", async (_, _) => await RunOperationAsync(CalibrateOcrRegionAsync, cancellable: false));
+        ConfigureButton(_testOcrOnceButton, "Test OCR Once", async (_, _) => await RunOperationAsync(TestOcrOnceAsync, cancellable: true));
+        panel.Controls.Add(_calibrateOcrRegionButton);
+        panel.Controls.Add(_testOcrOnceButton);
+        return panel;
+    }
+
+    private Control BuildDetectionActions()
+    {
+        FlowLayoutPanel panel = CreateActionPanel();
+        ConfigureButton(_startDryRunButton, "Start Dry-run Detection", async (_, _) => await RunOperationAsync(StartDryRunDetectionAsync, cancellable: true));
+        panel.Controls.Add(_startDryRunButton);
+        return panel;
+    }
+
+    private Control BuildSimulatedAudioPanel()
+    {
+        GroupBox groupBox = new()
+        {
+            Text = "Simulated Audio",
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            Padding = new Padding(10),
+            Margin = new Padding(0, 0, 0, 12)
+        };
+
+        FlowLayoutPanel panel = CreateActionPanel();
+        ConfigureButton(_startSimulatedAudioButton, "Start Simulated Detection Audio", async (_, _) => await RunOperationAsync(StartSimulatedDetectionAudioAsync, cancellable: true));
+        panel.Controls.Add(_startSimulatedAudioButton);
+        groupBox.Controls.Add(panel);
+        return groupBox;
+    }
+
+    private static FlowLayoutPanel CreateActionPanel()
+    {
+        return new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
             WrapContents = true,
-            Margin = new Padding(0, 0, 0, 8)
+            Margin = new Padding(0, 8, 0, 0)
         };
-
-        ConfigureButton(_validateConfigButton, "Validate Config", async (_, _) => await RunOperationAsync(ValidateConfigAsync, cancellable: false));
-        ConfigureButton(_printEffectiveConfigButton, "Print Effective Config", async (_, _) => await RunOperationAsync(PrintEffectiveConfigAsync, cancellable: false));
-        ConfigureButton(_calibrateOcrRegionButton, "Calibrate OCR Region", async (_, _) => await RunOperationAsync(CalibrateOcrRegionAsync, cancellable: false));
-        ConfigureButton(_testOcrOnceButton, "Test OCR Once", async (_, _) => await RunOperationAsync(TestOcrOnceAsync, cancellable: true));
-        ConfigureButton(_startDryRunButton, "Start Dry-run Detection", async (_, _) => await RunOperationAsync(StartDryRunDetectionAsync, cancellable: true));
-        ConfigureButton(_startSimulatedAudioButton, "Start Simulated Detection Audio", async (_, _) => await RunOperationAsync(StartSimulatedDetectionAudioAsync, cancellable: true));
-
-        _stopButton.Text = "Stop";
-        _stopButton.Width = 130;
-        _stopButton.Enabled = false;
-        _stopButton.Click += (_, _) => CancelCurrentOperation();
-
-        panel.Controls.Add(_validateConfigButton);
-        panel.Controls.Add(_printEffectiveConfigButton);
-        panel.Controls.Add(_calibrateOcrRegionButton);
-        panel.Controls.Add(_testOcrOnceButton);
-        panel.Controls.Add(_startDryRunButton);
-        panel.Controls.Add(_startSimulatedAudioButton);
-        panel.Controls.Add(_stopButton);
-        return panel;
     }
 
     private Control BuildDetectionInputRow()
@@ -238,6 +397,34 @@ public sealed class MainForm : Form
             Margin = new Padding(0, 0, 0, 8)
         };
         panel.Controls.Add(_useFixedImageForDetectionCheckBox);
+        panel.Controls.Add(helpLabel);
+        return panel;
+    }
+
+    private Control BuildOcrOptionsRow()
+    {
+        FlowLayoutPanel panel = new()
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Margin = new Padding(0, 0, 0, 8)
+        };
+
+        _saveDebugImagesCheckBox.Text = "Save debug images";
+        _saveDebugImagesCheckBox.AutoSize = true;
+        _saveDebugImagesCheckBox.Checked = false;
+
+        Label helpLabel = new()
+        {
+            Text = "Save debug images writes per-iteration debug files and can slow realtime detection. Leave unchecked for live GUI runs.",
+            AutoSize = true,
+            MaximumSize = new Size(430, 0),
+            ForeColor = SystemColors.GrayText
+        };
+
+        panel.Controls.Add(_saveDebugImagesCheckBox);
         panel.Controls.Add(helpLabel);
         return panel;
     }
@@ -267,13 +454,10 @@ public sealed class MainForm : Form
         _captureDelayTextBox.Text = GuiDetectionTuningOptions.DefaultCaptureDelayMs.ToString();
         _matchThresholdTextBox.Text = GuiDetectionTuningOptions.DefaultMatchThreshold.ToString();
         _missThresholdTextBox.Text = GuiDetectionTuningOptions.DefaultMissThreshold.ToString();
-        _saveDebugImagesCheckBox.Text = "Save debug images";
-        _saveDebugImagesCheckBox.AutoSize = true;
-        _saveDebugImagesCheckBox.Checked = false;
 
         Label helpLabel = new()
         {
-            Text = "Runtime tuning below overrides config.local.json for this run only and is not saved. Run until Stop checked ignores config LoopCount. Save debug images writes per-iteration debug files and can slow realtime detection.",
+            Text = "Runtime tuning below overrides config.local.json for this run only and is not saved. Run until Stop checked ignores config LoopCount.",
             AutoSize = true,
             MaximumSize = new Size(980, 0)
         };
@@ -285,8 +469,6 @@ public sealed class MainForm : Form
         AddLabeledTuningTextBox(panel, "Capture delay ms", _captureDelayTextBox, 4, 1);
         AddLabeledTuningTextBox(panel, "Match threshold", _matchThresholdTextBox, 0, 2);
         AddLabeledTuningTextBox(panel, "Miss threshold", _missThresholdTextBox, 2, 2);
-        panel.Controls.Add(_saveDebugImagesCheckBox, 4, 2);
-        panel.SetColumnSpan(_saveDebugImagesCheckBox, 2);
         panel.Controls.Add(helpLabel, 0, 3);
         panel.SetColumnSpan(helpLabel, 8);
         return panel;
@@ -316,9 +498,11 @@ public sealed class MainForm : Form
     {
         GroupBox groupBox = new()
         {
-            Text = "Guarded Real Audio",
+            Text = "Guarded Real Audio Danger Zone",
             Dock = DockStyle.Top,
             AutoSize = true,
+            BackColor = Color.MistyRose,
+            ForeColor = Color.DarkRed,
             Padding = new Padding(10),
             Margin = new Padding(0, 0, 0, 8)
         };
@@ -327,7 +511,8 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            AutoSize = true
+            AutoSize = true,
+            BackColor = Color.MistyRose
         };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -337,7 +522,8 @@ public sealed class MainForm : Form
             Text = "Warning: guarded real audio controls target process audio only after explicit confirmation. Test reduce mode first; Stop/close will try to restore, but manual mixer recovery may still be needed.",
             AutoSize = true,
             MaximumSize = new Size(760, 0),
-            ForeColor = Color.DarkRed
+            ForeColor = Color.DarkRed,
+            Font = new Font(Font, FontStyle.Bold)
         };
 
         _enableGuardedRealAudioCheckBox.Text = "Enable guarded real audio";

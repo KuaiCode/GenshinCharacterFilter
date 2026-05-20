@@ -1,4 +1,5 @@
 using GenshinCharacterFilter;
+using GenshinCharacterFilter.Capture;
 using GenshinCharacterFilter.Gui;
 
 namespace GenshinCharacterFilter.Tests;
@@ -246,5 +247,53 @@ public sealed class GuiCommandServiceTests
         int captureDelayMs = GuiCommandService.ResolveGuiCaptureDelayMs(500, options);
 
         Assert.Equal(100, captureDelayMs);
+    }
+
+    [Fact]
+    public void ManualForegroundFallbackPolicy_PromptsForLiveDetectionMinimizedFailure()
+    {
+        WindowCaptureException exception = WindowCaptureException.TargetWindowMinimizedCannotRestore("YuanShen");
+
+        bool shouldPrompt = GuiManualForegroundFallbackPolicy.ShouldPromptForDetection(
+            exception,
+            useFixedImageForDetection: false);
+
+        Assert.True(shouldPrompt);
+    }
+
+    [Fact]
+    public void ManualForegroundFallbackPolicy_DoesNotPromptForFixedImageMode()
+    {
+        WindowCaptureException exception = WindowCaptureException.TargetWindowMinimizedCannotRestore("YuanShen");
+
+        bool shouldPrompt = GuiManualForegroundFallbackPolicy.ShouldPromptForDetection(
+            exception,
+            useFixedImageForDetection: true);
+
+        Assert.False(shouldPrompt);
+    }
+
+    [Fact]
+    public void ManualForegroundFallbackPolicy_DoesNotPromptForOtherFailures()
+    {
+        bool shouldPrompt = GuiManualForegroundFallbackPolicy.ShouldPromptForDetection(
+            new InvalidOperationException("config failed"),
+            useFixedImageForDetection: false);
+
+        Assert.False(shouldPrompt);
+    }
+
+    [Fact]
+    public void ManualForegroundFallbackFlow_DelaysRestoreUntilOperationCompletes()
+    {
+        Assert.False(GuiManualForegroundFallbackFlow.ShouldRestoreAfterSessionReady);
+        Assert.True(GuiManualForegroundFallbackFlow.ShouldRestoreAfterOperationCompleted);
+    }
+
+    [Fact]
+    public void ManualForegroundFallbackFlow_RestoresWhenStartupDoesNotContinue()
+    {
+        Assert.True(GuiManualForegroundFallbackFlow.ShouldRestoreAfterSessionFailure);
+        Assert.True(GuiManualForegroundFallbackFlow.ShouldRestoreAfterUserCancel);
     }
 }

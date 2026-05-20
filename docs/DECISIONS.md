@@ -321,3 +321,25 @@ Reasoning:
 - Stop/Close should reuse existing cancellation and restore paths if real audio may have been applied.
 - Default console and default GUI launch remain safe and do not control real system audio.
 - The behavior does not add new dependencies, WPF, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.
+
+## 2026-05-19: v0.17 WPF Modern GUI Shell
+
+Decision: introduce a modern WPF shell for `--gui` while keeping existing core services and CLI behavior unchanged.
+
+Reasoning:
+
+- The WinForms control panel proved the workflow but remained visually cramped and hard to evolve into a long-term desktop tool.
+- WPF is already available through the Windows desktop stack and gives the project a cleaner path for a BetterGI-inspired shell without third-party UI dependencies.
+- The shell separates Overview, Config, OCR, Detection, Audio, and Logs with left navigation, a top status bar, card-style panels, and a distinct Guarded Real Audio Danger Zone.
+- Light and dark palettes are loaded at startup from the Windows app theme, with an optional DWM backdrop hint used only as a cosmetic enhancement.
+- Existing `GuiCommandService` remains the bridge to config, OCR, calibration, detection, simulated audio, and guarded real audio flows, so business logic is not duplicated in WPF code-behind.
+- Guarded real audio remains visually separated as a danger zone and still requires explicit checkbox enablement, preflight, stable detection, and confirmation.
+- The existing WinForms OCR region calibration selector can remain because replacing it is outside this shell milestone.
+- Capture and calibration continue to use visible screen pixels, so the target window must be restored, visible, and uncovered. If automatic restore/activation fails, WPF calibration provides a manual foreground fallback: the WPF window is minimized, the user manually switches to the target window, and the app captures the current foreground window only after validating that its process matches the configured target.
+- The same manual foreground fallback is available for WPF live detection startup. Dry-run detection, simulated detection audio, and guarded real audio can initialize a live capture session from the validated foreground target window when automatic restore fails. After a foreground detection session starts, WPF stays minimized until the operation stops or fails so it does not immediately steal focus and cause the target to minimize again.
+- Foreground detection sessions use the validated foreground window handle directly and do not silently fall back to process-name restore/reacquire on the first frame. If that foreground handle later becomes invalid or minimized, detection reports a clear visible-pixel capture error instead of simulating focus changes or keyboard/mouse automation.
+- Successful calibration writes a local `debug-ocr/calibration-region-latest.png` preview cropped from the selected rectangle. This debug artifact is for diagnosing coordinate, scaling, and wrong-region problems when OCR output is empty after calibration.
+- The project still does not implement background window capture, DirectX capture, hooks, injection, input automation, simulated Alt+Tab, or game memory access.
+- This milestone intentionally does not add a GUI config editor or save edited configuration.
+- Real audio safety gates, CLI behavior, OCR/detection/audio services, and MuteCoordinator behavior are unchanged.
+- The behavior does not add third-party UI dependencies, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.

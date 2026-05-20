@@ -85,7 +85,28 @@ public sealed class DetectionDryRunLoopTests
         Assert.Equal(1, capture.Session.RegionCaptureCount);
         Assert.Equal(0, capture.Session.CaptureCount);
         Assert.Equal(new CaptureRegion(1, 2, 3, 4), capture.Session.LastRegion);
-        Assert.Contains("Capture mode: region-only", log.ToString());
+        Assert.Contains("Capture mode: process-region-only", log.ToString());
+    }
+
+    [Fact]
+    public async Task RunAsync_PreinitializedForegroundSessionUsesForegroundRegionMode()
+    {
+        using TempFile regionCapture = TempFile.Create();
+        FakeGameWindowCaptureSession session = new([regionCapture.Path], captureModePrefix: "foreground");
+        PreinitializedGameWindowCapture capture = new(session);
+        DetectionDryRunOptions options = CreateLiveOptions();
+        options.LoopCount = 1;
+        options.OcrRegion = new OcrRegion(1, 2, 3, 4);
+        StringWriter log = new();
+        DetectionDryRunLoop loop = new(new FakeOcrService(["target"]), new FakeSpeakerMatcher(), capture, log: log);
+
+        await loop.RunAsync(options, CancellationToken.None);
+
+        Assert.Equal(1, session.InitializeCount);
+        Assert.Equal(1, session.RegionCaptureCount);
+        Assert.Equal(0, session.CaptureCount);
+        Assert.Contains("Capture mode: foreground-region-only", log.ToString());
+        Assert.DoesNotContain("Reacquiring target window", log.ToString());
     }
 
     [Fact]
@@ -263,14 +284,17 @@ public sealed class DetectionDryRunLoopTests
         }
     }
 
-    private sealed class FakeGameWindowCaptureSession : IGameWindowCaptureSession
+    private sealed class FakeGameWindowCaptureSession : IGameWindowCaptureSession, IGameWindowCaptureSessionMetadata
     {
         private readonly Queue<string> _paths;
 
-        public FakeGameWindowCaptureSession(IEnumerable<string> paths)
+        public FakeGameWindowCaptureSession(IEnumerable<string> paths, string captureModePrefix = "process")
         {
             _paths = new Queue<string>(paths);
+            CaptureModePrefix = captureModePrefix;
         }
+
+        public string CaptureModePrefix { get; }
 
         public int InitializeCount { get; private set; }
 

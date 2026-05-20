@@ -3,7 +3,7 @@ using System.Text;
 namespace GenshinCharacterFilter.Gui;
 
 /// <summary>
-/// Forwards TextWriter output to the WinForms log surface.
+/// Forwards TextWriter output to a UI log surface.
 /// </summary>
 public sealed class UiTextWriter : TextWriter
 {

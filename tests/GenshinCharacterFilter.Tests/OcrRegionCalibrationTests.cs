@@ -1,5 +1,6 @@
 using GenshinCharacterFilter.Calibration;
 using GenshinCharacterFilter.Ocr;
+using System.Drawing;
 
 namespace GenshinCharacterFilter.Tests;
 
@@ -91,5 +92,42 @@ public sealed class OcrRegionCalibrationTests
             () => file.Load(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.json")));
 
         Assert.Contains("was not found", exception.Message);
+    }
+
+    [Fact]
+    public void CalibrationRegionPreviewSaver_CropsSelectedRegion()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "GenshinCharacterFilterTests", Guid.NewGuid().ToString("N"));
+        string screenshotPath = Path.Combine(directory, "source.png");
+        string previewPath = Path.Combine(directory, "preview.png");
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            using (Bitmap source = new(8, 6))
+            {
+                source.SetPixel(3, 2, Color.Red);
+                source.SetPixel(4, 3, Color.Blue);
+                source.Save(screenshotPath);
+            }
+
+            CalibrationRegionPreviewSaver saver = new();
+
+            string savedPath = saver.SavePreview(screenshotPath, new OcrRegion(3, 2, 2, 2), previewPath);
+
+            Assert.Equal(previewPath, savedPath);
+            using Bitmap preview = new(savedPath);
+            Assert.Equal(2, preview.Width);
+            Assert.Equal(2, preview.Height);
+            Assert.Equal(Color.Red.ToArgb(), preview.GetPixel(0, 0).ToArgb());
+            Assert.Equal(Color.Blue.ToArgb(), preview.GetPixel(1, 1).ToArgb());
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
     }
 }

@@ -2,13 +2,13 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.16 GUI Guarded Real Audio Page**.
+Current milestone: **v0.17 WPF Modern GUI Shell**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, v0.12 Configuration Integration, v0.13 Usability Hardening, v0.14 Minimal WinForms Control Panel, and v0.15 GUI Hardening are implemented. v0.16 exposes guarded real audio in the WinForms panel only behind explicit user enablement and confirmation.
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, v0.12 Configuration Integration, v0.13 Usability Hardening, v0.14 Minimal WinForms Control Panel, v0.15 GUI Hardening, and v0.16 GUI Guarded Real Audio Page are implemented. v0.17 introduces a modern WPF shell over the existing services so the GUI can move beyond the temporary WinForms control panel without adding config editing or changing real-audio safety gates.
 
 ## Current Scope
 
-- Console app only.
+- Console app with an explicit modern GUI shell.
 - Simulated speaker input.
 - Target process audio filtering through `IAudioMuteService`.
 - Audio modes: `Mute` and `ReduceVolume`.
@@ -26,9 +26,9 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Local JSON configuration for OCR, detection loop, stability thresholds, OCR region source, and audio filter defaults.
 - Explicit configuration validation and effective configuration diagnostics.
 - Preflight checks for common OCR, image, region config, and process problems.
-- Explicit minimal WinForms control panel launched with `--gui`, including guarded real audio controls behind visible warning and confirmation.
+- Explicit modern WPF GUI shell launched with `--gui`, with Overview, Config, OCR, Detection, Audio, and Logs pages.
 
-Out of scope: default automatic real audio, config-only guarded real audio, unguarded real detection audio, production auto mute, automatic OCR region detection, fabricated preset coordinates, GUI settings editor, fuzzy matching, speaker recognition from image, full GUI application, WPF, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
+Out of scope: GUI config editor, saving edited config, default automatic real audio, config-only guarded real audio, unguarded real detection audio, production auto mute, automatic OCR region detection, fabricated preset coordinates, fuzzy matching, speaker recognition from image, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
 
 ## Commands
 
@@ -55,17 +55,17 @@ dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj
 
 Default mode is simulated and does not change real system audio.
 
-## Minimal WinForms Control Panel
+## Modern WPF GUI Shell
 
-The local control panel only runs when `--gui` is supplied. Default console startup is unchanged.
+The modern local GUI only runs when `--gui` is supplied. Default console startup is unchanged.
 
 ```powershell
 dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --gui
 ```
 
-The panel provides buttons for selecting a config file, validating config, showing effective config, calibrating the OCR region, testing OCR once, starting/stopping dry-run detection, starting/stopping simulated detection audio, and starting guarded real audio after explicit confirmation. It shows command logs in the window and uses the same underlying config, OCR, calibration, detection, and audio services as the CLI.
+The WPF shell uses a BetterGI-inspired local tool layout with left navigation, a top status bar, card-style pages, light/dark theme detection at startup, a dedicated Logs page, and a visually separated Guarded Real Audio Danger Zone. It provides controls for selecting a config file, validating config, showing effective config, calibrating the OCR region, testing OCR once, starting/stopping dry-run detection, starting/stopping simulated detection audio, and starting guarded real audio after explicit confirmation. It shows command logs in the window and uses the same underlying config, OCR, calibration, detection, and audio services as the CLI.
 
-The GUI is still a minimal local panel, not a full settings editor. It displays a run status, prevents overlapping detection starts, logs button errors in the panel, auto-scrolls new log output, and lets Stop request cancellation for cancellable operations.
+The GUI is a modern shell, not a settings editor or config editor. It displays run status, config, target process, speakers, capture mode, and real-audio status; prevents overlapping detection starts; logs button errors in the panel; auto-scrolls new log output; and lets Stop request cancellation for cancellable operations. The Guarded Real Audio controls are visually separated as a danger zone and still require explicit enablement plus confirmation.
 
 For OCR input, select the original screenshot, such as `debug-captures/capture-latest.png`. Do not use `debug-ocr/ocr-input-latest.png` as OCR input because that file is the generated debug output and may be overwritten by the next OCR run.
 
@@ -85,6 +85,10 @@ Use reduce-volume mode for the first real audio test. The GUI does not create `W
 
 Guarded real audio includes OCR jitter tolerance for near target-speaker text. Strong OCR matches can enter the stable matched state, while weak near-matches and short/empty noisy OCR are used to avoid rapid restore/reduce flicker after a stable target hit. Clear non-target text can still restore quickly according to the configured miss threshold.
 
+Capture, calibration, and live detection use visible screen pixels. The target window must be restored, visible, and not covered. For Genshin, prefer windowed or borderless window mode; exclusive fullscreen can minimize or block visible-pixel capture when focus moves to the GUI. If calibration or live detection startup cannot automatically restore the target window, the WPF GUI can run a manual foreground fallback: it prompts you, minimizes the WPF window, waits briefly while you manually switch to the target, then captures or initializes detection from the current foreground window only if its process matches `TargetProcessName`. This applies to dry-run detection, simulated detection audio, and guarded real audio startup; guarded real audio still requires the checkbox, preflight, and confirmation first. For detection fallback, the WPF window stays minimized until detection stops or fails so it does not immediately steal focus back from the game. If you switch back to WPF during detection, the game may minimize again and visible-pixel capture can stop. Windowed/borderless mode or a second monitor is recommended.
+
+After OCR region calibration succeeds, the app also writes `debug-ocr/calibration-region-latest.png`. Open that preview to confirm the saved region actually contains the speaker-name text before testing OCR or real audio.
+
 ## Debug Screenshot Capture
 
 Screenshot mode only runs when `--capture-once` is supplied. It does not control real system audio.
@@ -95,7 +99,7 @@ Verify with a normal desktop app such as Notepad before trying a game window:
 dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --capture-once --process notepad --capture-output debug-captures --capture-delay-ms 500
 ```
 
-The app looks for the target process main window, attempts to restore and activate it, waits briefly, then saves `capture-latest.png` under the output directory. The target window should be restored, visible, and not covered by other windows. If Windows blocks foreground activation, manually bring the target window to the front before capturing. The expected v0.3 output is a full-window debug screenshot including the title bar and visible frame. This is visible-window screen capture, not background window capture, so covered windows may still capture the covering pixels.
+The app looks for the target process main window, attempts to restore and activate it, waits briefly, then saves `capture-latest.png` under the output directory. The target window should be restored, visible, and not covered by other windows. If Windows blocks foreground activation, manually bring the target window to the front before capturing. If the target is minimized and cannot be restored, the error explains that this is visible-pixel capture and suggests manually restoring the target or using windowed/borderless mode. The expected v0.3 output is a full-window debug screenshot including the title bar and visible frame. This is visible-window screen capture, not background window capture, so covered windows may still capture the covering pixels.
 
 ## OCR Text Extraction
 
@@ -230,6 +234,8 @@ Workflow:
 - press Esc to cancel.
 
 The output JSON includes `sourceImageWidth`, `sourceImageHeight`, `regionPixels`, `regionRatio`, `generatedAt`, and `sourceProcessName`. Ratio coordinates are useful when the same relative speaker-name area must be reapplied after resolution or window-size changes.
+
+Calibration also saves `debug-ocr/calibration-region-latest.png`, a crop from the selected rectangle. Use it to diagnose empty OCR output after calibration; if the preview does not contain the character name, recalibrate the region.
 
 ## OCR Region Source Resolution
 

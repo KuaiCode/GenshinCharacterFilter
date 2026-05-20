@@ -14,6 +14,12 @@ public sealed class GuiCommandService
 {
     private readonly AppSettingsLoader _settingsLoader = new();
 
+    private enum GuiLiveCaptureStartupMode
+    {
+        AutomaticTargetWindow,
+        ManualForegroundWindow
+    }
+
     public void ValidateConfig(string? configPath, TextWriter log)
     {
         AppCommandLineOptions options = BuildOptions(configPath, "--validate-config");
@@ -42,30 +48,47 @@ public sealed class GuiCommandService
 
     public async Task CalibrateOcrRegionAsync(string? configPath, TextWriter log, CancellationToken cancellationToken)
     {
-        AppSettings settings = LoadSettings(configPath);
-        AppCommandLineOptions options = BuildOptions(
-            configPath,
-            "--calibrate-ocr-region",
-            "--process",
-            settings.TargetProcessName);
-        settings = LoadMergedSettings(options);
+        CalibrationCommandContext context = BuildCalibrationContext(configPath);
 
-        EnsurePreflightPassed(settings, options);
+        EnsurePreflightPassed(context.Settings, context.Options);
         log.WriteLine("Starting OCR region calibration.");
-
-        OcrRegionCalibrationOptions calibrationOptions = new()
-        {
-            TargetProcessName = settings.TargetProcessName,
-            CaptureOutputDirectory = options.CaptureOutputDirectory,
-            CaptureDelayMs = options.CaptureDelayMs,
-            CalibrationOutputPath = options.CalibrationOutputPath
-        };
 
         WindowsOcrRegionCalibrator calibrator = new(
             new WindowsGameWindowCapture(log),
             log);
 
-        OcrRegionCalibrationResult result = await calibrator.CalibrateAsync(calibrationOptions, cancellationToken);
+        OcrRegionCalibrationResult result = await calibrator.CalibrateAsync(context.CalibrationOptions, cancellationToken);
+        WriteCalibrationResult(context.CalibrationOptions, result, log);
+    }
+
+    public async Task CalibrateOcrRegionFromForegroundWindowAsync(
+        string? configPath,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
+        CalibrationCommandContext context = BuildCalibrationContext(configPath);
+
+        EnsurePreflightPassed(context.Settings, context.Options);
+        log.WriteLine("Starting manual foreground OCR region calibration.");
+
+        WindowsGameWindowCapture capture = new(log);
+        string screenshotPath = await capture.CaptureForegroundWindowAsync(
+            context.CalibrationOptions.ToWindowCaptureOptions(),
+            cancellationToken);
+
+        WindowsOcrRegionCalibrator calibrator = new(capture, log);
+        OcrRegionCalibrationResult result = calibrator.CalibrateFromScreenshot(
+            context.CalibrationOptions,
+            screenshotPath,
+            cancellationToken);
+        WriteCalibrationResult(context.CalibrationOptions, result, log);
+    }
+
+    private static void WriteCalibrationResult(
+        OcrRegionCalibrationOptions calibrationOptions,
+        OcrRegionCalibrationResult result,
+        TextWriter log)
+    {
         log.WriteLine($"Calibration output: {calibrationOptions.GetCalibrationOutputPath()}");
         log.WriteLine($"Source image: {result.SourceImageWidth}x{result.SourceImageHeight}");
         log.WriteLine($"Region pixels: {result.RegionPixels}");
@@ -100,6 +123,51 @@ public sealed class GuiCommandService
         TextWriter log,
         CancellationToken cancellationToken)
     {
+        await RunDetectionLoopCoreAsync(
+            configPath,
+            ocrInputPath,
+            useFixedImageForDetection,
+            tuningOptions,
+            simulateAudio,
+            GuiLiveCaptureStartupMode.AutomaticTargetWindow,
+            afterForegroundSessionReady: null,
+            log,
+            cancellationToken);
+    }
+
+    public async Task RunDetectionLoopFromForegroundWindowAsync(
+        string? configPath,
+        string? ocrInputPath,
+        bool useFixedImageForDetection,
+        GuiDetectionTuningOptions tuningOptions,
+        bool simulateAudio,
+        Func<Task>? afterForegroundSessionReady,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
+        await RunDetectionLoopCoreAsync(
+            configPath,
+            ocrInputPath,
+            useFixedImageForDetection,
+            tuningOptions,
+            simulateAudio,
+            GuiLiveCaptureStartupMode.ManualForegroundWindow,
+            afterForegroundSessionReady,
+            log,
+            cancellationToken);
+    }
+
+    private async Task RunDetectionLoopCoreAsync(
+        string? configPath,
+        string? ocrInputPath,
+        bool useFixedImageForDetection,
+        GuiDetectionTuningOptions tuningOptions,
+        bool simulateAudio,
+        GuiLiveCaptureStartupMode liveCaptureStartupMode,
+        Func<Task>? afterForegroundSessionReady,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
         List<string> arguments = ["--detect-loop"];
         if (simulateAudio)
         {
@@ -127,6 +195,13 @@ public sealed class GuiCommandService
 
         DetectionDryRunOptions dryRunOptions = BuildDryRunOptions(settings, options, tuningOptions);
         WriteDetectionTuning(dryRunOptions, tuningOptions, log);
+        IGameWindowCapture windowCapture = await BuildGuiWindowCaptureAsync(
+            dryRunOptions,
+            hasFixedImageInput: detectionOcrInputPath is not null,
+            liveCaptureStartupMode,
+            afterForegroundSessionReady,
+            log,
+            cancellationToken);
         DetectionAudioCoordinator? audioCoordinator = simulateAudio
             ? new DetectionAudioCoordinator(new LoggingAudioMuteService(log, settings.AudioFilter), settings.AudioFilter)
             : null;
@@ -134,7 +209,7 @@ public sealed class GuiCommandService
         DetectionDryRunLoop loop = new(
             new TesseractCliOcrService(),
             new SpeakerMatcher(),
-            new WindowsGameWindowCapture(log),
+            windowCapture,
             new OcrInputPreparer(),
             audioCoordinator: audioCoordinator,
             audioActionLabel: "Simulated audio action",
@@ -147,6 +222,43 @@ public sealed class GuiCommandService
         string? configPath,
         bool useFixedImageForDetection,
         GuiDetectionTuningOptions tuningOptions,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
+        await RunGuardedRealAudioDetectionCoreAsync(
+            configPath,
+            useFixedImageForDetection,
+            tuningOptions,
+            GuiLiveCaptureStartupMode.AutomaticTargetWindow,
+            afterForegroundSessionReady: null,
+            log,
+            cancellationToken);
+    }
+
+    public async Task RunGuardedRealAudioDetectionFromForegroundWindowAsync(
+        string? configPath,
+        bool useFixedImageForDetection,
+        GuiDetectionTuningOptions tuningOptions,
+        Func<Task>? afterForegroundSessionReady,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
+        await RunGuardedRealAudioDetectionCoreAsync(
+            configPath,
+            useFixedImageForDetection,
+            tuningOptions,
+            GuiLiveCaptureStartupMode.ManualForegroundWindow,
+            afterForegroundSessionReady,
+            log,
+            cancellationToken);
+    }
+
+    private async Task RunGuardedRealAudioDetectionCoreAsync(
+        string? configPath,
+        bool useFixedImageForDetection,
+        GuiDetectionTuningOptions tuningOptions,
+        GuiLiveCaptureStartupMode liveCaptureStartupMode,
+        Func<Task>? afterForegroundSessionReady,
         TextWriter log,
         CancellationToken cancellationToken)
     {
@@ -165,6 +277,13 @@ public sealed class GuiCommandService
 
         DetectionDryRunOptions dryRunOptions = BuildDryRunOptions(settings, options, tuningOptions);
         WriteDetectionTuning(dryRunOptions, tuningOptions, log);
+        IGameWindowCapture windowCapture = await BuildGuiWindowCaptureAsync(
+            dryRunOptions,
+            hasFixedImageInput: false,
+            liveCaptureStartupMode,
+            afterForegroundSessionReady,
+            log,
+            cancellationToken);
         DetectionAudioCoordinator audioCoordinator = new(
             new WindowsAudioMuteService(settings.TargetProcessName, log, settings.AudioFilter),
             settings.AudioFilter);
@@ -172,13 +291,42 @@ public sealed class GuiCommandService
         DetectionDryRunLoop loop = new(
             new TesseractCliOcrService(),
             new SpeakerMatcher(),
-            new WindowsGameWindowCapture(log),
+            windowCapture,
             new OcrInputPreparer(),
             audioCoordinator: audioCoordinator,
             audioActionLabel: "Real audio action",
             log: log);
 
         await loop.RunAsync(dryRunOptions, cancellationToken);
+    }
+
+    private static async Task<IGameWindowCapture> BuildGuiWindowCaptureAsync(
+        DetectionDryRunOptions dryRunOptions,
+        bool hasFixedImageInput,
+        GuiLiveCaptureStartupMode liveCaptureStartupMode,
+        Func<Task>? afterForegroundSessionReady,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
+        WindowsGameWindowCapture capture = new(log);
+        if (hasFixedImageInput)
+        {
+            return capture;
+        }
+
+        WindowCaptureOptions captureOptions = BuildWindowCaptureOptions(dryRunOptions);
+        IGameWindowCaptureSession session = liveCaptureStartupMode == GuiLiveCaptureStartupMode.ManualForegroundWindow
+            ? capture.CreateForegroundSession(captureOptions)
+            : capture.CreateSession(captureOptions);
+        await session.InitializeAsync(cancellationToken);
+
+        if (liveCaptureStartupMode == GuiLiveCaptureStartupMode.ManualForegroundWindow &&
+            afterForegroundSessionReady is not null)
+        {
+            await afterForegroundSessionReady();
+        }
+
+        return new PreinitializedGameWindowCapture(session);
     }
 
     public GuardedRealAudioStatus GetGuardedRealAudioStatus(string? configPath)
@@ -287,6 +435,32 @@ public sealed class GuiCommandService
             ? _settingsLoader.LoadDefault()
             : _settingsLoader.LoadFromFile(configPath.Trim());
     }
+
+    private CalibrationCommandContext BuildCalibrationContext(string? configPath)
+    {
+        AppSettings baseSettings = LoadSettings(configPath);
+        AppCommandLineOptions options = BuildOptions(
+            configPath,
+            "--calibrate-ocr-region",
+            "--process",
+            baseSettings.TargetProcessName);
+        AppSettings settings = LoadMergedSettings(options);
+
+        OcrRegionCalibrationOptions calibrationOptions = new()
+        {
+            TargetProcessName = settings.TargetProcessName,
+            CaptureOutputDirectory = options.CaptureOutputDirectory,
+            CaptureDelayMs = options.CaptureDelayMs,
+            CalibrationOutputPath = options.CalibrationOutputPath
+        };
+
+        return new CalibrationCommandContext(settings, options, calibrationOptions);
+    }
+
+    private sealed record CalibrationCommandContext(
+        AppSettings Settings,
+        AppCommandLineOptions Options,
+        OcrRegionCalibrationOptions CalibrationOptions);
 
     private AppSettings? TryLoadSettings(string? configPath)
     {
@@ -424,6 +598,17 @@ public sealed class GuiCommandService
                 MatchThreshold = settings.Detection.MatchThreshold,
                 MissThreshold = settings.Detection.MissThreshold
             }
+        };
+    }
+
+    private static WindowCaptureOptions BuildWindowCaptureOptions(DetectionDryRunOptions options)
+    {
+        return new WindowCaptureOptions
+        {
+            TargetProcessName = options.TargetProcessName!,
+            OutputDirectory = options.CaptureOutputDirectory,
+            CaptureDelayMs = options.CaptureDelayMs,
+            SaveDebugImage = options.SaveDebugImages
         };
     }
 

@@ -1,31 +1,26 @@
 # Roadmap
 
-## Current Milestone: v0.16 GUI Guarded Real Audio Page
+## Current Milestone: v0.17 WPF Modern GUI Shell
 
 Status: in progress.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, v0.12 Configuration Integration, v0.13 Usability Hardening, v0.14 Minimal WinForms Control Panel, and v0.15 GUI Hardening milestones have been manually verified where applicable. The v0.16 milestone is limited to:
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, v0.12 Configuration Integration, v0.13 Usability Hardening, v0.14 Minimal WinForms Control Panel, v0.15 GUI Hardening, and v0.16 GUI Guarded Real Audio Page milestones have been manually verified where applicable. The v0.17 milestone is limited to:
 
 - preserving console app behavior;
 - keeping GUI launch explicit via `--gui`;
-- adding a guarded real audio section/page/group to the minimal WinForms control panel;
-- requiring explicit checkbox enablement, visible warning, and confirmation dialog before real audio starts;
-- requiring valid config/preflight, valid OCR region source, and target process before real audio starts;
-- reusing the existing guarded real audio path and safety rules;
-- driving GUI real audio only from stable detection state, not raw match state;
-- using live target-process capture by default for GUI detection loops;
-- keeping fixed-image detection as an explicit dry-run/simulated debug option only;
-- letting GUI detection loops run until Stop by default, with an optional fixed loop count for short tests;
-- adding GUI-only tuning for loop interval, capture delay, match threshold, and miss threshold without writing config files;
-- disabling realtime loop debug image writes by default, with a Save debug images option for troubleshooting;
-- preferring region-only capture for realtime live detection when an OCR region source is configured;
-- preserving the main GUI window size around OCR region calibration;
-- hardening WinForms DPI/autoscale behavior so calibration does not shrink the main panel;
-- sharing Stop with existing long-running operations and attempting restore on Stop/Close;
+- adding a modern WPF shell over existing core services;
+- launching the WPF shell from `--gui` while leaving existing CLI behavior unchanged;
+- keeping the existing WinForms calibration selector and old WinForms MainForm available temporarily where useful;
+- separating Overview, Config, OCR, Detection, Audio, and Logs pages with left navigation and a top status bar;
+- using card-style panels, a readable log page, light/dark startup theme detection, and an optional built-in Windows backdrop effect;
+- making guarded real audio visually distinct as a danger zone;
+- preserving the existing guarded real audio checkbox, warning, confirmation, preflight, and stable-detection safety rules;
+- preserving the existing live capture, fixed-image debug option, GUI tuning, Save debug images option, region-only capture, and timing diagnostics;
+- sharing Stop with existing long-running operations and preserving cleanup/restore behavior;
 - preserving existing simulated detection audio GUI behavior;
 - preserving existing CLI behavior;
 - preserving existing simulated and opt-in real audio behavior;
-- no new dependencies, WPF, WinUI, GUI settings editor, automatic region detection, fabricated preset coordinates, full GUI application, overlay, or masking.
+- no third-party UI dependencies, WinUI, GUI config editor, config saving, automatic region detection, fabricated preset coordinates, overlay, or masking.
 
 ## Phase Order
 
@@ -46,14 +41,16 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 15. Minimal WinForms control panel.
 16. GUI hardening.
 17. GUI guarded real audio page.
-18. Stable mute/unmute coordination with debounce and recovery.
-19. Optional masking.
+18. WPF modern GUI shell.
+19. Stable mute/unmute coordination with debounce and recovery.
+20. Optional masking.
 
-## Out of Scope for v0.16
+## Out of Scope for v0.17
 
 - New major features.
 - Speaker recognition from image.
-- GUI settings editor.
+- GUI config editor.
+- Saving edited config.
 - Real audio enabled by default.
 - Bypassing guarded real audio safety semantics.
 - New calibration UI features.
@@ -61,9 +58,8 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Fabricated preset coordinates.
 - Real audio without existing guarded real-audio flags.
 - MuteCoordinator changes.
-- Full GUI application.
 - Fuzzy matching unless explicitly requested.
-- WPF or WinUI.
+- WinUI.
 - Overlay masking.
 - ONNX or OpenCV.
 - Gameplay automation.

@@ -1,9 +1,9 @@
-using System.Windows.Forms;
+using GenshinCharacterFilter.Wpf;
 
 namespace GenshinCharacterFilter.Gui;
 
 /// <summary>
-/// Starts the minimal WinForms control panel on an STA thread.
+/// Starts the explicit GUI control panel on an STA thread.
 /// </summary>
 public static class GuiApplication
 {
@@ -14,10 +14,14 @@ public static class GuiApplication
         {
             try
             {
-                Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new MainForm(initialConfigPath));
+                System.Windows.Application application = new()
+                {
+                    ShutdownMode = System.Windows.ShutdownMode.OnMainWindowClose
+                };
+                WpfAppTheme theme = WpfThemeService.DetectStartupTheme();
+                WpfThemeService.Apply(application, theme);
+                MainWindow window = new(initialConfigPath, theme);
+                application.Run(window);
             }
             catch (Exception exception)
             {

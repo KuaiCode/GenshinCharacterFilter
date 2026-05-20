@@ -12,16 +12,19 @@ public sealed class WindowsOcrRegionCalibrator
 {
     private readonly IGameWindowCapture _windowCapture;
     private readonly OcrRegionCalibrationFile _calibrationFile;
+    private readonly CalibrationRegionPreviewSaver _previewSaver;
     private readonly TextWriter _log;
 
     public WindowsOcrRegionCalibrator(
         IGameWindowCapture windowCapture,
         TextWriter? log = null,
-        OcrRegionCalibrationFile? calibrationFile = null)
+        OcrRegionCalibrationFile? calibrationFile = null,
+        CalibrationRegionPreviewSaver? previewSaver = null)
     {
         _windowCapture = windowCapture;
         _log = log ?? TextWriter.Null;
         _calibrationFile = calibrationFile ?? new OcrRegionCalibrationFile();
+        _previewSaver = previewSaver ?? new CalibrationRegionPreviewSaver();
     }
 
     /// <summary>
@@ -38,6 +41,23 @@ public sealed class WindowsOcrRegionCalibrator
         _log.WriteLine("OCR region calibration mode; this run does not run OCR or control real system audio.");
 
         string screenshotPath = await _windowCapture.CaptureOnceAsync(options.ToWindowCaptureOptions(), cancellationToken);
+        return CalibrateFromScreenshot(options, screenshotPath, cancellationToken);
+    }
+
+    public OcrRegionCalibrationResult CalibrateFromScreenshot(
+        OcrRegionCalibrationOptions options,
+        string screenshotPath,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        options.Validate();
+
+        if (string.IsNullOrWhiteSpace(screenshotPath))
+        {
+            throw new ArgumentException("Calibration screenshot path cannot be empty.", nameof(screenshotPath));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
         _log.WriteLine($"Calibration screenshot captured: {screenshotPath}");
 
         using Bitmap screenshot = new(screenshotPath);
@@ -58,7 +78,21 @@ public sealed class WindowsOcrRegionCalibrator
         string outputPath = options.GetCalibrationOutputPath();
         _calibrationFile.Save(result, outputPath);
         _log.WriteLine($"Calibration JSON saved: {outputPath}");
+        TrySaveRegionPreview(screenshot, result.RegionPixels);
         return result;
+    }
+
+    private void TrySaveRegionPreview(Bitmap screenshot, OcrRegion region)
+    {
+        try
+        {
+            string previewPath = _previewSaver.SavePreview(screenshot, region);
+            _log.WriteLine($"Calibration region preview saved: {previewPath}");
+        }
+        catch (Exception exception) when (exception is CalibrationException or ArgumentException or ArgumentOutOfRangeException or IOException or UnauthorizedAccessException or System.Runtime.InteropServices.ExternalException)
+        {
+            _log.WriteLine($"Warning: Calibration region preview was not saved: {exception.Message}");
+        }
     }
 
     private static OcrRegion? SelectRegion(Bitmap screenshot)

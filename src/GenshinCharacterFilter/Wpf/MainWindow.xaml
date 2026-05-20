@@ -1,0 +1,293 @@
+<Window x:Class="GenshinCharacterFilter.Wpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GenshinCharacterFilter"
+        Width="1240"
+        Height="780"
+        MinWidth="1120"
+        MinHeight="700"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AppBackgroundBrush}">
+    <Grid Background="{DynamicResource AppBackgroundBrush}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="210" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0"
+                Background="{DynamicResource SidebarBackgroundBrush}"
+                BorderBrush="{DynamicResource CardBorderBrush}"
+                BorderThickness="0,0,1,0"
+                Padding="18">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBlock Text="GenshinCharacterFilter"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,4" />
+                    <TextBlock Text="Modern local control shell"
+                               Foreground="{DynamicResource MutedForegroundBrush}"
+                               Margin="0,0,0,20" />
+                    <Button x:Name="OverviewNavButton" Content="Overview" Style="{StaticResource NavButtonStyle}" Click="ShowOverviewPage" />
+                    <Button x:Name="ConfigNavButton" Content="Config" Style="{StaticResource NavButtonStyle}" Click="ShowConfigPage" />
+                    <Button x:Name="OcrNavButton" Content="OCR" Style="{StaticResource NavButtonStyle}" Click="ShowOcrPage" />
+                    <Button x:Name="DetectionNavButton" Content="Detection" Style="{StaticResource NavButtonStyle}" Click="ShowDetectionPage" />
+                    <Button x:Name="AudioNavButton" Content="Audio" Style="{StaticResource NavButtonStyle}" Click="ShowAudioPage" />
+                    <Button x:Name="LogsNavButton" Content="Logs" Style="{StaticResource NavButtonStyle}" Click="ShowLogsPage" />
+                </StackPanel>
+
+                <Border DockPanel.Dock="Bottom"
+                        Style="{StaticResource DangerCardBorderStyle}"
+                        Padding="12"
+                        Margin="0,20,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Real audio danger zone"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource DangerForegroundBrush}" />
+                        <TextBlock Text="Never starts by default. Requires checkbox and confirmation."
+                                   Foreground="{DynamicResource DangerForegroundBrush}"
+                                   Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Column="1" Margin="20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Padding="16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <UniformGrid Grid.Column="0" Columns="3" Rows="2">
+                        <StackPanel Margin="0,0,16,8">
+                            <TextBlock Text="Run state" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="RunStateStatusTextBlock" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,16,8">
+                            <TextBlock Text="Config file" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="ConfigStatusTextBlock" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,16,8">
+                            <TextBlock Text="Target process" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="TargetProcessStatusTextBlock" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,16,0">
+                            <TextBlock Text="Target speakers" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="TargetSpeakersStatusTextBlock" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,16,0">
+                            <TextBlock Text="Capture mode" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="CaptureModeStatusTextBlock" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,16,0">
+                            <TextBlock Text="Real audio" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="RealAudioStatusTextBlock" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </UniformGrid>
+                    <Button x:Name="HeaderStopButton"
+                            Grid.Column="1"
+                            Content="Stop"
+                            Width="132"
+                            Style="{StaticResource DangerButtonStyle}"
+                            Click="StopOperation" />
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="1" Margin="0,4,0,0">
+                <ScrollViewer x:Name="OverviewPage" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Overview" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,14" />
+                        <UniformGrid Columns="2">
+                            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,14,14">
+                                <StackPanel>
+                                    <TextBlock Text="Runtime status" FontSize="18" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="OverviewRunStateTextBlock" Margin="0,10,0,0" />
+                                    <TextBlock x:Name="OverviewTargetProcessTextBlock" Margin="0,6,0,0" />
+                                    <TextBlock x:Name="OverviewTargetSpeakersTextBlock" Margin="0,6,0,0" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,14">
+                                <StackPanel>
+                                    <TextBlock Text="Detection readiness" FontSize="18" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="OverviewRegionSourceTextBlock" Margin="0,10,0,0" />
+                                    <TextBlock x:Name="OverviewRealAudioTextBlock" Margin="0,6,0,0" />
+                                    <TextBlock x:Name="OverviewCaptureModeTextBlock" Margin="0,6,0,0" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+                        <Border Style="{StaticResource CardBorderStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Quick actions" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                                <WrapPanel>
+                                    <Button x:Name="OverviewValidateConfigButton" Content="Validate Config" Click="ValidateConfig" />
+                                    <Button x:Name="OverviewTestOcrOnceButton" Content="Test OCR Once" Click="TestOcrOnce" />
+                                    <Button x:Name="OverviewStartDryRunButton" Content="Start Dry-run Detection" Style="{StaticResource PrimaryButtonStyle}" Click="StartDryRunDetection" />
+                                    <Button x:Name="OverviewStartSimulatedButton" Content="Start Simulated Detection Audio" Click="StartSimulatedDetectionAudio" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <ScrollViewer x:Name="ConfigPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Config" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,14" />
+                        <Border Style="{StaticResource CardBorderStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Config file" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="ConfigPathTextBox" Grid.Column="0" />
+                                    <Button x:Name="BrowseConfigButton" Grid.Column="1" Content="Browse" Margin="10,0,0,0" Click="BrowseConfig" />
+                                </Grid>
+                                <TextBlock Text="Config editor will come later. This page only loads, validates, and prints the effective config."
+                                           Foreground="{DynamicResource MutedForegroundBrush}"
+                                           Margin="0,10,0,14" />
+                                <WrapPanel>
+                                    <Button x:Name="ValidateConfigButton" Content="Validate Config" Style="{StaticResource PrimaryButtonStyle}" Click="ValidateConfig" />
+                                    <Button x:Name="PrintEffectiveConfigButton" Content="Print Effective Config" Click="PrintEffectiveConfig" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <ScrollViewer x:Name="OcrPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="OCR" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,14" />
+                        <Border Style="{StaticResource CardBorderStyle}">
+                            <StackPanel>
+                                <TextBlock Text="OCR input" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="OcrInputPathTextBox" Grid.Column="0" />
+                                    <Button x:Name="BrowseOcrImageButton" Grid.Column="1" Content="Browse OCR Image" Margin="10,0,0,0" Click="BrowseOcrInput" />
+                                </Grid>
+                                <CheckBox x:Name="UseFixedImageForDetectionCheckBox" Content="Use fixed image for detection loop (debug only)" Margin="0,14,0,0" />
+                                <CheckBox x:Name="SaveDebugImagesCheckBox" Content="Save debug images" />
+                                <TextBlock x:Name="RegionSourceSummaryTextBlock"
+                                           Foreground="{DynamicResource MutedForegroundBrush}"
+                                           Margin="0,8,0,14" />
+                                <WrapPanel>
+                                    <Button x:Name="CalibrateOcrRegionButton" Content="Calibrate OCR Region" Click="CalibrateOcrRegion" />
+                                    <Button x:Name="TestOcrOnceButton" Content="Test OCR Once" Style="{StaticResource PrimaryButtonStyle}" Click="TestOcrOnce" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <ScrollViewer x:Name="DetectionPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Detection" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,14" />
+                        <Border Style="{StaticResource CardBorderStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Runtime tuning" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                                <CheckBox x:Name="RunUntilStopCheckBox" Content="Run until Stop" />
+                                <UniformGrid Columns="2" Margin="0,8,0,14">
+                                    <StackPanel Margin="0,0,10,10">
+                                        <TextBlock Text="Loop count" Foreground="{DynamicResource MutedForegroundBrush}" />
+                                        <TextBox x:Name="LoopCountTextBox" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,10,10">
+                                        <TextBlock Text="Loop interval ms" Foreground="{DynamicResource MutedForegroundBrush}" />
+                                        <TextBox x:Name="LoopIntervalTextBox" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,10,10">
+                                        <TextBlock Text="Capture delay ms" Foreground="{DynamicResource MutedForegroundBrush}" />
+                                        <TextBox x:Name="CaptureDelayTextBox" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,10,10">
+                                        <TextBlock Text="Match threshold" Foreground="{DynamicResource MutedForegroundBrush}" />
+                                        <TextBox x:Name="MatchThresholdTextBox" />
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,10,10">
+                                        <TextBlock Text="Miss threshold" Foreground="{DynamicResource MutedForegroundBrush}" />
+                                        <TextBox x:Name="MissThresholdTextBox" />
+                                    </StackPanel>
+                                </UniformGrid>
+                                <WrapPanel>
+                                    <Button x:Name="StartDryRunButton" Content="Start Dry-run Detection" Style="{StaticResource PrimaryButtonStyle}" Click="StartDryRunDetection" />
+                                    <Button x:Name="DetectionStopButton" Content="Stop" Style="{StaticResource DangerButtonStyle}" Click="StopOperation" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <ScrollViewer x:Name="AudioPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Audio" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,14" />
+                        <Border Style="{StaticResource CardBorderStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Simulated Audio" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                <TextBlock Text="Uses stable detection to print simulated audio actions only. It does not control real system audio."
+                                           Foreground="{DynamicResource MutedForegroundBrush}"
+                                           Margin="0,0,0,12" />
+                                <Button x:Name="StartSimulatedAudioButton" Content="Start Simulated Detection Audio" Style="{StaticResource PrimaryButtonStyle}" Click="StartSimulatedDetectionAudio" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource DangerCardBorderStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Guarded Real Audio Danger Zone"
+                                           FontSize="20"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource DangerForegroundBrush}" />
+                                <TextBlock Text="This can control the target process audio. Use reduce mode first. Stop/close will try to restore, but manual mixer recovery may still be needed."
+                                           Foreground="{DynamicResource DangerForegroundBrush}"
+                                           Margin="0,8,0,12" />
+                                <CheckBox x:Name="EnableGuardedRealAudioCheckBox" Content="Enable guarded real audio" />
+                                <TextBlock x:Name="GuardedReadinessTextBlock"
+                                           Foreground="{DynamicResource DangerForegroundBrush}"
+                                           Margin="0,8,0,8" />
+                                <TextBlock x:Name="RealAudioTargetTextBlock" Foreground="{DynamicResource DangerForegroundBrush}" />
+                                <TextBlock x:Name="RealAudioFilterTextBlock" Foreground="{DynamicResource DangerForegroundBrush}" Margin="0,4,0,12" />
+                                <WrapPanel>
+                                    <Button x:Name="StartGuardedRealAudioButton" Content="Start Guarded Real Audio" Style="{StaticResource DangerButtonStyle}" Click="StartGuardedRealAudio" />
+                                    <Button x:Name="AudioStopButton" Content="Stop / Restore" Style="{StaticResource DangerButtonStyle}" Click="StopOperation" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Grid x:Name="LogsPage" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock Text="Logs" FontSize="28" FontWeight="SemiBold" DockPanel.Dock="Left" />
+                        <WrapPanel HorizontalAlignment="Right">
+                            <Button x:Name="ClearLogButton" Content="Clear Log" Click="ClearLog" />
+                            <Button x:Name="CopyLogButton" Content="Copy Log" Click="CopyLog" />
+                        </WrapPanel>
+                    </DockPanel>
+                    <TextBox x:Name="LogTextBox"
+                             Grid.Row="1"
+                             AcceptsReturn="True"
+                             AcceptsTab="True"
+                             HorizontalScrollBarVisibility="Auto"
+                             VerticalScrollBarVisibility="Auto"
+                             FontFamily="Consolas"
+                             FontSize="13"
+                             IsReadOnly="True"
+                             TextWrapping="NoWrap" />
+                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

@@ -237,11 +237,14 @@ public sealed class DetectionDryRunLoop
             string regionImagePath = await liveCaptureSession.CaptureRegionAsync(
                 ToCaptureRegion(resolvedRegion.Region.Value),
                 cancellationToken);
+            string captureModePrefix = liveCaptureSession is IGameWindowCaptureSessionMetadata metadata
+                ? metadata.CaptureModePrefix
+                : "process";
             return new IterationImageInput(
                 regionImagePath,
                 OcrRegion: null,
                 resolvedRegion.SourceLabel,
-                "region-only",
+                $"{captureModePrefix}-region-only",
                 DeleteCaptureInputAfterUse: ShouldDeleteRealtimeCaptureInput(options, regionImagePath));
         }
         catch (Exception exception) when (exception is OcrRegionSourceException or WindowCaptureException or ArgumentException)

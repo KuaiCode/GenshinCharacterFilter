@@ -45,12 +45,92 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCa
         return CaptureWindow(windowHandle, normalizedProcessName, options);
     }
 
+    public async Task<string> CaptureForegroundWindowAsync(WindowCaptureOptions options, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("Window capture is only supported on Windows.");
+        }
+
+        EnsureDpiAwareness();
+        options.Validate();
+        string normalizedProcessName = WindowCaptureOptions.NormalizeProcessName(options.TargetProcessName);
+        _log.WriteLine($"Capturing current foreground window; expected process '{normalizedProcessName}'.");
+
+        IntPtr windowHandle = GetForegroundWindow();
+        if (windowHandle == IntPtr.Zero)
+        {
+            throw new WindowCaptureException("No foreground window is currently available for manual calibration capture.");
+        }
+
+        string foregroundProcessName = GetWindowProcessName(windowHandle);
+        WindowCaptureProcessValidator.ValidateForegroundProcess(normalizedProcessName, foregroundProcessName);
+        _log.WriteLine($"Foreground window belongs to target process '{normalizedProcessName}'.");
+
+        if (IsIconic(windowHandle))
+        {
+            throw WindowCaptureException.TargetWindowMinimizedCannotRestore(normalizedProcessName);
+        }
+
+        if (options.CaptureDelayMs > 0)
+        {
+            _log.WriteLine($"Foreground target window visible; waiting {options.CaptureDelayMs} ms before capture.");
+            await Task.Delay(options.CaptureDelayMs, cancellationToken);
+        }
+
+        if (IsIconic(windowHandle))
+        {
+            throw WindowCaptureException.TargetWindowMinimizedCannotRestore(normalizedProcessName);
+        }
+
+        return CaptureWindow(windowHandle, normalizedProcessName, options);
+    }
+
     public IGameWindowCaptureSession CreateSession(WindowCaptureOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         EnsureDpiAwareness();
         options.Validate();
-        return new WindowsGameWindowCaptureSession(this, options);
+        return new WindowsGameWindowCaptureSession(
+            this,
+            options,
+            initialWindowHandle: default,
+            allowReacquire: true,
+            captureModePrefix: "process");
+    }
+
+    public IGameWindowCaptureSession CreateForegroundSession(WindowCaptureOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        EnsureDpiAwareness();
+        options.Validate();
+        string normalizedProcessName = WindowCaptureOptions.NormalizeProcessName(options.TargetProcessName);
+        _log.WriteLine($"Creating live capture session from current foreground window; expected process '{normalizedProcessName}'.");
+
+        IntPtr windowHandle = GetForegroundWindow();
+        if (windowHandle == IntPtr.Zero)
+        {
+            throw new WindowCaptureException("No foreground window is currently available for manual detection startup.");
+        }
+
+        string foregroundProcessName = GetWindowProcessName(windowHandle);
+        WindowCaptureProcessValidator.ValidateForegroundProcess(normalizedProcessName, foregroundProcessName);
+        _log.WriteLine($"Foreground window belongs to target process '{normalizedProcessName}'.");
+
+        if (IsIconic(windowHandle))
+        {
+            throw WindowCaptureException.TargetWindowMinimizedCannotRestore(normalizedProcessName);
+        }
+
+        return new WindowsGameWindowCaptureSession(
+            this,
+            options,
+            windowHandle,
+            allowReacquire: false,
+            captureModePrefix: "foreground");
     }
 
     private string CaptureWindow(IntPtr windowHandle, string normalizedProcessName, WindowCaptureOptions options)
@@ -139,7 +219,7 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCa
 
         if (IsIconic(windowHandle))
         {
-            throw new WindowCaptureException($"Target window for process '{processName}' is minimized and could not be restored. Restore it before capturing.");
+            throw WindowCaptureException.TargetWindowMinimizedCannotRestore(processName);
         }
     }
 
@@ -185,6 +265,25 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCa
         catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
         {
             return false;
+        }
+    }
+
+    private static string GetWindowProcessName(IntPtr windowHandle)
+    {
+        _ = GetWindowThreadProcessId(windowHandle, out int processId);
+        if (processId <= 0)
+        {
+            throw new WindowCaptureException("Could not determine the process for the current foreground window.");
+        }
+
+        try
+        {
+            using Process process = Process.GetProcessById(processId);
+            return process.ProcessName;
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or Win32Exception)
+        {
+            throw new WindowCaptureException($"Could not inspect foreground window process {processId}: {exception.Message}", exception);
         }
     }
 
@@ -308,6 +407,12 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCa
     [DllImport("user32.dll")]
     private static extern bool IsWindow(IntPtr hWnd);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
+
     [DllImport("gdi32.dll", SetLastError = true)]
     private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
 
@@ -360,15 +465,22 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCa
         }
     }
 
-    private sealed class WindowsGameWindowCaptureSession : IGameWindowCaptureSession
+    private sealed class WindowsGameWindowCaptureSession : IGameWindowCaptureSession, IGameWindowCaptureSessionMetadata
     {
         private readonly WindowsGameWindowCapture _owner;
         private readonly WindowCaptureOptions _options;
         private readonly string _normalizedProcessName;
+        private readonly bool _allowReacquire;
+        private readonly string _captureModePrefix;
         private IntPtr _windowHandle;
         private bool _disposed;
 
-        public WindowsGameWindowCaptureSession(WindowsGameWindowCapture owner, WindowCaptureOptions options)
+        public WindowsGameWindowCaptureSession(
+            WindowsGameWindowCapture owner,
+            WindowCaptureOptions options,
+            IntPtr initialWindowHandle,
+            bool allowReacquire,
+            string captureModePrefix)
         {
             _owner = owner;
             _options = new WindowCaptureOptions
@@ -381,8 +493,15 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCa
                 SaveDebugImage = options.SaveDebugImage
             };
             _normalizedProcessName = WindowCaptureOptions.NormalizeProcessName(_options.TargetProcessName);
-            _owner._log.WriteLine($"Live capture session initialized for process: {_normalizedProcessName}");
+            _allowReacquire = allowReacquire;
+            _captureModePrefix = string.IsNullOrWhiteSpace(captureModePrefix) ? "process" : captureModePrefix;
+            _windowHandle = initialWindowHandle;
+            _owner._log.WriteLine(initialWindowHandle == IntPtr.Zero
+                ? $"Live capture session initialized for process: {_normalizedProcessName}"
+                : $"Live capture session initialized from foreground window for process: {_normalizedProcessName}");
         }
+
+        public string CaptureModePrefix => _captureModePrefix;
 
         public async Task InitializeAsync(CancellationToken cancellationToken)
         {
@@ -406,7 +525,7 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCa
             ObjectDisposedException.ThrowIf(_disposed, this);
             cancellationToken.ThrowIfCancellationRequested();
 
-            await EnsureReadyAsync(cancellationToken);
+            await EnsureReadyAsync(cancellationToken, logReuse: false);
             WindowRect bounds = GetCaptureBounds(_windowHandle, _normalizedProcessName);
             return new WindowCaptureFrameInfo(bounds.Width, bounds.Height);
         }
@@ -421,7 +540,7 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCa
 
         private async Task<string> CaptureCoreAsync(CaptureRegion? region, CancellationToken cancellationToken)
         {
-            await EnsureReadyAsync(cancellationToken);
+            await EnsureReadyAsync(cancellationToken, logReuse: true);
 
             try
             {
@@ -429,22 +548,41 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCa
             }
             catch (WindowCaptureException exception)
             {
+                if (!_allowReacquire)
+                {
+                    throw new WindowCaptureException(
+                        $"Foreground capture session for process '{_normalizedProcessName}' failed and will not reacquire by process name: {exception.Message}",
+                        exception);
+                }
+
                 await ReacquireAsync(exception.Message, cancellationToken);
                 return _owner.CaptureWindow(_windowHandle, _normalizedProcessName, CreateCaptureOptions(region));
             }
         }
 
-        private async Task EnsureReadyAsync(CancellationToken cancellationToken)
+        private async Task EnsureReadyAsync(CancellationToken cancellationToken, bool logReuse)
         {
             if (!IsWindowHandleValid(_windowHandle))
             {
+                if (!_allowReacquire)
+                {
+                    throw new WindowCaptureException(
+                        $"Foreground capture session for process '{_normalizedProcessName}' is no longer valid. Keep the target window visible and restart detection.");
+                }
+
                 await ReacquireAsync("no cached target window is available", cancellationToken);
             }
             else if (IsIconic(_windowHandle))
             {
+                if (!_allowReacquire)
+                {
+                    throw new WindowCaptureException(
+                        $"Foreground capture session for process '{_normalizedProcessName}' is minimized. Keep the target visible; this visible-pixel capture path will not restore or reacquire by process name.");
+                }
+
                 await ReacquireAsync("cached target window is minimized", cancellationToken);
             }
-            else
+            else if (logReuse)
             {
                 _owner._log.WriteLine("Reusing target window handle.");
             }
