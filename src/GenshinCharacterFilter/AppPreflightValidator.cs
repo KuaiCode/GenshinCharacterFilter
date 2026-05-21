@@ -49,7 +49,7 @@ public sealed class AppPreflightValidator
 
         if (ocrRequested)
         {
-            ValidateTesseract(settings.Ocr.TesseractExecutablePath, issues);
+            ValidateOcrBackend(settings.Ocr, issues);
         }
 
         if (fixedImageMode)
@@ -90,7 +90,11 @@ public sealed class AppPreflightValidator
 
     private void ValidateConfiguredPaths(AppSettings settings, List<RuntimePreflightIssue> issues)
     {
-        if (!IsDefaultTesseractCommand(settings.Ocr.TesseractExecutablePath))
+        if (settings.Ocr.Engine == OcrEngine.PaddleOcrLocal)
+        {
+            ValidatePaddle(settings.Ocr, issues);
+        }
+        else if (!IsDefaultTesseractCommand(settings.Ocr.TesseractExecutablePath))
         {
             ValidateTesseract(settings.Ocr.TesseractExecutablePath, issues);
         }
@@ -125,6 +129,63 @@ public sealed class AppPreflightValidator
         }
     }
 
+    private void ValidateOcrBackend(AppOcrSettings ocr, List<RuntimePreflightIssue> issues)
+    {
+        if (ocr.Engine == OcrEngine.PaddleOcrLocal)
+        {
+            ValidatePaddle(ocr, issues);
+            return;
+        }
+
+        ValidateTesseract(ocr.TesseractExecutablePath, issues);
+    }
+
+    private void ValidatePaddle(AppOcrSettings ocr, List<RuntimePreflightIssue> issues)
+    {
+        if (!string.IsNullOrWhiteSpace(ocr.PaddleRuntimeDirectory))
+        {
+            string runtimeDirectory = ocr.PaddleRuntimeDirectory.Trim();
+            if (!Directory.Exists(runtimeDirectory))
+            {
+                issues.Add(new RuntimePreflightIssue(
+                    "OCR preflight error",
+                    $"PaddleOCR runtime directory not found: {runtimeDirectory}"));
+                return;
+            }
+
+            string paddleDll = Path.Combine(runtimeDirectory, "PaddleOCR.dll");
+            if (!_fileExists(paddleDll))
+            {
+                issues.Add(new RuntimePreflightIssue(
+                    "OCR preflight error",
+                    $"PaddleOCR native runtime missing: {paddleDll}"));
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(ocr.PaddleModelDirectory))
+        {
+            string modelDirectory = ocr.PaddleModelDirectory.Trim();
+            if (!Directory.Exists(modelDirectory))
+            {
+                issues.Add(new RuntimePreflightIssue(
+                    "OCR preflight error",
+                    $"PaddleOCR model directory not found: {modelDirectory}"));
+                return;
+            }
+
+            foreach (string child in new[] { "det", "cls", "rec" })
+            {
+                string path = Path.Combine(modelDirectory, child);
+                if (!Directory.Exists(path))
+                {
+                    issues.Add(new RuntimePreflightIssue(
+                        "OCR preflight error",
+                        $"PaddleOCR model directory missing '{path}'."));
+                }
+            }
+        }
+    }
+
     private void ValidateFile(string category, string label, string path, List<RuntimePreflightIssue> issues)
     {
         if (!_fileExists(path))
@@ -147,6 +208,7 @@ public sealed class AppPreflightValidator
     private static bool IsOcrRequested(AppCommandLineOptions options)
     {
         return options.OcrOnce ||
+            options.OcrBenchmark ||
             options.DetectLoop ||
             (options.DetectSpeakerOnce && options.SpeakerText is null);
     }

@@ -12,6 +12,7 @@ public sealed class DetectionDryRunOptions
     public const int MinLoopIntervalMs = 50;
     public const int MaxLoopIntervalMs = 10000;
     public const bool DefaultSaveDebugImages = false;
+    public const bool DefaultSaveOcrFailureSamples = false;
 
     /// <summary>
     /// Gets or sets the optional fixed image path used for repeated OCR.
@@ -54,6 +55,16 @@ public sealed class DetectionDryRunOptions
     public string TesseractExecutablePath { get; set; } = OcrOptions.DefaultTesseractExecutablePath;
 
     /// <summary>
+    /// Gets or sets an optional PaddleOCR model directory.
+    /// </summary>
+    public string? PaddleModelDirectory { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional PaddleOCR native runtime directory.
+    /// </summary>
+    public string? PaddleRuntimeDirectory { get; set; }
+
+    /// <summary>
     /// Gets or sets the Tesseract page segmentation mode.
     /// </summary>
     public int OcrPageSegmentationMode { get; set; } = OcrOptions.DefaultPageSegmentationMode;
@@ -89,6 +100,21 @@ public sealed class DetectionDryRunOptions
     public bool SaveDebugImages { get; set; } = DefaultSaveDebugImages;
 
     /// <summary>
+    /// Gets or sets whether non-matching or noisy OCR crops should be saved for diagnosis.
+    /// </summary>
+    public bool SaveOcrFailureSamples { get; set; } = DefaultSaveOcrFailureSamples;
+
+    public int OcrInputScale { get; set; } = OcrOptions.DefaultInputScale;
+
+    public int OcrPaddingPixels { get; set; } = OcrOptions.DefaultPaddingPixels;
+
+    public bool OcrGrayscale { get; set; }
+
+    public bool OcrInvert { get; set; }
+
+    public int? OcrThreshold { get; set; }
+
+    /// <summary>
     /// Gets or sets the stability gate options used by the dry-run loop.
     /// </summary>
     public DetectionStabilityOptions Stability { get; set; } = new();
@@ -119,7 +145,8 @@ public sealed class DetectionDryRunOptions
             throw new ArgumentException("OCR engine is not supported.", nameof(OcrEngine));
         }
 
-        if (string.IsNullOrWhiteSpace(TesseractExecutablePath))
+        if (OcrEngine == OcrEngine.TesseractCli &&
+            string.IsNullOrWhiteSpace(TesseractExecutablePath))
         {
             throw new ArgumentException("Tesseract executable path cannot be empty.", nameof(TesseractExecutablePath));
         }
@@ -130,6 +157,8 @@ public sealed class DetectionDryRunOptions
                 nameof(OcrPageSegmentationMode),
                 $"OCR page segmentation mode must be between {OcrOptions.MinPageSegmentationMode} and {OcrOptions.MaxPageSegmentationMode}.");
         }
+
+        OcrOptions.ValidatePreparationOptions(OcrInputScale, OcrPaddingPixels, OcrThreshold);
 
         OcrRegion?.ValidateShape();
         GetOcrRegionSourceOptions().Validate();

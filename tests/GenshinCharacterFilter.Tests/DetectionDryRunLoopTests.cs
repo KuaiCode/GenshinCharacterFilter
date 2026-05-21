@@ -179,6 +179,36 @@ public sealed class DetectionDryRunLoopTests
         Assert.Equal(1, audio.RestoreCalls);
     }
 
+    [Fact]
+    public async Task RunAsync_WhenEnabledSavesOcrFailureSample()
+    {
+        using TempFile input = TempFile.Create();
+        string outputDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        try
+        {
+            DetectionDryRunOptions options = CreateOptions(input.Path);
+            options.LoopCount = 1;
+            options.SaveOcrFailureSamples = true;
+            DetectionDryRunLoop loop = new(
+                new FakeOcrService(["miss"]),
+                new FakeSpeakerMatcher(),
+                new FakeWindowCapture(),
+                failureSampleSaver: new OcrFailureSampleSaver(outputDirectory));
+
+            await loop.RunAsync(options, CancellationToken.None);
+
+            Assert.Single(Directory.GetFiles(outputDirectory, "*.png"));
+            Assert.Single(Directory.GetFiles(outputDirectory, "*.json"));
+        }
+        finally
+        {
+            if (Directory.Exists(outputDirectory))
+            {
+                Directory.Delete(outputDirectory, recursive: true);
+            }
+        }
+    }
+
     private static DetectionDryRunOptions CreateOptions(string inputPath)
     {
         return new DetectionDryRunOptions

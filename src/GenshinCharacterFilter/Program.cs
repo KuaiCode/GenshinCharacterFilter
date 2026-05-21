@@ -116,6 +116,17 @@ if (commandLineOptions.OcrOnce)
     return;
 }
 
+if (commandLineOptions.OcrBenchmark)
+{
+    if (!RunCommandPreflight(settings, commandLineOptions))
+    {
+        return;
+    }
+
+    await OcrBenchmarkAsync(settings, commandLineOptions);
+    return;
+}
+
 if (commandLineOptions.CaptureOnce)
 {
     if (!RunCommandPreflight(settings, commandLineOptions))
@@ -141,7 +152,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.17 WPF Modern GUI Shell");
+Console.WriteLine("GenshinCharacterFilter v0.18 OCR Backend Replacement / Low-latency OCR Spike");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");
@@ -334,13 +345,21 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
             OcrEngine = settings.Ocr.Engine,
             OcrLanguage = settings.Ocr.Language,
             TesseractExecutablePath = settings.Ocr.TesseractExecutablePath,
+            PaddleModelDirectory = settings.Ocr.PaddleModelDirectory,
+            PaddleRuntimeDirectory = settings.Ocr.PaddleRuntimeDirectory,
             OcrPageSegmentationMode = settings.Ocr.PageSegmentationMode,
+            OcrInputScale = settings.Ocr.InputScale,
+            OcrPaddingPixels = settings.Ocr.PaddingPixels,
+            OcrGrayscale = settings.Ocr.Grayscale,
+            OcrInvert = settings.Ocr.Invert,
+            OcrThreshold = settings.Ocr.Threshold,
             TargetSpeakers = settings.TargetSpeakers,
             LoopIntervalMs = settings.Detection.LoopIntervalMs,
             LoopCount = settings.Detection.LoopCount,
             CaptureOutputDirectory = commandLineOptions.CaptureOutputDirectory,
             CaptureDelayMs = commandLineOptions.CaptureDelayMs,
             SaveDebugImages = settings.Detection.SaveDebugImages,
+            SaveOcrFailureSamples = settings.Detection.SaveOcrFailureSamples,
             Stability = new DetectionStabilityOptions
             {
                 MatchThreshold = settings.Detection.MatchThreshold,
@@ -349,10 +368,12 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
         };
 
         Console.WriteLine($"Loop interval: {dryRunOptions.LoopIntervalMs} ms");
+        Console.WriteLine($"OCR engine: {dryRunOptions.OcrEngine}");
         Console.WriteLine($"Loop count: {(dryRunOptions.LoopCount?.ToString() ?? "until Ctrl+C")}");
         Console.WriteLine($"Match threshold: {dryRunOptions.Stability.MatchThreshold}");
         Console.WriteLine($"Miss threshold: {dryRunOptions.Stability.MissThreshold}");
         Console.WriteLine($"Save debug images: {dryRunOptions.SaveDebugImages}");
+        Console.WriteLine($"Save OCR failure samples: {dryRunOptions.SaveOcrFailureSamples}");
 
         DetectionAudioCoordinator? audioCoordinator = null;
         string audioActionLabel = "Simulated audio action";
@@ -371,7 +392,7 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
         }
 
         DetectionDryRunLoop loop = new(
-            new TesseractCliOcrService(),
+            OcrServiceFactory.Create(settings.Ocr.Engine),
             new SpeakerMatcher(),
             new WindowsGameWindowCapture(Console.Out),
             new OcrInputPreparer(),
@@ -403,8 +424,15 @@ static async Task<OcrResult> ExtractOcrAsync(AppSettings settings, AppCommandLin
         InputImagePath = commandLineOptions.OcrInputPath,
         Language = settings.Ocr.Language,
         TesseractExecutablePath = settings.Ocr.TesseractExecutablePath,
+        PaddleModelDirectory = settings.Ocr.PaddleModelDirectory,
+        PaddleRuntimeDirectory = settings.Ocr.PaddleRuntimeDirectory,
         PageSegmentationMode = settings.Ocr.PageSegmentationMode,
-        OcrRegion = null
+        OcrRegion = null,
+        InputScale = settings.Ocr.InputScale,
+        PaddingPixels = settings.Ocr.PaddingPixels,
+        Grayscale = settings.Ocr.Grayscale,
+        Invert = settings.Ocr.Invert,
+        Threshold = settings.Ocr.Threshold
     };
 
     OcrRegionSourceResolver regionSourceResolver = new();
@@ -414,9 +442,12 @@ static async Task<OcrResult> ExtractOcrAsync(AppSettings settings, AppCommandLin
     ocrOptions.OcrRegion = resolvedRegion.Region;
 
     OcrInputPreparer inputPreparer = new();
-    IOcrService ocrService = new TesseractCliOcrService();
+    IOcrService ocrService = OcrServiceFactory.Create(settings.Ocr.Engine);
     Console.WriteLine($"OCR input: {ocrOptions.InputImagePath}");
+    Console.WriteLine($"OCR engine: {ocrOptions.OcrEngine}");
     Console.WriteLine($"OCR language: {ocrOptions.Language}, psm: {ocrOptions.PageSegmentationMode}");
+    Console.WriteLine(
+        $"OCR preprocessing: scale={ocrOptions.InputScale}, padding={ocrOptions.PaddingPixels}, grayscale={ocrOptions.Grayscale}, invert={ocrOptions.Invert}, threshold={ocrOptions.Threshold?.ToString() ?? "none"}");
     Console.WriteLine($"OCR region source: {resolvedRegion.SourceLabel}");
     if (ocrOptions.OcrRegion is not null)
     {
@@ -433,12 +464,75 @@ static async Task<OcrResult> ExtractOcrAsync(AppSettings settings, AppCommandLin
     {
         OcrEngine = ocrOptions.OcrEngine,
         TesseractExecutablePath = ocrOptions.TesseractExecutablePath,
+        PaddleModelDirectory = ocrOptions.PaddleModelDirectory,
+        PaddleRuntimeDirectory = ocrOptions.PaddleRuntimeDirectory,
         Language = ocrOptions.Language,
         PageSegmentationMode = ocrOptions.PageSegmentationMode,
         InputImagePath = preparedInputPath
     };
 
     return await ocrService.ExtractTextAsync(preparedOptions, CancellationToken.None);
+}
+
+static async Task OcrBenchmarkAsync(AppSettings settings, AppCommandLineOptions commandLineOptions)
+{
+    Console.WriteLine("OCR benchmark mode; this run does not control real system audio.");
+
+    try
+    {
+        OcrOptions ocrOptions = new()
+        {
+            OcrEngine = settings.Ocr.Engine,
+            InputImagePath = commandLineOptions.OcrInputPath,
+            Language = settings.Ocr.Language,
+            TesseractExecutablePath = settings.Ocr.TesseractExecutablePath,
+            PaddleModelDirectory = settings.Ocr.PaddleModelDirectory,
+            PaddleRuntimeDirectory = settings.Ocr.PaddleRuntimeDirectory,
+            PageSegmentationMode = settings.Ocr.PageSegmentationMode,
+            InputScale = settings.Ocr.InputScale,
+            PaddingPixels = settings.Ocr.PaddingPixels,
+            Grayscale = settings.Ocr.Grayscale,
+            Invert = settings.Ocr.Invert,
+            Threshold = settings.Ocr.Threshold
+        };
+        ResolvedOcrRegion resolvedRegion = new OcrRegionSourceResolver().ResolveForImage(
+            settings.Ocr.GetOcrRegionSourceOptions(),
+            ocrOptions.InputImagePath!);
+        ocrOptions.OcrRegion = resolvedRegion.Region;
+
+        OcrBenchmarkRunner runner = new(OcrServiceFactory.Create(settings.Ocr.Engine));
+        OcrBenchmarkResult result = await runner.RunAsync(ocrOptions, commandLineOptions.OcrRepeat, CancellationToken.None);
+
+        Console.WriteLine($"OCR benchmark engine: {result.Engine}");
+        Console.WriteLine($"OCR benchmark prepared input: {result.PreparedInputPath}");
+        Console.WriteLine($"OCR region source: {resolvedRegion.SourceLabel}");
+        Console.WriteLine(
+            $"OCR preprocessing: scale={ocrOptions.InputScale}, padding={ocrOptions.PaddingPixels}, grayscale={ocrOptions.Grayscale}, invert={ocrOptions.Invert}, threshold={ocrOptions.Threshold?.ToString() ?? "none"}");
+        foreach (OcrBenchmarkRunResult run in result.Runs)
+        {
+            Console.WriteLine($"Run {run.Iteration}: {run.ElapsedMs} ms");
+            if (run.Error is not null)
+            {
+                Console.WriteLine($"Error: {run.Error}");
+            }
+            else
+            {
+                Console.WriteLine("Raw text:");
+                Console.WriteLine(run.RawText);
+            }
+        }
+
+        Console.WriteLine($"First-run elapsed: {result.FirstRunElapsedMs} ms");
+        Console.WriteLine($"Average elapsed: {result.AverageElapsedMs:F1} ms");
+        Console.WriteLine($"Warm-run average elapsed: {result.WarmAverageElapsedMs:F1} ms");
+        Console.WriteLine($"Min elapsed: {result.MinElapsedMs} ms");
+        Console.WriteLine($"Max elapsed: {result.MaxElapsedMs} ms");
+        Console.WriteLine($"Failure count: {result.FailureCount}");
+    }
+    catch (Exception exception) when (exception is OcrException or OcrRegionSourceException or ArgumentException or FileNotFoundException)
+    {
+        Console.Error.WriteLine($"OCR benchmark error: {exception.Message}");
+    }
 }
 
 static void PrintOcrResult(OcrResult result)

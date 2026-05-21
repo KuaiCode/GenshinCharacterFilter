@@ -343,3 +343,26 @@ Reasoning:
 - This milestone intentionally does not add a GUI config editor or save edited configuration.
 - Real audio safety gates, CLI behavior, OCR/detection/audio services, and MuteCoordinator behavior are unchanged.
 - The behavior does not add third-party UI dependencies, WinUI, overlay, masking, OpenCV, ONNX, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.
+
+## 2026-05-20: v0.18 OCR Backend Replacement / Low-latency OCR Spike
+
+Decision: add an optional in-process PaddleOCRSharp backend behind the existing `IOcrService` abstraction while keeping `TesseractCli` as the default fallback.
+
+Reasoning:
+
+- Region-only live capture reduced screenshot latency to tens of milliseconds, but realtime logs still show Tesseract CLI OCR taking roughly 1-2 seconds per iteration.
+- The main remaining latency is the per-iteration external `tesseract.exe` startup and OCR work, not capture.
+- `PaddleOcrLocal` is introduced as a local, in-process backend candidate so the OCR engine and model can be initialized once and reused across detection-loop iterations.
+- Existing `TesseractCli` behavior remains available and is still the safe default until Paddle has enough manual validation.
+- OCR backend selection is config/CLI driven through `Ocr.Engine`; detection and audio behavior continue to use `IOcrService`.
+- Paddle runtime/model path errors should be clear and actionable, including missing native DLL, missing model directory, or unsupported architecture suggestions.
+- OCR timing logs remain the source of truth for comparing backend latency on the same OCR region.
+- The WPF/CLI detection path logs the selected OCR engine at loop startup so users can confirm whether a run is actually using `TesseractCli` or `PaddleOcrLocal`.
+- The WPF shell exposes OCR engine selection for the current run and a warm-up action so Paddle initialization can happen before the first detection frame.
+- The GUI command layer reuses the selected OCR service across WPF Start/Stop cycles; selecting Paddle must not silently fall back to Tesseract.
+- `--ocr-benchmark` runs repeated OCR on the same prepared input and reports per-run raw text and elapsed time. This isolates OCR accuracy and latency from live capture.
+- Benchmark output separates first-run timing from warm-run average because Paddle's first initialization can be much slower than steady-state OCR.
+- Detection can optionally save OCR failure samples under `debug-ocr/failures` with sidecar metadata. This is meant to diagnose why names such as `流浪者` are misrecognized instead of hiding the issue with extra state-machine thresholds.
+- Optional preprocessing settings are explicit and disabled by default: scale, padding, grayscale, invert, and threshold. The default remains raw crop because earlier manual checks showed preprocessing can make small Chinese text worse.
+- Real audio safety gates, stable detection requirements, MuteCoordinator behavior, capture rules, and WPF guarded real audio confirmation are unchanged.
+- The behavior does not add overlay, masking, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.

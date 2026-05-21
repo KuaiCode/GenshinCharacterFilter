@@ -12,8 +12,15 @@
   "Ocr": {
     "Engine": "TesseractCli",
     "TesseractExecutablePath": "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+    "PaddleModelDirectory": null,
+    "PaddleRuntimeDirectory": null,
     "Language": "chi_sim",
     "PageSegmentationMode": 7,
+    "InputScale": 1,
+    "PaddingPixels": 0,
+    "Grayscale": false,
+    "Invert": false,
+    "Threshold": null,
     "RegionConfigPath": "ocr-region.json"
   },
   "Detection": {
@@ -21,6 +28,7 @@
     "LoopCount": 5,
     "MatchThreshold": 2,
     "MissThreshold": 2,
-    "SaveDebugImages": false
+    "SaveDebugImages": false,
+    "SaveOcrFailureSamples": false
   }
 }

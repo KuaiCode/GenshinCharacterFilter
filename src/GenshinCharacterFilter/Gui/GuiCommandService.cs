@@ -13,6 +13,7 @@ namespace GenshinCharacterFilter.Gui;
 public sealed class GuiCommandService
 {
     private readonly AppSettingsLoader _settingsLoader = new();
+    private readonly GuiOcrServiceCache _ocrServices = new();
 
     private enum GuiLiveCaptureStartupMode
     {
@@ -41,8 +42,14 @@ public sealed class GuiCommandService
 
     public void PrintEffectiveConfig(string? configPath, TextWriter log)
     {
+        PrintEffectiveConfig(configPath, ocrEngineOverride: null, log);
+    }
+
+    public void PrintEffectiveConfig(string? configPath, OcrEngine? ocrEngineOverride, TextWriter log)
+    {
         AppCommandLineOptions options = BuildOptions(configPath, "--print-effective-config");
         AppSettings settings = LoadMergedSettings(options);
+        ApplyGuiOcrEngineOverride(settings, ocrEngineOverride);
         new EffectiveConfigPrinter().Print(settings, options, log);
     }
 
@@ -102,8 +109,19 @@ public sealed class GuiCommandService
         TextWriter log,
         CancellationToken cancellationToken)
     {
+        await OcrOnceAsync(configPath, ocrInputPath, ocrEngineOverride: null, log, cancellationToken);
+    }
+
+    public async Task OcrOnceAsync(
+        string? configPath,
+        string ocrInputPath,
+        OcrEngine? ocrEngineOverride,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
         AppCommandLineOptions options = BuildOptions(configPath, "--ocr-once", "--ocr-input", ocrInputPath);
         AppSettings settings = LoadMergedSettings(options);
+        ApplyGuiOcrEngineOverride(settings, ocrEngineOverride);
         EnsurePreflightPassed(settings, options);
 
         log.WriteLine("OCR mode; this run does not control real system audio.");
@@ -112,6 +130,38 @@ public sealed class GuiCommandService
         log.WriteLine($"OCR input path: {result.InputImagePath}");
         log.WriteLine("OCR raw text:");
         log.WriteLine(result.RawText);
+    }
+
+    public async Task<GuiOcrWarmupResult> WarmUpOcrBackendAsync(
+        string? configPath,
+        OcrEngine? ocrEngineOverride,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
+        AppCommandLineOptions options = BuildOptions(configPath);
+        AppSettings settings = LoadMergedSettings(options);
+        ApplyGuiOcrEngineOverride(settings, ocrEngineOverride);
+
+        OcrOptions ocrOptions = BuildOcrOptionsForSettings(settings);
+        log.WriteLine($"OCR backend warmup requested: {settings.Ocr.Engine}");
+        log.WriteLine($"OCR backend initialized before warmup: {IsOcrBackendWarm(settings.Ocr.Engine)}");
+        if (settings.Ocr.Engine == OcrEngine.PaddleOcrLocal)
+        {
+            log.WriteLine($"Paddle model path: {FormatOptionalPath(settings.Ocr.PaddleModelDirectory)}");
+            log.WriteLine($"Paddle runtime path: {FormatOptionalPath(settings.Ocr.PaddleRuntimeDirectory)}");
+        }
+
+        GuiOcrWarmupResult result = await _ocrServices.WarmUpAsync(
+            settings.Ocr.Engine,
+            ocrOptions,
+            cancellationToken);
+        log.WriteLine($"OCR backend warmed up: {result.Engine}, elapsed: {result.ElapsedMs} ms");
+        return result;
+    }
+
+    public bool IsOcrBackendWarm(OcrEngine engine)
+    {
+        return _ocrServices.IsWarm(engine);
     }
 
     public async Task RunDetectionLoopAsync(
@@ -123,11 +173,33 @@ public sealed class GuiCommandService
         TextWriter log,
         CancellationToken cancellationToken)
     {
+        await RunDetectionLoopAsync(
+            configPath,
+            ocrInputPath,
+            useFixedImageForDetection,
+            tuningOptions,
+            ocrEngineOverride: null,
+            simulateAudio,
+            log,
+            cancellationToken);
+    }
+
+    public async Task RunDetectionLoopAsync(
+        string? configPath,
+        string? ocrInputPath,
+        bool useFixedImageForDetection,
+        GuiDetectionTuningOptions tuningOptions,
+        OcrEngine? ocrEngineOverride,
+        bool simulateAudio,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
         await RunDetectionLoopCoreAsync(
             configPath,
             ocrInputPath,
             useFixedImageForDetection,
             tuningOptions,
+            ocrEngineOverride,
             simulateAudio,
             GuiLiveCaptureStartupMode.AutomaticTargetWindow,
             afterForegroundSessionReady: null,
@@ -145,11 +217,35 @@ public sealed class GuiCommandService
         TextWriter log,
         CancellationToken cancellationToken)
     {
+        await RunDetectionLoopFromForegroundWindowAsync(
+            configPath,
+            ocrInputPath,
+            useFixedImageForDetection,
+            tuningOptions,
+            ocrEngineOverride: null,
+            simulateAudio,
+            afterForegroundSessionReady,
+            log,
+            cancellationToken);
+    }
+
+    public async Task RunDetectionLoopFromForegroundWindowAsync(
+        string? configPath,
+        string? ocrInputPath,
+        bool useFixedImageForDetection,
+        GuiDetectionTuningOptions tuningOptions,
+        OcrEngine? ocrEngineOverride,
+        bool simulateAudio,
+        Func<Task>? afterForegroundSessionReady,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
         await RunDetectionLoopCoreAsync(
             configPath,
             ocrInputPath,
             useFixedImageForDetection,
             tuningOptions,
+            ocrEngineOverride,
             simulateAudio,
             GuiLiveCaptureStartupMode.ManualForegroundWindow,
             afterForegroundSessionReady,
@@ -162,6 +258,7 @@ public sealed class GuiCommandService
         string? ocrInputPath,
         bool useFixedImageForDetection,
         GuiDetectionTuningOptions tuningOptions,
+        OcrEngine? ocrEngineOverride,
         bool simulateAudio,
         GuiLiveCaptureStartupMode liveCaptureStartupMode,
         Func<Task>? afterForegroundSessionReady,
@@ -183,6 +280,7 @@ public sealed class GuiCommandService
 
         AppCommandLineOptions options = BuildOptions(configPath, [.. arguments]);
         AppSettings settings = LoadMergedSettings(options);
+        ApplyGuiOcrEngineOverride(settings, ocrEngineOverride);
         ApplyGuiDetectionTuningOverrides(settings, tuningOptions);
         EnsurePreflightPassed(settings, options);
 
@@ -195,6 +293,7 @@ public sealed class GuiCommandService
 
         DetectionDryRunOptions dryRunOptions = BuildDryRunOptions(settings, options, tuningOptions);
         WriteDetectionTuning(dryRunOptions, tuningOptions, log);
+        WriteOcrBackendState(settings, log);
         IGameWindowCapture windowCapture = await BuildGuiWindowCaptureAsync(
             dryRunOptions,
             hasFixedImageInput: detectionOcrInputPath is not null,
@@ -207,7 +306,7 @@ public sealed class GuiCommandService
             : null;
 
         DetectionDryRunLoop loop = new(
-            new TesseractCliOcrService(),
+            _ocrServices.Get(settings.Ocr.Engine),
             new SpeakerMatcher(),
             windowCapture,
             new OcrInputPreparer(),
@@ -225,10 +324,28 @@ public sealed class GuiCommandService
         TextWriter log,
         CancellationToken cancellationToken)
     {
+        await RunGuardedRealAudioDetectionAsync(
+            configPath,
+            useFixedImageForDetection,
+            tuningOptions,
+            ocrEngineOverride: null,
+            log,
+            cancellationToken);
+    }
+
+    public async Task RunGuardedRealAudioDetectionAsync(
+        string? configPath,
+        bool useFixedImageForDetection,
+        GuiDetectionTuningOptions tuningOptions,
+        OcrEngine? ocrEngineOverride,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
         await RunGuardedRealAudioDetectionCoreAsync(
             configPath,
             useFixedImageForDetection,
             tuningOptions,
+            ocrEngineOverride,
             GuiLiveCaptureStartupMode.AutomaticTargetWindow,
             afterForegroundSessionReady: null,
             log,
@@ -243,10 +360,30 @@ public sealed class GuiCommandService
         TextWriter log,
         CancellationToken cancellationToken)
     {
+        await RunGuardedRealAudioDetectionFromForegroundWindowAsync(
+            configPath,
+            useFixedImageForDetection,
+            tuningOptions,
+            ocrEngineOverride: null,
+            afterForegroundSessionReady,
+            log,
+            cancellationToken);
+    }
+
+    public async Task RunGuardedRealAudioDetectionFromForegroundWindowAsync(
+        string? configPath,
+        bool useFixedImageForDetection,
+        GuiDetectionTuningOptions tuningOptions,
+        OcrEngine? ocrEngineOverride,
+        Func<Task>? afterForegroundSessionReady,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
         await RunGuardedRealAudioDetectionCoreAsync(
             configPath,
             useFixedImageForDetection,
             tuningOptions,
+            ocrEngineOverride,
             GuiLiveCaptureStartupMode.ManualForegroundWindow,
             afterForegroundSessionReady,
             log,
@@ -257,6 +394,7 @@ public sealed class GuiCommandService
         string? configPath,
         bool useFixedImageForDetection,
         GuiDetectionTuningOptions tuningOptions,
+        OcrEngine? ocrEngineOverride,
         GuiLiveCaptureStartupMode liveCaptureStartupMode,
         Func<Task>? afterForegroundSessionReady,
         TextWriter log,
@@ -265,6 +403,7 @@ public sealed class GuiCommandService
         EnsureGuardedRealAudioAllowsDetectionInput(useFixedImageForDetection);
         AppCommandLineOptions options = BuildGuardedRealAudioOptions(configPath);
         AppSettings settings = LoadMergedSettings(options);
+        ApplyGuiOcrEngineOverride(settings, ocrEngineOverride);
         ApplyGuiDetectionTuningOverrides(settings, tuningOptions);
         EnsurePreflightPassed(settings, options);
 
@@ -277,6 +416,7 @@ public sealed class GuiCommandService
 
         DetectionDryRunOptions dryRunOptions = BuildDryRunOptions(settings, options, tuningOptions);
         WriteDetectionTuning(dryRunOptions, tuningOptions, log);
+        WriteOcrBackendState(settings, log);
         IGameWindowCapture windowCapture = await BuildGuiWindowCaptureAsync(
             dryRunOptions,
             hasFixedImageInput: false,
@@ -289,7 +429,7 @@ public sealed class GuiCommandService
             settings.AudioFilter);
 
         DetectionDryRunLoop loop = new(
-            new TesseractCliOcrService(),
+            _ocrServices.Get(settings.Ocr.Engine),
             new SpeakerMatcher(),
             windowCapture,
             new OcrInputPreparer(),
@@ -331,10 +471,16 @@ public sealed class GuiCommandService
 
     public GuardedRealAudioStatus GetGuardedRealAudioStatus(string? configPath)
     {
+        return GetGuardedRealAudioStatus(configPath, ocrEngineOverride: null);
+    }
+
+    public GuardedRealAudioStatus GetGuardedRealAudioStatus(string? configPath, OcrEngine? ocrEngineOverride)
+    {
         try
         {
             AppCommandLineOptions options = BuildGuardedRealAudioOptions(configPath);
             AppSettings settings = LoadMergedSettings(options);
+            ApplyGuiOcrEngineOverride(settings, ocrEngineOverride);
             RuntimePreflightResult preflightResult = new AppPreflightValidator().Validate(settings, options);
             List<string> issues = preflightResult.Issues
                 .Select(issue => $"{issue.Category}: {issue.Message}")
@@ -350,6 +496,7 @@ public sealed class GuiCommandService
         catch (Exception exception)
         {
             AppSettings? fallbackSettings = TryLoadSettings(configPath);
+            ApplyGuiOcrEngineOverride(fallbackSettings, ocrEngineOverride);
             return new GuardedRealAudioStatus(
                 TargetProcessName: fallbackSettings?.TargetProcessName ?? string.Empty,
                 AudioMode: fallbackSettings?.AudioFilter.Mode.ToString() ?? "Unknown",
@@ -426,6 +573,18 @@ public sealed class GuiCommandService
         }
 
         settings.Detection.SaveDebugImages = tuningOptions.SaveDebugImages;
+        settings.Detection.SaveOcrFailureSamples = tuningOptions.SaveOcrFailureSamples;
+        settings.Validate();
+    }
+
+    public static void ApplyGuiOcrEngineOverride(AppSettings? settings, OcrEngine? ocrEngineOverride)
+    {
+        if (settings is null || ocrEngineOverride is null)
+        {
+            return;
+        }
+
+        settings.Ocr.Engine = ocrEngineOverride.Value;
         settings.Validate();
     }
 
@@ -522,7 +681,7 @@ public sealed class GuiCommandService
         throw new InvalidOperationException(message);
     }
 
-    private static async Task<OcrResult> ExtractOcrAsync(
+    private async Task<OcrResult> ExtractOcrAsync(
         AppSettings settings,
         AppCommandLineOptions options,
         TextWriter log,
@@ -534,7 +693,14 @@ public sealed class GuiCommandService
             InputImagePath = options.OcrInputPath,
             Language = settings.Ocr.Language,
             TesseractExecutablePath = settings.Ocr.TesseractExecutablePath,
+            PaddleModelDirectory = settings.Ocr.PaddleModelDirectory,
+            PaddleRuntimeDirectory = settings.Ocr.PaddleRuntimeDirectory,
             PageSegmentationMode = settings.Ocr.PageSegmentationMode,
+            InputScale = settings.Ocr.InputScale,
+            PaddingPixels = settings.Ocr.PaddingPixels,
+            Grayscale = settings.Ocr.Grayscale,
+            Invert = settings.Ocr.Invert,
+            Threshold = settings.Ocr.Threshold,
             OcrRegion = null
         };
 
@@ -563,12 +729,33 @@ public sealed class GuiCommandService
         {
             OcrEngine = ocrOptions.OcrEngine,
             TesseractExecutablePath = ocrOptions.TesseractExecutablePath,
+            PaddleModelDirectory = ocrOptions.PaddleModelDirectory,
+            PaddleRuntimeDirectory = ocrOptions.PaddleRuntimeDirectory,
             Language = ocrOptions.Language,
             PageSegmentationMode = ocrOptions.PageSegmentationMode,
             InputImagePath = preparedInputPath
         };
 
-        return await new TesseractCliOcrService().ExtractTextAsync(preparedOptions, cancellationToken);
+        return await _ocrServices.Get(settings.Ocr.Engine).ExtractTextAsync(preparedOptions, cancellationToken);
+    }
+
+    private static OcrOptions BuildOcrOptionsForSettings(AppSettings settings)
+    {
+        return new OcrOptions
+        {
+            OcrEngine = settings.Ocr.Engine,
+            TesseractExecutablePath = settings.Ocr.TesseractExecutablePath,
+            PaddleModelDirectory = settings.Ocr.PaddleModelDirectory,
+            PaddleRuntimeDirectory = settings.Ocr.PaddleRuntimeDirectory,
+            Language = settings.Ocr.Language,
+            PageSegmentationMode = settings.Ocr.PageSegmentationMode,
+            InputScale = settings.Ocr.InputScale,
+            PaddingPixels = settings.Ocr.PaddingPixels,
+            Grayscale = settings.Ocr.Grayscale,
+            Invert = settings.Ocr.Invert,
+            Threshold = settings.Ocr.Threshold,
+            InputImagePath = null
+        };
     }
 
     private static DetectionDryRunOptions BuildDryRunOptions(
@@ -586,13 +773,21 @@ public sealed class GuiCommandService
             OcrEngine = settings.Ocr.Engine,
             OcrLanguage = settings.Ocr.Language,
             TesseractExecutablePath = settings.Ocr.TesseractExecutablePath,
+            PaddleModelDirectory = settings.Ocr.PaddleModelDirectory,
+            PaddleRuntimeDirectory = settings.Ocr.PaddleRuntimeDirectory,
             OcrPageSegmentationMode = settings.Ocr.PageSegmentationMode,
+            OcrInputScale = settings.Ocr.InputScale,
+            OcrPaddingPixels = settings.Ocr.PaddingPixels,
+            OcrGrayscale = settings.Ocr.Grayscale,
+            OcrInvert = settings.Ocr.Invert,
+            OcrThreshold = settings.Ocr.Threshold,
             TargetSpeakers = settings.TargetSpeakers,
             LoopIntervalMs = settings.Detection.LoopIntervalMs,
             LoopCount = settings.Detection.LoopCount,
             CaptureOutputDirectory = options.CaptureOutputDirectory,
             CaptureDelayMs = ResolveGuiCaptureDelayMs(options.CaptureDelayMs, tuningOptions),
             SaveDebugImages = settings.Detection.SaveDebugImages,
+            SaveOcrFailureSamples = settings.Detection.SaveOcrFailureSamples,
             Stability = new DetectionStabilityOptions
             {
                 MatchThreshold = settings.Detection.MatchThreshold,
@@ -623,11 +818,31 @@ public sealed class GuiCommandService
         log.WriteLine($"Match threshold: {dryRunOptions.Stability.MatchThreshold}");
         log.WriteLine($"Miss threshold: {dryRunOptions.Stability.MissThreshold}");
         log.WriteLine($"Save debug images: {dryRunOptions.SaveDebugImages}");
+        log.WriteLine($"Save OCR failure samples: {dryRunOptions.SaveOcrFailureSamples}");
+        log.WriteLine($"OCR engine: {dryRunOptions.OcrEngine}");
+        log.WriteLine(
+            $"OCR preprocessing: scale={dryRunOptions.OcrInputScale}, padding={dryRunOptions.OcrPaddingPixels}, grayscale={dryRunOptions.OcrGrayscale}, invert={dryRunOptions.OcrInvert}, threshold={dryRunOptions.OcrThreshold?.ToString() ?? "none"}");
+    }
+
+    private void WriteOcrBackendState(AppSettings settings, TextWriter log)
+    {
+        bool warm = _ocrServices.IsWarm(settings.Ocr.Engine);
+        log.WriteLine($"OCR backend initialized: {warm}");
+        log.WriteLine($"OCR backend warm: {warm}");
+        if (settings.Ocr.Engine == OcrEngine.PaddleOcrLocal && !warm)
+        {
+            log.WriteLine("OCR backend warmup note: PaddleOcrLocal is not warm yet; first OCR may include model initialization. Use Warm up OCR backend before realtime detection.");
+        }
     }
 
     public static int ResolveGuiCaptureDelayMs(int baseCaptureDelayMs, GuiDetectionTuningOptions? tuningOptions)
     {
         return tuningOptions?.CaptureDelayMs ?? baseCaptureDelayMs;
+    }
+
+    private static string FormatOptionalPath(string? path)
+    {
+        return string.IsNullOrWhiteSpace(path) ? "(bundled/default)" : path.Trim();
     }
 
     private static void WritePreflightIssues(RuntimePreflightResult preflightResult, TextWriter log)

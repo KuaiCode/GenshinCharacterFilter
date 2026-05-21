@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.17 WPF Modern GUI Shell**.
+Current milestone: **v0.18 OCR Backend Replacement / Low-latency OCR Spike**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, v0.12 Configuration Integration, v0.13 Usability Hardening, v0.14 Minimal WinForms Control Panel, v0.15 GUI Hardening, and v0.16 GUI Guarded Real Audio Page are implemented. v0.17 introduces a modern WPF shell over the existing services so the GUI can move beyond the temporary WinForms control panel without adding config editing or changing real-audio safety gates.
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, v0.12 Configuration Integration, v0.13 Usability Hardening, v0.14 Minimal WinForms Control Panel, v0.15 GUI Hardening, v0.16 GUI Guarded Real Audio Page, and v0.17 WPF Modern GUI Shell are implemented. v0.18 adds an optional low-latency local PaddleOCR backend while keeping Tesseract CLI as the default fallback and leaving real-audio safety gates unchanged.
 
 ## Current Scope
 
@@ -27,6 +27,8 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Explicit configuration validation and effective configuration diagnostics.
 - Preflight checks for common OCR, image, region config, and process problems.
 - Explicit modern WPF GUI shell launched with `--gui`, with Overview, Config, OCR, Detection, Audio, and Logs pages.
+- Optional `PaddleOcrLocal` backend for low-latency OCR experiments, with `TesseractCli` retained as the default fallback.
+- OCR benchmark and failure-sample diagnostics for comparing backend speed and inspecting bad crops.
 
 Out of scope: GUI config editor, saving edited config, default automatic real audio, config-only guarded real audio, unguarded real detection audio, production auto mute, automatic OCR region detection, fabricated preset coordinates, fuzzy matching, speaker recognition from image, WinUI, overlay, masking, hotkeys, game memory access, hooks, DLL injection, game file modification, and input automation.
 
@@ -66,6 +68,8 @@ dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj --
 The WPF shell uses a BetterGI-inspired local tool layout with left navigation, a top status bar, card-style pages, light/dark theme detection at startup, a dedicated Logs page, and a visually separated Guarded Real Audio Danger Zone. It provides controls for selecting a config file, validating config, showing effective config, calibrating the OCR region, testing OCR once, starting/stopping dry-run detection, starting/stopping simulated detection audio, and starting guarded real audio after explicit confirmation. It shows command logs in the window and uses the same underlying config, OCR, calibration, detection, and audio services as the CLI.
 
 The GUI is a modern shell, not a settings editor or config editor. It displays run status, config, target process, speakers, capture mode, and real-audio status; prevents overlapping detection starts; logs button errors in the panel; auto-scrolls new log output; and lets Stop request cancellation for cancellable operations. The Guarded Real Audio controls are visually separated as a danger zone and still require explicit enablement plus confirmation.
+
+The OCR page can select the OCR backend for the current GUI run. Choose `TesseractCli` for the compatibility fallback, or `PaddleOcrLocal` for the low-latency local backend. The `Warm up OCR backend` button initializes the selected backend before detection starts; for Paddle this avoids putting the slow first model load into the first detection frame. The GUI logs the actual backend used by dry-run, simulated audio, and guarded real audio detection.
 
 For OCR input, select the original screenshot, such as `debug-captures/capture-latest.png`. Do not use `debug-ocr/ocr-input-latest.png` as OCR input because that file is the generated debug output and may be overwritten by the next OCR run.
 
@@ -136,6 +140,77 @@ dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj --
 ```
 
 If Tesseract is not installed or the requested language data is missing, the app reports a clear OCR error. No screenshots are sent to cloud OCR services.
+
+## OCR Backend Selection
+
+The OCR service is selected by `Ocr.Engine` in config or by `--ocr-engine`.
+
+- `TesseractCli` is the default and remains the compatibility fallback. It starts `tesseract.exe` for each OCR call, so it is stable but can be slow in realtime loops.
+- `PaddleOcrLocal` uses the local PaddleOCRSharp runtime in-process. It is intended as a low-latency candidate because the OCR engine can be initialized once and reused by a detection loop.
+
+Config example:
+
+```json
+"Ocr": {
+  "Engine": "PaddleOcrLocal",
+  "TesseractExecutablePath": "tesseract",
+  "PaddleModelDirectory": null,
+  "PaddleRuntimeDirectory": null,
+  "Language": "chi_sim",
+  "PageSegmentationMode": 7,
+  "RegionConfigPath": "ocr-region.json"
+}
+```
+
+`PaddleModelDirectory` and `PaddleRuntimeDirectory` are optional. Leave them empty to use the bundled PaddleOCRSharp model/runtime files copied by NuGet. If you provide custom paths, the app validates them and reports clear errors for missing native DLLs, model files, or unsupported architecture. You can also test from CLI:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --ocr-once --ocr-engine PaddleOcrLocal --ocr-input debug-captures/capture-latest.png --ocr-region-config ocr-region.json
+```
+
+Realtime detection timing still prints `OCR: <ms>` per iteration. Compare the same OCR region with `TesseractCli` and `PaddleOcrLocal` before enabling guarded real audio.
+
+Detection loops print the selected OCR engine before the first iteration:
+
+- `OCR engine: TesseractCli` or `OCR engine: PaddleOcrLocal`
+- `OCR backend initialized: true/false`
+- `OCR backend warm: true/false`
+- Paddle model/runtime paths when Paddle is selected
+
+If `PaddleOcrLocal` is selected and initialization fails, the app reports the Paddle failure and does not silently fall back to Tesseract. Switch `Ocr.Engine` back to `TesseractCli` when you need the known fallback path.
+
+In WPF, select `PaddleOcrLocal` on the OCR page and click `Warm up OCR backend` before starting realtime detection. Paddle first-run initialization can take many seconds, while warm runs are the timing that matters for realtime detection. Start/Stop detection keeps the warmed Paddle service alive for the GUI app lifetime unless you switch engines or change relevant OCR runtime/model settings.
+
+## OCR Benchmark And Failure Samples
+
+Use `--ocr-benchmark` to compare engines against the same local crop. This does not start detection or audio.
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --ocr-benchmark --ocr-input debug-ocr/calibration-region-latest.png --ocr-engine TesseractCli --ocr-repeat 5
+```
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --ocr-benchmark --ocr-input debug-ocr/calibration-region-latest.png --ocr-engine PaddleOcrLocal --ocr-repeat 5
+```
+
+The benchmark prints the engine, region source, preprocessing settings, raw text for each run, first-run elapsed time, average elapsed time, warm-run average elapsed time, min/max elapsed time, and failure count. For Paddle, the first run includes model/runtime initialization; warm-run average is the more useful realtime estimate. Use `debug-ocr/calibration-region-latest.png` or `debug-ocr/ocr-input-latest.png` to isolate OCR accuracy from capture timing.
+
+Realtime detection can save failed OCR samples without saving every frame. Enable `Detection.SaveOcrFailureSamples` in config, or use the GUI checkbox when available. When OCR output is empty, noisy, or does not match a configured target speaker, the app writes:
+
+- `debug-ocr/failures/YYYYMMDD-HHMMSS-iteration-xxxx.png`
+- a matching `.json` sidecar with timestamp, OCR engine, raw text, normalized text, target speakers, OCR region, elapsed ms, and iteration
+
+Failure samples are diagnostics only. If saving them fails, the detection loop logs a warning and continues.
+
+OCR input preparation is optional and disabled by default because earlier manual samples sometimes worked better as raw crops. These config/CLI values can be used for one-shot OCR, benchmark, and detection loops:
+
+- `Ocr.InputScale` / `--ocr-input-scale <1..4>`
+- `Ocr.PaddingPixels` / `--ocr-padding-pixels <0..100>`
+- `Ocr.Grayscale` / `--ocr-grayscale`
+- `Ocr.Invert` / `--ocr-invert`
+- `Ocr.Threshold` / `--ocr-threshold <0..255|none>`
+
+Default behavior is still raw crop: scale `1`, padding `0`, grayscale `false`, invert `false`, threshold `none`.
 
 ## Speaker Detection Debug
 
@@ -295,6 +370,11 @@ Example shape:
     "TesseractExecutablePath": "tesseract",
     "Language": "chi_sim",
     "PageSegmentationMode": 7,
+    "InputScale": 1,
+    "PaddingPixels": 0,
+    "Grayscale": false,
+    "Invert": false,
+    "Threshold": null,
     "RegionPreset": "none"
   },
   "Detection": {
@@ -302,7 +382,8 @@ Example shape:
     "LoopCount": 5,
     "MatchThreshold": 2,
     "MissThreshold": 2,
-    "SaveDebugImages": false
+    "SaveDebugImages": false,
+    "SaveOcrFailureSamples": false
   }
 }
 ```
@@ -377,9 +458,19 @@ Supported overrides:
 - `--capture-delay-ms <number>`
 - `--ocr-once`
 - `--ocr-input <imagePath>`
+- `--ocr-engine TesseractCli|PaddleOcrLocal`
 - `--ocr-lang <language>`
 - `--tesseract-path <path>`
+- `--paddle-model-dir <path>`
+- `--paddle-runtime-dir <path>`
 - `--ocr-psm <number>`
+- `--ocr-input-scale <number>`
+- `--ocr-padding-pixels <number>`
+- `--ocr-grayscale`
+- `--ocr-invert`
+- `--ocr-threshold <number|none>`
+- `--ocr-benchmark`
+- `--ocr-repeat <number>`
 - `--ocr-region <x,y,width,height>`
 - `--ocr-region-config <path>`
 - `--ocr-region-preset auto|2560x1600|1920x1080|none`
@@ -437,4 +528,4 @@ Real mode uses Windows Core Audio sessions through `WindowsAudioMuteService`. It
 
 NAudio is included only for Windows Core Audio session access in explicit real audio mode. It affects deployment by adding managed NuGet assemblies and Windows audio API access, but it does not add game integration, injection, memory reading, hooks, OCR, image-processing, model-inference, UI, or overlay features.
 
-OCR currently uses an external Tesseract CLI process when explicitly requested. No Tesseract binaries or traineddata files are committed to the repository, and OCR output is not uploaded to any cloud service.
+OCR keeps the external Tesseract CLI path as the default fallback. No Tesseract binaries or traineddata files are committed to the repository, and OCR output is not uploaded to any cloud service. v0.18 also includes PaddleOCRSharp as an optional local OCR backend spike; it adds native Windows x64 runtime/model artifacts through NuGet output copying, but remains opt-in through `Ocr.Engine` or `--ocr-engine PaddleOcrLocal`.

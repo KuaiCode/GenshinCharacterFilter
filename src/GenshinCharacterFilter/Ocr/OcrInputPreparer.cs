@@ -21,15 +21,15 @@ public sealed class OcrInputPreparer
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
 
-        if (options.OcrRegion is null)
+        if (options.OcrRegion is null && !options.HasNonDefaultPreparation())
         {
             return options.GetFullInputImagePath();
         }
 
-        return PrepareRegionImage(options);
+        return PreparePreparedImage(options);
     }
 
-    private static string PrepareRegionImage(OcrOptions options)
+    private static string PreparePreparedImage(OcrOptions options)
     {
         string inputImagePath = options.GetFullInputImagePath();
         string outputDirectory = options.SaveDebugImage
@@ -82,7 +82,30 @@ public sealed class OcrInputPreparer
     private static Bitmap PrepareBitmap(Image sourceImage, OcrOptions options)
     {
         using Bitmap sourceBitmap = new(sourceImage);
-        return Crop(sourceBitmap, options.OcrRegion!.Value);
+        OcrRegion region = options.OcrRegion is null
+            ? new OcrRegion(0, 0, sourceBitmap.Width, sourceBitmap.Height)
+            : ExpandRegion(options.OcrRegion.Value, sourceBitmap.Width, sourceBitmap.Height, options.PaddingPixels);
+        using Bitmap cropped = Crop(sourceBitmap, region);
+        using Bitmap scaled = Scale(cropped, options.InputScale);
+        using Bitmap transformed = ApplyPixelTransforms(scaled, options);
+        return new Bitmap(transformed);
+    }
+
+    private static OcrRegion ExpandRegion(OcrRegion region, int imageWidth, int imageHeight, int paddingPixels)
+    {
+        if (paddingPixels == 0)
+        {
+            region.ValidateWithin(imageWidth, imageHeight);
+            return region;
+        }
+
+        int left = Math.Max(0, region.X - paddingPixels);
+        int top = Math.Max(0, region.Y - paddingPixels);
+        int right = Math.Min(imageWidth, region.X + region.Width + paddingPixels);
+        int bottom = Math.Min(imageHeight, region.Y + region.Height + paddingPixels);
+        OcrRegion expanded = new(left, top, right - left, bottom - top);
+        expanded.ValidateWithin(imageWidth, imageHeight);
+        return expanded;
     }
 
     private static Bitmap Crop(Bitmap source, OcrRegion region)
@@ -98,6 +121,68 @@ public sealed class OcrInputPreparer
             GraphicsUnit.Pixel);
 
         return cropped;
+    }
+
+    private static Bitmap Scale(Bitmap source, int scale)
+    {
+        if (scale == OcrOptions.DefaultInputScale)
+        {
+            return new Bitmap(source);
+        }
+
+        Bitmap scaled = new(source.Width * scale, source.Height * scale);
+        using Graphics graphics = Graphics.FromImage(scaled);
+        graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+        graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+        graphics.DrawImage(source, new Rectangle(0, 0, scaled.Width, scaled.Height));
+        return scaled;
+    }
+
+    private static Bitmap ApplyPixelTransforms(Bitmap source, OcrOptions options)
+    {
+        if (!options.Grayscale && !options.Invert && options.Threshold is null)
+        {
+            return new Bitmap(source);
+        }
+
+        Bitmap transformed = new(source.Width, source.Height, PixelFormat.Format32bppArgb);
+        for (int y = 0; y < source.Height; y++)
+        {
+            for (int x = 0; x < source.Width; x++)
+            {
+                Color pixel = source.GetPixel(x, y);
+                int red = pixel.R;
+                int green = pixel.G;
+                int blue = pixel.B;
+
+                if (options.Grayscale || options.Threshold is not null)
+                {
+                    int gray = (int)Math.Round(red * 0.299 + green * 0.587 + blue * 0.114);
+                    red = gray;
+                    green = gray;
+                    blue = gray;
+                }
+
+                if (options.Threshold is not null)
+                {
+                    int value = red >= options.Threshold.Value ? 255 : 0;
+                    red = value;
+                    green = value;
+                    blue = value;
+                }
+
+                if (options.Invert)
+                {
+                    red = 255 - red;
+                    green = 255 - green;
+                    blue = 255 - blue;
+                }
+
+                transformed.SetPixel(x, y, Color.FromArgb(pixel.A, red, green, blue));
+            }
+        }
+
+        return transformed;
     }
 
     private static void MoveWithRetry(string tempPath, string outputPath)

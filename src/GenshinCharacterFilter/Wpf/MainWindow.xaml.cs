@@ -31,12 +31,14 @@ public partial class MainWindow : Window
         string CaptureDelayMs,
         string MatchThreshold,
         string MissThreshold,
-        bool SaveDebugImages);
+        bool SaveDebugImages,
+        bool SaveOcrFailureSamples);
 
     private readonly record struct DetectionLaunchInput(
         string? ConfigPath,
         string? OcrInputPath,
         bool UseFixedImageForDetection,
+        OcrEngine OcrEngine,
         GuiDetectionTuningOptions TuningOptions);
 
     public MainWindow(string? initialConfigPath, WpfAppTheme theme)
@@ -48,15 +50,18 @@ public partial class MainWindow : Window
         ConfigPathTextBox.Text = string.IsNullOrWhiteSpace(initialConfigPath)
             ? GuiCommandService.GetDefaultConfigPath()
             : initialConfigPath;
+        OcrEngineComboBox.ItemsSource = Enum.GetValues<OcrEngine>().Select(engine => engine.ToString()).ToArray();
         OcrInputPathTextBox.Text = GuiCommandService.GetDefaultOcrInputPath();
         UseFixedImageForDetectionCheckBox.IsChecked = false;
         SaveDebugImagesCheckBox.IsChecked = false;
+        SaveOcrFailureSamplesCheckBox.IsChecked = false;
         RunUntilStopCheckBox.IsChecked = true;
         LoopCountTextBox.Text = string.Empty;
         LoopIntervalTextBox.Text = GuiDetectionTuningOptions.DefaultLoopIntervalMs.ToString();
         CaptureDelayTextBox.Text = GuiDetectionTuningOptions.DefaultCaptureDelayMs.ToString();
         MatchThresholdTextBox.Text = GuiDetectionTuningOptions.DefaultMatchThreshold.ToString();
         MissThresholdTextBox.Text = GuiDetectionTuningOptions.DefaultMissThreshold.ToString();
+        RefreshOcrEngineSelectionFromConfig();
 
         Closing += OnWindowClosing;
         ConfigPathTextBox.TextChanged += (_, _) => RefreshStatus();
@@ -113,6 +118,7 @@ public partial class MainWindow : Window
             if (dialog.ShowDialog(this) == true)
             {
                 ConfigPathTextBox.Text = dialog.FileName;
+                RefreshOcrEngineSelectionFromConfig();
             }
         });
     }
@@ -154,6 +160,11 @@ public partial class MainWindow : Window
         await RunOperationAsync(TestOcrOnceAsync, cancellable: true);
     }
 
+    private async void WarmUpOcrBackend(object? sender, RoutedEventArgs eventArgs)
+    {
+        await RunOperationAsync(WarmUpOcrBackendAsync, cancellable: true);
+    }
+
     private async void StartDryRunDetection(object? sender, RoutedEventArgs eventArgs)
     {
         await RunOperationAsync(StartDryRunDetectionAsync, cancellable: true);
@@ -167,6 +178,12 @@ public partial class MainWindow : Window
     private async void StartGuardedRealAudio(object? sender, RoutedEventArgs eventArgs)
     {
         await StartGuardedRealAudioWithConfirmationAsync();
+    }
+
+    private void OcrEngineSelectionChanged(object? sender, SelectionChangedEventArgs eventArgs)
+    {
+        RefreshOcrBackendStatus();
+        RefreshStatus();
     }
 
     private void StopOperation(object? sender, RoutedEventArgs eventArgs)
@@ -213,7 +230,7 @@ public partial class MainWindow : Window
     private Task PrintEffectiveConfigAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _commandService.PrintEffectiveConfig(GetConfigPath(), CreateLogWriter());
+        _commandService.PrintEffectiveConfig(GetConfigPath(), GetSelectedOcrEngine(), CreateLogWriter());
         return Task.CompletedTask;
     }
 
@@ -244,8 +261,28 @@ public partial class MainWindow : Window
         await _commandService.OcrOnceAsync(
             GetConfigPath(),
             GetRequiredOcrInputPath(),
+            GetSelectedOcrEngine(),
             CreateLogWriter(),
             cancellationToken);
+    }
+
+    private async Task WarmUpOcrBackendAsync(CancellationToken cancellationToken)
+    {
+        await SetOcrBackendStatusAsync("Warming up");
+        try
+        {
+            GuiOcrWarmupResult result = await _commandService.WarmUpOcrBackendAsync(
+                GetConfigPath(),
+                GetSelectedOcrEngine(),
+                CreateLogWriter(),
+                cancellationToken);
+            await SetOcrBackendStatusAsync(result.IsWarm ? "Ready" : "Not initialized");
+        }
+        catch
+        {
+            await SetOcrBackendStatusAsync("Failed");
+            throw;
+        }
     }
 
     private async Task StartDryRunDetectionAsync(CancellationToken cancellationToken)
@@ -259,6 +296,7 @@ public partial class MainWindow : Window
                 launch.OcrInputPath,
                 launch.UseFixedImageForDetection,
                 launch.TuningOptions,
+                launch.OcrEngine,
                 false,
                 CreateLogWriter(),
                 token),
@@ -267,6 +305,7 @@ public partial class MainWindow : Window
                 launch.OcrInputPath,
                 launch.UseFixedImageForDetection,
                 launch.TuningOptions,
+                launch.OcrEngine,
                 false,
                 afterForegroundSessionReady,
                 CreateLogWriter(),
@@ -285,6 +324,7 @@ public partial class MainWindow : Window
                 launch.OcrInputPath,
                 launch.UseFixedImageForDetection,
                 launch.TuningOptions,
+                launch.OcrEngine,
                 true,
                 CreateLogWriter(),
                 token),
@@ -293,6 +333,7 @@ public partial class MainWindow : Window
                 launch.OcrInputPath,
                 launch.UseFixedImageForDetection,
                 launch.TuningOptions,
+                launch.OcrEngine,
                 true,
                 afterForegroundSessionReady,
                 CreateLogWriter(),
@@ -310,12 +351,14 @@ public partial class MainWindow : Window
                 launch.ConfigPath,
                 launch.UseFixedImageForDetection,
                 launch.TuningOptions,
+                launch.OcrEngine,
                 CreateLogWriter(),
                 token),
             foregroundOperation: (afterForegroundSessionReady, token) => _commandService.RunGuardedRealAudioDetectionFromForegroundWindowAsync(
                 launch.ConfigPath,
                 launch.UseFixedImageForDetection,
                 launch.TuningOptions,
+                launch.OcrEngine,
                 afterForegroundSessionReady,
                 CreateLogWriter(),
                 token),
@@ -605,6 +648,9 @@ public partial class MainWindow : Window
             OverviewTestOcrOnceButton,
             UseFixedImageForDetectionCheckBox,
             SaveDebugImagesCheckBox,
+            SaveOcrFailureSamplesCheckBox,
+            OcrEngineComboBox,
+            WarmUpOcrBackendButton,
             RunUntilStopCheckBox,
             LoopIntervalTextBox,
             CaptureDelayTextBox,
@@ -621,6 +667,7 @@ public partial class MainWindow : Window
         DetectionStopButton.IsEnabled = uiState.StopButtonEnabled;
         AudioStopButton.IsEnabled = uiState.StopButtonEnabled;
         RefreshGuardedRealAudioStatus();
+        RefreshOcrBackendStatus();
     }
 
     private static void SetControlsEnabled(bool enabled, params WpfControl[] controls)
@@ -680,7 +727,7 @@ public partial class MainWindow : Window
 
     private void RefreshGuardedRealAudioStatusCore()
     {
-        GuardedRealAudioStatus status = _commandService.GetGuardedRealAudioStatus(GetConfigPath());
+        GuardedRealAudioStatus status = _commandService.GetGuardedRealAudioStatus(GetConfigPath(), GetSelectedOcrEngine());
         GuardedRealAudioUiEligibility eligibility = new(
             EnableGuardedRealAudioCheckBox.IsChecked == true,
             _stateController.OperationActive,
@@ -701,7 +748,7 @@ public partial class MainWindow : Window
 
     private GuardedRealAudioUiEligibility GetGuardedRealAudioEligibility()
     {
-        GuardedRealAudioStatus status = _commandService.GetGuardedRealAudioStatus(GetConfigPath());
+        GuardedRealAudioStatus status = _commandService.GetGuardedRealAudioStatus(GetConfigPath(), GetSelectedOcrEngine());
         return new GuardedRealAudioUiEligibility(
             IsGuardedRealAudioEnabled(),
             _stateController.OperationActive,
@@ -782,6 +829,42 @@ public partial class MainWindow : Window
         });
     }
 
+    private OcrEngine GetSelectedOcrEngine()
+    {
+        return RunOnUiThread(() => GuiOcrEngineSelection.Parse(OcrEngineComboBox.SelectedItem?.ToString()));
+    }
+
+    private void RefreshOcrEngineSelectionFromConfig()
+    {
+        RunOnUiThread(() =>
+        {
+            AppSettings? settings = TryLoadSettings();
+            OcrEngine engine = settings?.Ocr.Engine ?? OcrEngine.TesseractCli;
+            OcrEngineComboBox.SelectedItem = engine.ToString();
+            RefreshOcrBackendStatusCore(engine);
+        });
+    }
+
+    private void RefreshOcrBackendStatus()
+    {
+        RunOnUiThread(() => RefreshOcrBackendStatusCore(GetSelectedOcrEngine()));
+    }
+
+    private void RefreshOcrBackendStatusCore(OcrEngine engine)
+    {
+        OcrBackendStatusTextBlock.Text = _commandService.IsOcrBackendWarm(engine)
+            ? "Backend status: Ready"
+            : "Backend status: Not initialized";
+    }
+
+    private Task SetOcrBackendStatusAsync(string status)
+    {
+        return RunOnUiThreadAsync(() =>
+        {
+            OcrBackendStatusTextBlock.Text = $"Backend status: {status}";
+        });
+    }
+
     private string GetRequiredOcrInputPath()
     {
         return RunOnUiThread(() =>
@@ -825,7 +908,8 @@ public partial class MainWindow : Window
             input.CaptureDelayMs,
             input.MatchThreshold,
             input.MissThreshold,
-            input.SaveDebugImages);
+            input.SaveDebugImages,
+            input.SaveOcrFailureSamples);
     }
 
     private DetectionLaunchInput GetDetectionLaunchInput()
@@ -834,6 +918,7 @@ public partial class MainWindow : Window
             GetConfigPath(),
             GetOptionalOcrInputPath(),
             IsFixedImageForDetectionEnabled(),
+            GetSelectedOcrEngine(),
             ParseGuiDetectionTuning());
     }
 
@@ -846,7 +931,8 @@ public partial class MainWindow : Window
             CaptureDelayTextBox.Text,
             MatchThresholdTextBox.Text,
             MissThresholdTextBox.Text,
-            SaveDebugImagesCheckBox.IsChecked == true));
+            SaveDebugImagesCheckBox.IsChecked == true,
+            SaveOcrFailureSamplesCheckBox.IsChecked == true));
     }
 
     private void RunBrowseAction(string label, Action action)

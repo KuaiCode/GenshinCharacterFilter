@@ -166,6 +166,26 @@
                         <TextBlock Text="OCR" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,14" />
                         <Border Style="{StaticResource CardBorderStyle}">
                             <StackPanel>
+                                <TextBlock Text="OCR backend" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox x:Name="OcrEngineComboBox"
+                                              Grid.Column="0"
+                                              SelectionChanged="OcrEngineSelectionChanged" />
+                                    <TextBlock x:Name="OcrBackendStatusTextBlock"
+                                               Grid.Column="1"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource MutedForegroundBrush}"
+                                               Margin="12,0,12,0" />
+                                    <Button x:Name="WarmUpOcrBackendButton"
+                                            Grid.Column="2"
+                                            Content="Warm up OCR backend"
+                                            Click="WarmUpOcrBackend" />
+                                </Grid>
                                 <TextBlock Text="OCR input" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -177,6 +197,7 @@
                                 </Grid>
                                 <CheckBox x:Name="UseFixedImageForDetectionCheckBox" Content="Use fixed image for detection loop (debug only)" Margin="0,14,0,0" />
                                 <CheckBox x:Name="SaveDebugImagesCheckBox" Content="Save debug images" />
+                                <CheckBox x:Name="SaveOcrFailureSamplesCheckBox" Content="Save OCR failure samples" />
                                 <TextBlock x:Name="RegionSourceSummaryTextBlock"
                                            Foreground="{DynamicResource MutedForegroundBrush}"
                                            Margin="0,8,0,14" />

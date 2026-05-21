@@ -88,6 +88,34 @@ public sealed class AppPreflightValidatorTests
     }
 
     [Fact]
+    public void Validate_PaddleOcrReportsMissingRuntimeDirectory()
+    {
+        AppSettings settings = CreateSettings();
+        settings.Ocr.Engine = OcrEngine.PaddleOcrLocal;
+        settings.Ocr.PaddleRuntimeDirectory = @"C:\Missing\PaddleRuntime";
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--ocr-once", "--ocr-input", "input.png"]);
+        AppPreflightValidator validator = new(fileExists: path => path == "input.png");
+
+        RuntimePreflightResult result = validator.Validate(settings, options);
+
+        Assert.Contains(result.Issues, issue => issue.Message.Contains("PaddleOCR runtime directory"));
+    }
+
+    [Fact]
+    public void Validate_PaddleOcrReportsMissingModelDirectory()
+    {
+        AppSettings settings = CreateSettings();
+        settings.Ocr.Engine = OcrEngine.PaddleOcrLocal;
+        settings.Ocr.PaddleModelDirectory = @"C:\Missing\PaddleModels";
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(["--ocr-once", "--ocr-input", "input.png"]);
+        AppPreflightValidator validator = new(fileExists: path => path == "input.png");
+
+        RuntimePreflightResult result = validator.Validate(settings, options);
+
+        Assert.Contains(result.Issues, issue => issue.Message.Contains("PaddleOCR model directory"));
+    }
+
+    [Fact]
     public void Validate_WindowDetectLoopReportsMissingTargetProcess()
     {
         AppSettings settings = CreateSettings();

@@ -113,15 +113,60 @@ public sealed class AppCommandLineOptionsTests
     public void Parse_ReadsOcrOptions()
     {
         AppCommandLineOptions options = AppCommandLineOptions.Parse(
-            ["--ocr-once", "--ocr-input", "debug-captures/capture-latest.png", "--ocr-lang", "chi_sim+eng", "--tesseract-path", "C:\\Tools\\tesseract.exe", "--ocr-psm", "7"]);
+            ["--ocr-once", "--ocr-input", "debug-captures/capture-latest.png", "--ocr-engine", "TesseractCli", "--ocr-lang", "chi_sim+eng", "--tesseract-path", "C:\\Tools\\tesseract.exe", "--ocr-psm", "7"]);
 
         Assert.True(options.OcrOnce);
         Assert.Equal("debug-captures/capture-latest.png", options.OcrInputPath);
+        Assert.Equal(OcrEngine.TesseractCli, options.OcrEngine);
         Assert.Equal("chi_sim+eng", options.OcrLanguage);
         Assert.Equal("C:\\Tools\\tesseract.exe", options.TesseractExecutablePath);
         Assert.Equal(7, options.OcrPageSegmentationMode);
         Assert.Null(options.OcrRegion);
         Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
+    public void Parse_ReadsPaddleOcrOptions()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--ocr-once", "--ocr-input", "input.png", "--ocr-engine", "PaddleOcrLocal", "--paddle-model-dir", "models", "--paddle-runtime-dir", "runtime"]);
+
+        Assert.Equal(OcrEngine.PaddleOcrLocal, options.OcrEngine);
+        Assert.Equal("models", options.PaddleModelDirectory);
+        Assert.Equal("runtime", options.PaddleRuntimeDirectory);
+    }
+
+    [Fact]
+    public void Parse_ReadsOcrBenchmarkOptions()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--ocr-benchmark", "--ocr-input", "input.png", "--ocr-repeat", "5"]);
+
+        Assert.True(options.OcrBenchmark);
+        Assert.Equal("input.png", options.OcrInputPath);
+        Assert.Equal(5, options.OcrRepeat);
+    }
+
+    [Fact]
+    public void Parse_ReadsOcrPreparationOptions()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--ocr-once", "--ocr-input", "input.png", "--ocr-input-scale", "2", "--ocr-padding-pixels", "5", "--ocr-grayscale", "--ocr-invert", "--ocr-threshold", "120"]);
+
+        Assert.Equal(2, options.OcrInputScale);
+        Assert.Equal(5, options.OcrPaddingPixels);
+        Assert.True(options.OcrGrayscale);
+        Assert.True(options.OcrInvert);
+        Assert.Equal(120, options.OcrThreshold);
+    }
+
+    [Fact]
+    public void Parse_RejectsInvalidOcrEngine()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--ocr-engine", "fast"]));
+
+        Assert.Contains("OCR engine", exception.Message);
     }
 
     [Fact]
@@ -318,9 +363,15 @@ public sealed class AppCommandLineOptionsTests
     [InlineData("--capture-output")]
     [InlineData("--capture-delay-ms")]
     [InlineData("--ocr-input")]
+    [InlineData("--ocr-engine")]
     [InlineData("--ocr-lang")]
     [InlineData("--tesseract-path")]
+    [InlineData("--paddle-model-dir")]
+    [InlineData("--paddle-runtime-dir")]
     [InlineData("--ocr-psm")]
+    [InlineData("--ocr-input-scale")]
+    [InlineData("--ocr-padding-pixels")]
+    [InlineData("--ocr-threshold")]
     [InlineData("--ocr-region")]
     [InlineData("--ocr-region-config")]
     [InlineData("--ocr-region-preset")]
@@ -329,6 +380,7 @@ public sealed class AppCommandLineOptionsTests
     [InlineData("--loop-count")]
     [InlineData("--match-threshold")]
     [InlineData("--miss-threshold")]
+    [InlineData("--ocr-repeat")]
     [InlineData("--calibration-output")]
     public void Parse_RejectsMissingOptionValue(string optionName)
     {
@@ -728,6 +780,39 @@ public sealed class AppCommandLineOptionsTests
         AppSettings merged = options.ApplyOverrides(settings);
 
         Assert.Equal("chi_sim", merged.Ocr.Language);
+    }
+
+    [Fact]
+    public void ApplyOverrides_CanOverrideOcrEngineAndPaddlePaths()
+    {
+        AppSettings settings = CreateBaseSettings();
+        settings.Ocr.Engine = OcrEngine.TesseractCli;
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--ocr-engine", "PaddleOcrLocal", "--paddle-model-dir", "models", "--paddle-runtime-dir", "runtime"]);
+
+        AppSettings merged = options.ApplyOverrides(settings);
+
+        Assert.Equal(OcrEngine.PaddleOcrLocal, merged.Ocr.Engine);
+        Assert.Equal("models", merged.Ocr.PaddleModelDirectory);
+        Assert.Equal("runtime", merged.Ocr.PaddleRuntimeDirectory);
+    }
+
+    [Fact]
+    public void ApplyOverrides_CanOverrideOcrPreparationOptions()
+    {
+        AppSettings settings = CreateBaseSettings();
+        settings.Ocr.InputScale = 1;
+        settings.Ocr.PaddingPixels = 0;
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--ocr-input-scale", "3", "--ocr-padding-pixels", "10", "--ocr-grayscale", "--ocr-invert", "--ocr-threshold", "160"]);
+
+        AppSettings merged = options.ApplyOverrides(settings);
+
+        Assert.Equal(3, merged.Ocr.InputScale);
+        Assert.Equal(10, merged.Ocr.PaddingPixels);
+        Assert.True(merged.Ocr.Grayscale);
+        Assert.True(merged.Ocr.Invert);
+        Assert.Equal(160, merged.Ocr.Threshold);
     }
 
     [Fact]

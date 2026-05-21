@@ -11,9 +11,23 @@ public sealed class AppOcrSettings
 
     public string TesseractExecutablePath { get; set; } = OcrOptions.DefaultTesseractExecutablePath;
 
+    public string? PaddleModelDirectory { get; set; }
+
+    public string? PaddleRuntimeDirectory { get; set; }
+
     public string Language { get; set; } = OcrOptions.DefaultLanguage;
 
     public int PageSegmentationMode { get; set; } = OcrOptions.DefaultPageSegmentationMode;
+
+    public int InputScale { get; set; } = OcrOptions.DefaultInputScale;
+
+    public int PaddingPixels { get; set; } = OcrOptions.DefaultPaddingPixels;
+
+    public bool Grayscale { get; set; }
+
+    public bool Invert { get; set; }
+
+    public int? Threshold { get; set; }
 
     public string? RegionConfigPath { get; set; }
 
@@ -31,7 +45,8 @@ public sealed class AppOcrSettings
             throw new AppSettingsException("Ocr.Engine is not supported.");
         }
 
-        if (string.IsNullOrWhiteSpace(TesseractExecutablePath))
+        if (Engine == OcrEngine.TesseractCli &&
+            string.IsNullOrWhiteSpace(TesseractExecutablePath))
         {
             throw new AppSettingsException("Ocr.TesseractExecutablePath cannot be empty.");
         }
@@ -49,6 +64,15 @@ public sealed class AppOcrSettings
 
         try
         {
+            OcrOptions.ValidatePreparationOptions(InputScale, PaddingPixels, Threshold);
+        }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            throw new AppSettingsException(exception.Message, exception);
+        }
+
+        try
+        {
             Region?.ValidateShape();
             GetOcrRegionSourceOptions().Validate();
         }
@@ -57,7 +81,11 @@ public sealed class AppOcrSettings
             throw new AppSettingsException(exception.Message, exception);
         }
 
-        TesseractExecutablePath = TesseractExecutablePath.Trim();
+        TesseractExecutablePath = string.IsNullOrWhiteSpace(TesseractExecutablePath)
+            ? OcrOptions.DefaultTesseractExecutablePath
+            : TesseractExecutablePath.Trim();
+        PaddleModelDirectory = string.IsNullOrWhiteSpace(PaddleModelDirectory) ? null : PaddleModelDirectory.Trim();
+        PaddleRuntimeDirectory = string.IsNullOrWhiteSpace(PaddleRuntimeDirectory) ? null : PaddleRuntimeDirectory.Trim();
         Language = Language.Trim();
         RegionConfigPath = string.IsNullOrWhiteSpace(RegionConfigPath) ? null : RegionConfigPath.Trim();
         RegionPreset = string.IsNullOrWhiteSpace(RegionPreset) ? null : RegionPreset.Trim();

@@ -5,5 +5,6 @@ namespace GenshinCharacterFilter.Ocr;
 /// </summary>
 public enum OcrEngine
 {
-    TesseractCli
+    TesseractCli,
+    PaddleOcrLocal
 }

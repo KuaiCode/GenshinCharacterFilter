@@ -20,8 +20,15 @@ public sealed class AppSettingsLoaderTests
         Assert.Equal(30, settings.AudioFilter.VolumePercent);
         Assert.Equal(OcrEngine.TesseractCli, settings.Ocr.Engine);
         Assert.Equal("tesseract", settings.Ocr.TesseractExecutablePath);
+        Assert.Null(settings.Ocr.PaddleModelDirectory);
+        Assert.Null(settings.Ocr.PaddleRuntimeDirectory);
         Assert.Equal("chi_sim+eng", settings.Ocr.Language);
         Assert.Equal(7, settings.Ocr.PageSegmentationMode);
+        Assert.Equal(1, settings.Ocr.InputScale);
+        Assert.Equal(0, settings.Ocr.PaddingPixels);
+        Assert.False(settings.Ocr.Grayscale);
+        Assert.False(settings.Ocr.Invert);
+        Assert.Null(settings.Ocr.Threshold);
         Assert.Null(settings.Ocr.Region);
         Assert.Null(settings.Ocr.RegionConfigPath);
         Assert.Null(settings.Ocr.RegionPreset);
@@ -30,6 +37,7 @@ public sealed class AppSettingsLoaderTests
         Assert.Equal(2, settings.Detection.MatchThreshold);
         Assert.Equal(2, settings.Detection.MissThreshold);
         Assert.False(settings.Detection.SaveDebugImages);
+        Assert.False(settings.Detection.SaveOcrFailureSamples);
     }
 
     [Fact]
@@ -48,8 +56,15 @@ public sealed class AppSettingsLoaderTests
               "Ocr": {
                 "Engine": "TesseractCli",
                 "TesseractExecutablePath": "C:\\Tools\\tesseract.exe",
+                "PaddleModelDirectory": "models",
+                "PaddleRuntimeDirectory": "runtime",
                 "Language": "chi_sim",
                 "PageSegmentationMode": 7,
+                "InputScale": 2,
+                "PaddingPixels": 5,
+                "Grayscale": true,
+                "Invert": true,
+                "Threshold": 120,
                 "RegionConfigPath": "ocr-region.json",
                 "RegionPreset": "none"
               },
@@ -58,7 +73,8 @@ public sealed class AppSettingsLoaderTests
                 "LoopCount": 5,
                 "MatchThreshold": 3,
                 "MissThreshold": 4,
-                "SaveDebugImages": true
+                "SaveDebugImages": true,
+                "SaveOcrFailureSamples": true
               }
             }
             """);
@@ -72,8 +88,15 @@ public sealed class AppSettingsLoaderTests
         Assert.Equal(25, settings.AudioFilter.VolumePercent);
         Assert.Equal(OcrEngine.TesseractCli, settings.Ocr.Engine);
         Assert.Equal("C:\\Tools\\tesseract.exe", settings.Ocr.TesseractExecutablePath);
+        Assert.Equal("models", settings.Ocr.PaddleModelDirectory);
+        Assert.Equal("runtime", settings.Ocr.PaddleRuntimeDirectory);
         Assert.Equal("chi_sim", settings.Ocr.Language);
         Assert.Equal(7, settings.Ocr.PageSegmentationMode);
+        Assert.Equal(2, settings.Ocr.InputScale);
+        Assert.Equal(5, settings.Ocr.PaddingPixels);
+        Assert.True(settings.Ocr.Grayscale);
+        Assert.True(settings.Ocr.Invert);
+        Assert.Equal(120, settings.Ocr.Threshold);
         Assert.Equal("ocr-region.json", settings.Ocr.RegionConfigPath);
         Assert.Equal("none", settings.Ocr.RegionPreset);
         Assert.Equal(500, settings.Detection.LoopIntervalMs);
@@ -81,6 +104,7 @@ public sealed class AppSettingsLoaderTests
         Assert.Equal(3, settings.Detection.MatchThreshold);
         Assert.Equal(4, settings.Detection.MissThreshold);
         Assert.True(settings.Detection.SaveDebugImages);
+        Assert.True(settings.Detection.SaveOcrFailureSamples);
     }
 
     [Fact]
@@ -299,6 +323,7 @@ public sealed class AppSettingsLoaderTests
         Assert.Equal("none", settings.Ocr.RegionPreset);
         Assert.Equal(500, settings.Detection.LoopIntervalMs);
         Assert.False(settings.Detection.SaveDebugImages);
+        Assert.False(settings.Detection.SaveOcrFailureSamples);
     }
 
     [Fact]

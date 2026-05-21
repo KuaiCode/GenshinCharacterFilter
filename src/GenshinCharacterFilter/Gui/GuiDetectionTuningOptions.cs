@@ -27,6 +27,8 @@ public sealed class GuiDetectionTuningOptions
 
     public bool SaveDebugImages { get; init; }
 
+    public bool SaveOcrFailureSamples { get; init; }
+
     public static GuiDetectionTuningOptions Parse(
         bool runUntilStop,
         string? loopCount,
@@ -34,7 +36,8 @@ public sealed class GuiDetectionTuningOptions
         string? captureDelayMs,
         string? matchThreshold,
         string? missThreshold,
-        bool saveDebugImages = false)
+        bool saveDebugImages = false,
+        bool saveOcrFailureSamples = false)
     {
         return new GuiDetectionTuningOptions
         {
@@ -44,7 +47,8 @@ public sealed class GuiDetectionTuningOptions
             CaptureDelayMs = ParseOptionalCaptureDelay(captureDelayMs),
             MatchThreshold = ParseOptionalThreshold(matchThreshold, "Match threshold"),
             MissThreshold = ParseOptionalThreshold(missThreshold, "Miss threshold"),
-            SaveDebugImages = saveDebugImages
+            SaveDebugImages = saveDebugImages,
+            SaveOcrFailureSamples = saveOcrFailureSamples
         };
     }
 

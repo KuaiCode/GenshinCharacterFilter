@@ -118,6 +118,61 @@ public sealed class OcrInputPreparerTests
         Assert.Contains("does not fit within input image", exception.Message);
     }
 
+    [Fact]
+    public void PrepareInput_DefaultPreparationDoesNotAlterImageWithoutRegion()
+    {
+        using TempImage input = TempImage.Create(10, 10);
+        OcrOptions options = new()
+        {
+            InputImagePath = input.Path
+        };
+
+        string preparedPath = new OcrInputPreparer().PrepareInput(options);
+
+        Assert.Equal(Path.GetFullPath(input.Path), preparedPath);
+    }
+
+    [Fact]
+    public void PrepareInput_CanApplyScaleAndPadding()
+    {
+        using TempImage input = TempImage.Create(20, 10);
+        OcrOptions options = new()
+        {
+            InputImagePath = input.Path,
+            OcrRegion = new OcrRegion(5, 2, 4, 3),
+            PaddingPixels = 1,
+            InputScale = 2
+        };
+
+        string preparedPath = new OcrInputPreparer().PrepareInput(options);
+
+        using Image image = Image.FromFile(preparedPath);
+        Assert.Equal(12, image.Width);
+        Assert.Equal(10, image.Height);
+    }
+
+    [Fact]
+    public void PrepareInput_CanApplyGrayscaleInvertAndThreshold()
+    {
+        using TempImage input = TempImage.Create(4, 4);
+        OcrOptions options = new()
+        {
+            InputImagePath = input.Path,
+            OcrRegion = new OcrRegion(0, 0, 2, 1),
+            Grayscale = true,
+            Invert = true,
+            Threshold = 128
+        };
+
+        string preparedPath = new OcrInputPreparer().PrepareInput(options);
+
+        using Bitmap image = new(preparedPath);
+        Color first = image.GetPixel(0, 0);
+        Color second = image.GetPixel(1, 0);
+        Assert.Equal(Color.White.ToArgb(), first.ToArgb());
+        Assert.Equal(Color.Black.ToArgb(), second.ToArgb());
+    }
+
     private sealed class TempImage : IDisposable
     {
         private TempImage(string path)

@@ -15,6 +15,7 @@ public sealed class DetectionDryRunLoop
     private readonly IGameWindowCapture _windowCapture;
     private readonly OcrInputPreparer _ocrInputPreparer;
     private readonly OcrRegionSourceResolver _ocrRegionSourceResolver;
+    private readonly OcrFailureSampleSaver _failureSampleSaver;
     private readonly DetectionAudioCoordinator? _audioCoordinator;
     private readonly string _audioActionLabel;
     private readonly TextWriter _log;
@@ -25,6 +26,7 @@ public sealed class DetectionDryRunLoop
         IGameWindowCapture windowCapture,
         OcrInputPreparer? ocrInputPreparer = null,
         OcrRegionSourceResolver? ocrRegionSourceResolver = null,
+        OcrFailureSampleSaver? failureSampleSaver = null,
         DetectionAudioCoordinator? audioCoordinator = null,
         string audioActionLabel = "Simulated audio action",
         TextWriter? log = null)
@@ -34,6 +36,7 @@ public sealed class DetectionDryRunLoop
         _windowCapture = windowCapture;
         _ocrInputPreparer = ocrInputPreparer ?? new OcrInputPreparer();
         _ocrRegionSourceResolver = ocrRegionSourceResolver ?? new OcrRegionSourceResolver();
+        _failureSampleSaver = failureSampleSaver ?? new OcrFailureSampleSaver();
         _audioCoordinator = audioCoordinator;
         _audioActionLabel = string.IsNullOrWhiteSpace(audioActionLabel)
             ? "Audio action"
@@ -50,6 +53,17 @@ public sealed class DetectionDryRunLoop
         options.Validate();
 
         DetectionStabilityGate stabilityGate = new(options.Stability);
+        _log.WriteLine($"OCR engine: {options.OcrEngine}");
+        _log.WriteLine($"OCR backend initialized: {IsOcrBackendInitialized()}");
+        _log.WriteLine($"OCR backend warm: {IsOcrBackendWarm()}");
+        if (options.OcrEngine == OcrEngine.PaddleOcrLocal)
+        {
+            _log.WriteLine($"Paddle model path: {FormatOptionalPath(options.PaddleModelDirectory)}");
+            _log.WriteLine($"Paddle runtime path: {FormatOptionalPath(options.PaddleRuntimeDirectory)}");
+        }
+        _log.WriteLine(
+            $"OCR preprocessing: scale={options.OcrInputScale}, padding={options.OcrPaddingPixels}, grayscale={options.OcrGrayscale}, invert={options.OcrInvert}, threshold={options.OcrThreshold?.ToString() ?? "none"}");
+        _log.WriteLine($"Save OCR failure samples: {options.SaveOcrFailureSamples}");
         using IGameWindowCaptureSession? liveCaptureSession = CreateLiveCaptureSession(options);
         if (liveCaptureSession is not null)
         {
@@ -134,6 +148,15 @@ public sealed class DetectionDryRunLoop
             DetectionStabilityResult stabilityResult = stabilityGate.Observe(matchResult);
             matchStopwatch.Stop();
 
+            TrySaveOcrFailureSample(
+                options,
+                iteration,
+                preparedInputPath,
+                input.MetadataRegion,
+                ocrResult,
+                matchResult,
+                ocrStopwatch.ElapsedMilliseconds);
+
             Stopwatch audioStopwatch = Stopwatch.StartNew();
             DetectionAudioActionResult? audioActionResult = _audioCoordinator is null
                 ? null
@@ -186,6 +209,7 @@ public sealed class DetectionDryRunLoop
                 options.OcrInputPath);
             return new IterationImageInput(
                 options.OcrInputPath,
+                resolvedRegion.Region,
                 resolvedRegion.Region,
                 resolvedRegion.SourceLabel,
                 "fixed image",
@@ -241,10 +265,11 @@ public sealed class DetectionDryRunLoop
                 ? metadata.CaptureModePrefix
                 : "process";
             return new IterationImageInput(
-                regionImagePath,
+                ImagePath: regionImagePath,
                 OcrRegion: null,
-                resolvedRegion.SourceLabel,
-                $"{captureModePrefix}-region-only",
+                MetadataRegion: resolvedRegion.Region,
+                OcrRegionSourceLabel: resolvedRegion.SourceLabel,
+                CaptureMode: $"{captureModePrefix}-region-only",
                 DeleteCaptureInputAfterUse: ShouldDeleteRealtimeCaptureInput(options, regionImagePath));
         }
         catch (Exception exception) when (exception is OcrRegionSourceException or WindowCaptureException or ArgumentException)
@@ -264,6 +289,7 @@ public sealed class DetectionDryRunLoop
             inputImagePath);
         return new IterationImageInput(
             inputImagePath,
+            resolvedRegion.Region,
             resolvedRegion.Region,
             resolvedRegion.SourceLabel,
             captureMode,
@@ -299,10 +325,55 @@ public sealed class DetectionDryRunLoop
             InputImagePath = inputImagePath,
             Language = options.OcrLanguage,
             TesseractExecutablePath = options.TesseractExecutablePath,
+            PaddleModelDirectory = options.PaddleModelDirectory,
+            PaddleRuntimeDirectory = options.PaddleRuntimeDirectory,
             PageSegmentationMode = options.OcrPageSegmentationMode,
             OcrRegion = ocrRegion,
-            SaveDebugImage = options.SaveDebugImages
+            SaveDebugImage = options.SaveDebugImages,
+            InputScale = options.OcrInputScale,
+            PaddingPixels = options.OcrPaddingPixels,
+            Grayscale = options.OcrGrayscale,
+            Invert = options.OcrInvert,
+            Threshold = options.OcrThreshold
         };
+    }
+
+    private void TrySaveOcrFailureSample(
+        DetectionDryRunOptions options,
+        int iteration,
+        string? preparedInputPath,
+        OcrRegion? region,
+        OcrResult ocrResult,
+        SpeakerMatchResult matchResult,
+        long ocrElapsedMs)
+    {
+        if (!options.SaveOcrFailureSamples ||
+            string.IsNullOrWhiteSpace(preparedInputPath) ||
+            !OcrFailureSampleSaver.ShouldSave(matchResult))
+        {
+            return;
+        }
+
+        try
+        {
+            OcrFailureSampleResult result = _failureSampleSaver.Save(
+                preparedInputPath,
+                new OcrFailureSampleMetadata(
+                    DateTimeOffset.Now,
+                    options.OcrEngine.ToString(),
+                    ocrResult.RawText,
+                    matchResult.NormalizedText,
+                    options.TargetSpeakers.ToArray(),
+                    region,
+                    ocrElapsedMs,
+                    iteration));
+            _log.WriteLine($"OCR failure sample saved: {result.ImagePath}");
+            _log.WriteLine($"OCR failure metadata saved: {result.MetadataPath}");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OcrException)
+        {
+            _log.WriteLine($"OCR failure sample warning: {exception.Message}");
+        }
     }
 
     private static bool ShouldDeleteRealtimeCaptureInput(DetectionDryRunOptions options, string inputImagePath)
@@ -418,6 +489,25 @@ public sealed class DetectionDryRunLoop
         };
     }
 
+    private bool IsOcrBackendInitialized()
+    {
+        return _ocrService is PaddleOcrLocalService paddle
+            ? paddle.IsInitialized
+            : true;
+    }
+
+    private bool IsOcrBackendWarm()
+    {
+        return _ocrService is IOcrBackendWarmup warmup
+            ? warmup.IsWarm
+            : true;
+    }
+
+    private static string FormatOptionalPath(string? path)
+    {
+        return string.IsNullOrWhiteSpace(path) ? "(bundled/default)" : path.Trim();
+    }
+
     private static string FormatShutdownActionLabel(string actionLabel)
     {
         const string suffix = " action";
@@ -429,6 +519,7 @@ public sealed class DetectionDryRunLoop
     private sealed record IterationImageInput(
         string ImagePath,
         OcrRegion? OcrRegion,
+        OcrRegion? MetadataRegion,
         string OcrRegionSourceLabel,
         string CaptureMode,
         bool DeleteCaptureInputAfterUse);

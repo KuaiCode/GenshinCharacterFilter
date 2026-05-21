@@ -31,14 +31,22 @@ public sealed class EffectiveConfigPrinter
         writer.WriteLine($"AudioFilter.VolumePercent: {settings.AudioFilter.VolumePercent}");
         writer.WriteLine($"Ocr.Engine: {settings.Ocr.Engine}");
         writer.WriteLine($"Ocr.TesseractExecutablePath: {settings.Ocr.TesseractExecutablePath}");
+        writer.WriteLine($"Ocr.PaddleModelDirectory: {settings.Ocr.PaddleModelDirectory ?? "(bundled/default)"}");
+        writer.WriteLine($"Ocr.PaddleRuntimeDirectory: {settings.Ocr.PaddleRuntimeDirectory ?? "(bundled/default)"}");
         writer.WriteLine($"Ocr.Language: {settings.Ocr.Language}");
         writer.WriteLine($"Ocr.PageSegmentationMode: {settings.Ocr.PageSegmentationMode}");
+        writer.WriteLine($"Ocr.InputScale: {settings.Ocr.InputScale}");
+        writer.WriteLine($"Ocr.PaddingPixels: {settings.Ocr.PaddingPixels}");
+        writer.WriteLine($"Ocr.Grayscale: {settings.Ocr.Grayscale}");
+        writer.WriteLine($"Ocr.Invert: {settings.Ocr.Invert}");
+        writer.WriteLine($"Ocr.Threshold: {settings.Ocr.Threshold?.ToString() ?? "(none)"}");
         writer.WriteLine($"Ocr.RegionSource: {DescribeRegionSource(settings.Ocr.GetOcrRegionSourceOptions())}");
         writer.WriteLine($"Detection.LoopIntervalMs: {settings.Detection.LoopIntervalMs}");
         writer.WriteLine($"Detection.LoopCount: {settings.Detection.LoopCount?.ToString() ?? "(until Ctrl+C)"}");
         writer.WriteLine($"Detection.MatchThreshold: {settings.Detection.MatchThreshold}");
         writer.WriteLine($"Detection.MissThreshold: {settings.Detection.MissThreshold}");
         writer.WriteLine($"Detection.SaveDebugImages: {settings.Detection.SaveDebugImages}");
+        writer.WriteLine($"Detection.SaveOcrFailureSamples: {settings.Detection.SaveOcrFailureSamples}");
     }
 
     private static string DescribeRegionSource(OcrRegionSourceOptions options)

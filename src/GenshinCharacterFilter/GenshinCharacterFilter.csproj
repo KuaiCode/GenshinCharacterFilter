@@ -11,6 +11,8 @@
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.3.0" />
+    <PackageReference Include="Paddle.Runtime.win_x64" Version="3.3.0.1" />
+    <PackageReference Include="PaddleOCRSharp" Version="6.1.0" />
   </ItemGroup>
 
 </Project>

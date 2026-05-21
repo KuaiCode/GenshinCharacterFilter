@@ -17,6 +17,8 @@ public sealed class AppDetectionSettings
 
     public bool SaveDebugImages { get; set; } = DetectionDryRunOptions.DefaultSaveDebugImages;
 
+    public bool SaveOcrFailureSamples { get; set; } = DetectionDryRunOptions.DefaultSaveOcrFailureSamples;
+
     /// <summary>
     /// Validates detection timing and stability settings.
     /// </summary>

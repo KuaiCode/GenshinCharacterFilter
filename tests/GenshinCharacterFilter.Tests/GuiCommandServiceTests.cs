@@ -1,6 +1,7 @@
 using GenshinCharacterFilter;
 using GenshinCharacterFilter.Capture;
 using GenshinCharacterFilter.Gui;
+using GenshinCharacterFilter.Ocr;
 
 namespace GenshinCharacterFilter.Tests;
 
@@ -231,6 +232,60 @@ public sealed class GuiCommandServiceTests
         Assert.Equal(2, settings.Detection.MatchThreshold);
         Assert.Equal(1, settings.Detection.MissThreshold);
         Assert.False(settings.Detection.SaveDebugImages);
+    }
+
+    [Theory]
+    [InlineData("TesseractCli", OcrEngine.TesseractCli)]
+    [InlineData("paddleocrlocal", OcrEngine.PaddleOcrLocal)]
+    [InlineData("", OcrEngine.TesseractCli)]
+    public void GuiOcrEngineSelection_ParsesSelection(string value, OcrEngine expected)
+    {
+        OcrEngine engine = GuiOcrEngineSelection.Parse(value);
+
+        Assert.Equal(expected, engine);
+    }
+
+    [Fact]
+    public void GuiOcrEngineSelection_RejectsInvalidSelection()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => GuiOcrEngineSelection.Parse("Other"));
+
+        Assert.Contains("OCR engine", exception.Message);
+    }
+
+    [Fact]
+    public void ApplyGuiOcrEngineOverride_UsesSelectedEngine()
+    {
+        AppSettings settings = new();
+        settings.Ocr.Engine = OcrEngine.TesseractCli;
+
+        GuiCommandService.ApplyGuiOcrEngineOverride(settings, OcrEngine.PaddleOcrLocal);
+
+        Assert.Equal(OcrEngine.PaddleOcrLocal, settings.Ocr.Engine);
+    }
+
+    [Fact]
+    public void GuiOcrServiceCache_ReusesServiceForSameEngine()
+    {
+        using GuiOcrServiceCache cache = new();
+
+        IOcrService first = cache.Get(OcrEngine.PaddleOcrLocal);
+        IOcrService second = cache.Get(OcrEngine.PaddleOcrLocal);
+
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void GuiOcrServiceCache_RecreatesWhenEngineChanges()
+    {
+        using GuiOcrServiceCache cache = new();
+
+        IOcrService first = cache.Get(OcrEngine.PaddleOcrLocal);
+        IOcrService second = cache.Get(OcrEngine.TesseractCli);
+
+        Assert.NotSame(first, second);
+        Assert.IsType<TesseractCliOcrService>(second);
     }
 
     [Fact]
