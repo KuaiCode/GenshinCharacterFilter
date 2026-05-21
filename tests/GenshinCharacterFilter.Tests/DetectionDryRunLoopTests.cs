@@ -38,6 +38,24 @@ public sealed class DetectionDryRunLoopTests
     }
 
     [Fact]
+    public async Task RunAsync_InvokesIterationCompletedObserver()
+    {
+        using TempFile input = TempFile.Create();
+        List<DetectionDryRunResult> observed = [];
+        DetectionDryRunLoop loop = new(
+            new FakeOcrService(["target", "target"]),
+            new FakeSpeakerMatcher(),
+            new FakeWindowCapture(),
+            iterationCompleted: observed.Add);
+
+        await loop.RunAsync(CreateOptions(input.Path), CancellationToken.None);
+
+        Assert.Equal(2, observed.Count);
+        Assert.Equal("target", observed[0].OcrResult.RawText);
+        Assert.Equal(2, observed[1].Iteration);
+    }
+
+    [Fact]
     public async Task RunAsync_LiveModeInitializesSessionOnceAndReusesIt()
     {
         using TempFile firstCapture = TempFile.Create();
@@ -209,6 +227,33 @@ public sealed class DetectionDryRunLoopTests
         }
     }
 
+    [Fact]
+    public async Task RunAsync_ForegroundCaptureLostPropagatesAfterShutdownRestore()
+    {
+        using TempFile firstCapture = TempFile.Create();
+        using TempFile secondCapture = TempFile.Create();
+        FakeGameWindowCaptureSession session = new([firstCapture.Path, secondCapture.Path], captureModePrefix: "foreground")
+        {
+            ThrowForegroundCaptureLostOnRegionCaptureNumber = 3
+        };
+        FakeAudioMuteService audio = new();
+        DetectionDryRunOptions options = CreateLiveOptions();
+        options.LoopCount = 3;
+        options.OcrRegion = new OcrRegion(1, 2, 3, 4);
+        DetectionDryRunLoop loop = new(
+            new FakeOcrService(["target", "target", "target"]),
+            new FakeSpeakerMatcher(),
+            new PreinitializedGameWindowCapture(session),
+            audioCoordinator: new SimulatedDetectionAudioCoordinator(audio));
+
+        WindowCaptureException exception = await Assert.ThrowsAsync<WindowCaptureException>(
+            () => loop.RunAsync(options, CancellationToken.None));
+
+        Assert.Equal(WindowCaptureFailureReason.ForegroundCaptureLost, exception.Reason);
+        Assert.Equal(1, audio.MuteCalls);
+        Assert.Equal(1, audio.RestoreCalls);
+    }
+
     private static DetectionDryRunOptions CreateOptions(string inputPath)
     {
         return new DetectionDryRunOptions
@@ -336,6 +381,8 @@ public sealed class DetectionDryRunLoopTests
 
         public bool ThrowRegionCapture { get; set; }
 
+        public int? ThrowForegroundCaptureLostOnRegionCaptureNumber { get; set; }
+
         public Task InitializeAsync(CancellationToken cancellationToken)
         {
             InitializeCount++;
@@ -357,6 +404,11 @@ public sealed class DetectionDryRunLoopTests
         {
             RegionCaptureCount++;
             LastRegion = region;
+            if (ThrowForegroundCaptureLostOnRegionCaptureNumber == RegionCaptureCount)
+            {
+                throw WindowCaptureException.ForegroundCaptureLost("fake", "fake foreground target minimized");
+            }
+
             if (ThrowRegionCapture)
             {
                 throw new WindowCaptureException("fake region capture failed");

@@ -5,6 +5,38 @@ namespace GenshinCharacterFilter.Tests;
 public sealed class PaddleOcrLocalServiceTests
 {
     [Fact]
+    public void CaptureThirdPartyConsoleOutput_CapturesManagedStdoutAndRestoresConsole()
+    {
+        TextWriter originalOut = Console.Out;
+        TextWriter originalError = Console.Error;
+
+        string captured = PaddleOcrLocalService.CaptureThirdPartyConsoleOutput(() =>
+        {
+            Console.WriteLine("third-party banner");
+            Console.Error.WriteLine("third-party stderr");
+        });
+
+        Assert.Contains("third-party banner", captured);
+        Assert.Contains("third-party stderr", captured);
+        Assert.Same(originalOut, Console.Out);
+        Assert.Same(originalError, Console.Error);
+    }
+
+    [Fact]
+    public void CaptureThirdPartyConsoleOutput_RestoresConsoleWhenActionThrows()
+    {
+        TextWriter originalOut = Console.Out;
+        TextWriter originalError = Console.Error;
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+            PaddleOcrLocalService.CaptureThirdPartyConsoleOutput(() => throw new InvalidOperationException("boom")));
+
+        Assert.Equal("boom", exception.Message);
+        Assert.Same(originalOut, Console.Out);
+        Assert.Same(originalError, Console.Error);
+    }
+
+    [Fact]
     public void OcrServiceFactory_CreatesTesseractFallback()
     {
         IOcrService service = OcrServiceFactory.Create(OcrEngine.TesseractCli);

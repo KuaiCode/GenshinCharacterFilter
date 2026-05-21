@@ -550,9 +550,9 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCa
             {
                 if (!_allowReacquire)
                 {
-                    throw new WindowCaptureException(
-                        $"Foreground capture session for process '{_normalizedProcessName}' failed and will not reacquire by process name: {exception.Message}",
-                        exception);
+                    throw WindowCaptureException.ForegroundCaptureLost(
+                        _normalizedProcessName,
+                        $"Foreground capture session failed and will not reacquire by process name: {exception.Message}");
                 }
 
                 await ReacquireAsync(exception.Message, cancellationToken);
@@ -566,8 +566,9 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCa
             {
                 if (!_allowReacquire)
                 {
-                    throw new WindowCaptureException(
-                        $"Foreground capture session for process '{_normalizedProcessName}' is no longer valid. Keep the target window visible and restart detection.");
+                    throw WindowCaptureException.ForegroundCaptureLost(
+                        _normalizedProcessName,
+                        "Foreground capture session handle is no longer valid. Keep the target window visible and restart detection.");
                 }
 
                 await ReacquireAsync("no cached target window is available", cancellationToken);
@@ -576,8 +577,9 @@ public sealed class WindowsGameWindowCapture : IGameWindowCapture, IGameWindowCa
             {
                 if (!_allowReacquire)
                 {
-                    throw new WindowCaptureException(
-                        $"Foreground capture session for process '{_normalizedProcessName}' is minimized. Keep the target visible; this visible-pixel capture path will not restore or reacquire by process name.");
+                    throw WindowCaptureException.ForegroundCaptureLost(
+                        _normalizedProcessName,
+                        "Foreground capture session target is minimized. Keep the target visible; this visible-pixel capture path will not restore or reacquire by process name.");
                 }
 
                 await ReacquireAsync("cached target window is minimized", cancellationToken);

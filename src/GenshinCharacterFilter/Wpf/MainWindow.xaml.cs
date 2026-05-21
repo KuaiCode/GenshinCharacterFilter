@@ -1,5 +1,6 @@
 using GenshinCharacterFilter.Gui;
 using GenshinCharacterFilter.Capture;
+using GenshinCharacterFilter.Detection;
 using GenshinCharacterFilter.Ocr;
 using System.ComponentModel;
 using System.Windows;
@@ -18,11 +19,13 @@ public partial class MainWindow : Window
     private readonly GuiCommandService _commandService = new();
     private readonly AppSettingsLoader _settingsLoader = new();
     private readonly GuiStateController _stateController = new();
+    private readonly GuiRuntimeStatus _runtimeStatus = new();
     private readonly WpfAppTheme _theme;
     private static readonly TimeSpan ManualForegroundRetryDelay = TimeSpan.FromSeconds(8);
     private CancellationTokenSource? _operationCancellation;
     private Task? _operationTask;
     private bool _closeAfterOperationStops;
+    private bool _syncingGuardedRealAudioCheckBoxes;
 
     private readonly record struct GuiDetectionTuningInput(
         bool RunUntilStop,
@@ -69,11 +72,16 @@ public partial class MainWindow : Window
         UseFixedImageForDetectionCheckBox.Unchecked += (_, _) => RefreshStatus();
         EnableGuardedRealAudioCheckBox.Checked += (_, _) => RefreshStatus();
         EnableGuardedRealAudioCheckBox.Unchecked += (_, _) => RefreshStatus();
+        DockEnableGuardedRealAudioCheckBox.Checked += (_, _) => SyncGuardedRealAudioEnablement(fromDock: true);
+        DockEnableGuardedRealAudioCheckBox.Unchecked += (_, _) => SyncGuardedRealAudioEnablement(fromDock: true);
+        EnableGuardedRealAudioCheckBox.Checked += (_, _) => SyncGuardedRealAudioEnablement(fromDock: false);
+        EnableGuardedRealAudioCheckBox.Unchecked += (_, _) => SyncGuardedRealAudioEnablement(fromDock: false);
         RunUntilStopCheckBox.Checked += (_, _) => UpdateLoopCountInputState();
         RunUntilStopCheckBox.Unchecked += (_, _) => UpdateLoopCountInputState();
 
         ShowPage(OverviewPage);
         ApplyUiState(_stateController.Current);
+        ApplyRuntimeSnapshot(_runtimeStatus.Snapshot);
         RefreshStatus();
         AppendLogLine($"WPF GUI shell started with {_theme.ToString().ToLowerInvariant()} theme.");
     }
@@ -287,6 +295,7 @@ public partial class MainWindow : Window
 
     private async Task StartDryRunDetectionAsync(CancellationToken cancellationToken)
     {
+        ApplyRuntimeSnapshot(_runtimeStatus.MarkDetecting());
         DetectionLaunchInput launch = GetDetectionLaunchInput();
         await RunDetectionWithManualForegroundFallbackAsync(
             launch,
@@ -299,7 +308,8 @@ public partial class MainWindow : Window
                 launch.OcrEngine,
                 false,
                 CreateLogWriter(),
-                token),
+                token,
+                OnDetectionIterationCompleted),
             foregroundOperation: (afterForegroundSessionReady, token) => _commandService.RunDetectionLoopFromForegroundWindowAsync(
                 launch.ConfigPath,
                 launch.OcrInputPath,
@@ -309,12 +319,14 @@ public partial class MainWindow : Window
                 false,
                 afterForegroundSessionReady,
                 CreateLogWriter(),
-                token),
+                token,
+                OnDetectionIterationCompleted),
             cancellationToken);
     }
 
     private async Task StartSimulatedDetectionAudioAsync(CancellationToken cancellationToken)
     {
+        ApplyRuntimeSnapshot(_runtimeStatus.MarkDetecting());
         DetectionLaunchInput launch = GetDetectionLaunchInput();
         await RunDetectionWithManualForegroundFallbackAsync(
             launch,
@@ -327,7 +339,8 @@ public partial class MainWindow : Window
                 launch.OcrEngine,
                 true,
                 CreateLogWriter(),
-                token),
+                token,
+                OnDetectionIterationCompleted),
             foregroundOperation: (afterForegroundSessionReady, token) => _commandService.RunDetectionLoopFromForegroundWindowAsync(
                 launch.ConfigPath,
                 launch.OcrInputPath,
@@ -337,12 +350,14 @@ public partial class MainWindow : Window
                 true,
                 afterForegroundSessionReady,
                 CreateLogWriter(),
-                token),
+                token,
+                OnDetectionIterationCompleted),
             cancellationToken);
     }
 
     private async Task StartGuardedRealAudioDetectionAsync(CancellationToken cancellationToken)
     {
+        ApplyRuntimeSnapshot(_runtimeStatus.MarkDetecting());
         DetectionLaunchInput launch = GetDetectionLaunchInput();
         await RunDetectionWithManualForegroundFallbackAsync(
             launch,
@@ -353,7 +368,8 @@ public partial class MainWindow : Window
                 launch.TuningOptions,
                 launch.OcrEngine,
                 CreateLogWriter(),
-                token),
+                token,
+                OnDetectionIterationCompleted),
             foregroundOperation: (afterForegroundSessionReady, token) => _commandService.RunGuardedRealAudioDetectionFromForegroundWindowAsync(
                 launch.ConfigPath,
                 launch.UseFixedImageForDetection,
@@ -361,7 +377,8 @@ public partial class MainWindow : Window
                 launch.OcrEngine,
                 afterForegroundSessionReady,
                 CreateLogWriter(),
-                token),
+                token,
+                OnDetectionIterationCompleted),
             cancellationToken);
     }
 
@@ -555,6 +572,7 @@ public partial class MainWindow : Window
         }
 
         ApplyUiState(_stateController.StartOperation(cancellable));
+        ApplyRuntimeSnapshot(_runtimeStatus.MarkStarting());
         _operationCancellation = new CancellationTokenSource();
         CancellationToken cancellationToken = _operationCancellation.Token;
         _operationTask = RunOperationCoreAsync(operation, cancellationToken);
@@ -569,16 +587,26 @@ public partial class MainWindow : Window
             await Task.Run(async () => await operation(cancellationToken), cancellationToken);
             AppendLogLine("Operation completed.");
             ApplyUiState(_stateController.CompleteOperation());
+            ApplyRuntimeSnapshot(_runtimeStatus.MarkIdle());
         }
         catch (OperationCanceledException)
         {
             AppendLogLine("Operation cancelled.");
             ApplyUiState(_stateController.CompleteOperation());
+            ApplyRuntimeSnapshot(_runtimeStatus.MarkIdle());
+        }
+        catch (WindowCaptureException exception) when (WindowCaptureException.IsForegroundCaptureLost(exception))
+        {
+            AppendLogLine($"Capture lost: {exception.Message}");
+            AppendLogLine("Target window is no longer visible. Detection stopped safely. Restore audio attempted if needed.");
+            ApplyUiState(_stateController.FailOperation());
+            ApplyRuntimeSnapshot(_runtimeStatus.MarkCaptureLost());
         }
         catch (Exception exception)
         {
             AppendLogLine($"Error: {exception.Message}");
             ApplyUiState(_stateController.FailOperation());
+            ApplyRuntimeSnapshot(_runtimeStatus.MarkError());
         }
         finally
         {
@@ -597,6 +625,7 @@ public partial class MainWindow : Window
 
         AppendLogLine("Stop requested.");
         ApplyUiState(_stateController.RequestStop());
+        ApplyRuntimeSnapshot(_runtimeStatus.MarkStopping());
         _operationCancellation.Cancel();
     }
 
@@ -631,9 +660,6 @@ public partial class MainWindow : Window
 
     private void ApplyUiStateCore(GuiUiState uiState)
     {
-        RunStateStatusTextBlock.Text = uiState.RunState.ToString();
-        OverviewRunStateTextBlock.Text = $"Run state: {uiState.RunState}";
-
         bool commandsEnabled = uiState.CommandButtonsEnabled;
         SetControlsEnabled(commandsEnabled,
             BrowseConfigButton,
@@ -660,14 +686,38 @@ public partial class MainWindow : Window
             OverviewStartDryRunButton,
             StartSimulatedAudioButton,
             OverviewStartSimulatedButton,
+            DockEnableGuardedRealAudioCheckBox,
             EnableGuardedRealAudioCheckBox);
 
         UpdateLoopCountInputState();
         HeaderStopButton.IsEnabled = uiState.StopButtonEnabled;
+        DockStopButton.IsEnabled = uiState.StopButtonEnabled;
+        DockRestoreButton.IsEnabled = uiState.StopButtonEnabled;
         DetectionStopButton.IsEnabled = uiState.StopButtonEnabled;
         AudioStopButton.IsEnabled = uiState.StopButtonEnabled;
         RefreshGuardedRealAudioStatus();
         RefreshOcrBackendStatus();
+    }
+
+    private void ApplyRuntimeSnapshot(GuiStatusSnapshot snapshot)
+    {
+        RunOnUiThread(() => ApplyRuntimeSnapshotCore(snapshot));
+    }
+
+    private void ApplyRuntimeSnapshotCore(GuiStatusSnapshot snapshot)
+    {
+        RunStateStatusTextBlock.Text = snapshot.RunState.ToString();
+        OverviewRunStateTextBlock.Text = $"Run state: {snapshot.RunState}";
+        DockAudioStateTextBlock.Text = snapshot.AudioState.ToString();
+        DockLastOcrTextBlock.Text = snapshot.LastOcrText;
+        DockLastDetectedSpeakerTextBlock.Text = snapshot.LastDetectedSpeaker;
+        DockLastAudioActionTextBlock.Text = snapshot.LastAudioAction;
+    }
+
+    private void OnDetectionIterationCompleted(DetectionDryRunResult result)
+    {
+        GuiLastObservation observation = GuiRuntimeStatus.FromDetectionResult(result);
+        ApplyRuntimeSnapshot(_runtimeStatus.ApplyObservation(observation));
     }
 
     private static void SetControlsEnabled(bool enabled, params WpfControl[] controls)
@@ -696,6 +746,8 @@ public partial class MainWindow : Window
         {
             TargetProcessStatusTextBlock.Text = "(config error)";
             TargetSpeakersStatusTextBlock.Text = "(config error)";
+            DockTargetProcessTextBlock.Text = "(config error)";
+            DockTargetSpeakersTextBlock.Text = "(config error)";
             RegionSourceSummaryTextBlock.Text = "OCR region source: unavailable until config loads.";
             OverviewTargetProcessTextBlock.Text = "Target process: (config error)";
             OverviewTargetSpeakersTextBlock.Text = "Target speakers: (config error)";
@@ -707,15 +759,18 @@ public partial class MainWindow : Window
             string regionSource = FormatRegionSource(settings.Ocr.GetOcrRegionSourceOptions());
             TargetProcessStatusTextBlock.Text = settings.TargetProcessName;
             TargetSpeakersStatusTextBlock.Text = speakers;
+            DockTargetProcessTextBlock.Text = settings.TargetProcessName;
+            DockTargetSpeakersTextBlock.Text = speakers;
             RegionSourceSummaryTextBlock.Text = $"OCR region source: {regionSource}";
             OverviewTargetProcessTextBlock.Text = $"Target process: {settings.TargetProcessName}";
             OverviewTargetSpeakersTextBlock.Text = $"Target speakers: {speakers}";
             OverviewRegionSourceTextBlock.Text = $"OCR region source: {regionSource}";
         }
 
-        RealAudioStatusTextBlock.Text = EnableGuardedRealAudioCheckBox.IsChecked == true
+        RealAudioStatusTextBlock.Text = IsGuardedRealAudioEnabled()
             ? "Armed, confirmation required"
             : "Disabled";
+        DockRealAudioStatusTextBlock.Text = RealAudioStatusTextBlock.Text;
         OverviewRealAudioTextBlock.Text = $"Real audio: {RealAudioStatusTextBlock.Text}";
         RefreshOcrBackendStatusCore();
         RefreshGuardedRealAudioStatus();
@@ -741,10 +796,13 @@ public partial class MainWindow : Window
             ? "Target process: (missing)"
             : $"Target process: {status.TargetProcessName}";
         RealAudioFilterTextBlock.Text = $"Audio filter: {status.AudioMode}, {status.VolumePercent}%";
+        DockAudioFilterTextBlock.Text = $"{status.AudioMode}, {status.VolumePercent}%";
         GuardedReadinessTextBlock.Text = eligibility.CanRequestConfirmation
             ? "Ready for confirmation."
             : BuildGuardedRealAudioStatusText(eligibility, status);
+        DockGuardedReadinessTextBlock.Text = GuardedReadinessTextBlock.Text;
         StartGuardedRealAudioButton.IsEnabled = eligibility.CanRequestConfirmation;
+        DockStartGuardedRealAudioButton.IsEnabled = eligibility.CanRequestConfirmation;
     }
 
     private GuardedRealAudioUiEligibility GetGuardedRealAudioEligibility()
@@ -855,13 +913,18 @@ public partial class MainWindow : Window
     {
         try
         {
-            OcrBackendStatusTextBlock.Text = _commandService.IsOcrBackendWarm(GetConfigPath(), GetSelectedOcrEngine())
-                ? "Backend status: Ready"
-                : "Backend status: Not initialized";
+            OcrEngine engine = GetSelectedOcrEngine();
+            bool isWarm = _commandService.IsOcrBackendWarm(GetConfigPath(), engine);
+            string warmStatus = isWarm ? "Ready" : "Not initialized";
+            OcrBackendStatusTextBlock.Text = $"Backend status: {warmStatus}";
+            DockOcrEngineTextBlock.Text = engine.ToString();
+            DockOcrWarmStatusTextBlock.Text = warmStatus;
         }
         catch
         {
             OcrBackendStatusTextBlock.Text = "Backend status: Not initialized";
+            DockOcrEngineTextBlock.Text = "(unknown)";
+            DockOcrWarmStatusTextBlock.Text = "Not initialized";
         }
     }
 
@@ -870,6 +933,7 @@ public partial class MainWindow : Window
         return RunOnUiThreadAsync(() =>
         {
             OcrBackendStatusTextBlock.Text = $"Backend status: {status}";
+            DockOcrWarmStatusTextBlock.Text = status;
         });
     }
 
@@ -903,7 +967,36 @@ public partial class MainWindow : Window
 
     private bool IsGuardedRealAudioEnabled()
     {
-        return RunOnUiThread(() => EnableGuardedRealAudioCheckBox.IsChecked == true);
+        return RunOnUiThread(() =>
+            EnableGuardedRealAudioCheckBox.IsChecked == true ||
+            DockEnableGuardedRealAudioCheckBox.IsChecked == true);
+    }
+
+    private void SyncGuardedRealAudioEnablement(bool fromDock)
+    {
+        if (_syncingGuardedRealAudioCheckBoxes)
+        {
+            return;
+        }
+
+        RunOnUiThread(() =>
+        {
+            _syncingGuardedRealAudioCheckBoxes = true;
+            try
+            {
+                bool value = fromDock
+                    ? DockEnableGuardedRealAudioCheckBox.IsChecked == true
+                    : EnableGuardedRealAudioCheckBox.IsChecked == true;
+                DockEnableGuardedRealAudioCheckBox.IsChecked = value;
+                EnableGuardedRealAudioCheckBox.IsChecked = value;
+            }
+            finally
+            {
+                _syncingGuardedRealAudioCheckBoxes = false;
+            }
+
+            RefreshStatusCore();
+        });
     }
 
     private GuiDetectionTuningOptions ParseGuiDetectionTuning()

@@ -55,6 +55,7 @@
         <Grid Grid.Column="1" Margin="20">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
@@ -99,7 +100,99 @@
                 </Grid>
             </Border>
 
-            <Grid Grid.Row="1" Margin="0,4,0,0">
+            <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Padding="14" Margin="0,12,0,14">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="1.4*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <UniformGrid Grid.Column="0" Columns="3" Rows="3" Margin="0,0,12,0">
+                        <StackPanel Margin="0,0,12,8">
+                            <TextBlock Text="Audio state" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="DockAudioStateTextBlock" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,12,8">
+                            <TextBlock Text="OCR engine" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="DockOcrEngineTextBlock" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,12,8">
+                            <TextBlock Text="Backend" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="DockOcrWarmStatusTextBlock" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,12,8">
+                            <TextBlock Text="Target process" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="DockTargetProcessTextBlock" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,12,8">
+                            <TextBlock Text="Target speakers" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="DockTargetSpeakersTextBlock" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,12,8">
+                            <TextBlock Text="Real audio" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="DockRealAudioStatusTextBlock" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Text="Last OCR text" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="DockLastOcrTextBlock" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Text="Last speaker" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="DockLastDetectedSpeakerTextBlock" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Text="Last audio action" Foreground="{DynamicResource MutedForegroundBrush}" />
+                            <TextBlock x:Name="DockLastAudioActionTextBlock" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </UniformGrid>
+
+                    <Border Grid.Column="1"
+                            Style="{StaticResource DangerCardBorderStyle}"
+                            Padding="12"
+                            Margin="0,0,12,0">
+                        <StackPanel>
+                            <TextBlock Text="Guarded Real Audio"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource DangerForegroundBrush}" />
+                            <CheckBox x:Name="DockEnableGuardedRealAudioCheckBox"
+                                      Content="Arm guarded real audio"
+                                      Foreground="{DynamicResource DangerForegroundBrush}"
+                                      Margin="0,6,0,4" />
+                            <TextBlock x:Name="DockGuardedReadinessTextBlock"
+                                       Foreground="{DynamicResource DangerForegroundBrush}"
+                                       Margin="0,2,0,4" />
+                            <TextBlock Text="Audio filter"
+                                       Foreground="{DynamicResource DangerForegroundBrush}" />
+                            <TextBlock x:Name="DockAudioFilterTextBlock"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource DangerForegroundBrush}" />
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Grid.Column="2"
+                                Width="190"
+                                VerticalAlignment="Center">
+                        <Button x:Name="DockStartGuardedRealAudioButton"
+                                Content="Start Guarded Real Audio"
+                                MinWidth="180"
+                                Style="{StaticResource DangerButtonStyle}"
+                                Click="StartGuardedRealAudio" />
+                        <Button x:Name="DockStopButton"
+                                Content="Stop"
+                                MinWidth="180"
+                                Style="{StaticResource DangerButtonStyle}"
+                                Click="StopOperation" />
+                        <Button x:Name="DockRestoreButton"
+                                Content="Restore"
+                                MinWidth="180"
+                                Style="{StaticResource DangerButtonStyle}"
+                                Click="StopOperation" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="2" Margin="0,0,0,0">
                 <ScrollViewer x:Name="OverviewPage" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <TextBlock Text="Overview" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,14" />

@@ -4,7 +4,8 @@ public enum WindowCaptureFailureReason
 {
     Unknown,
     TargetWindowMinimizedCannotRestore,
-    ForegroundWindowProcessMismatch
+    ForegroundWindowProcessMismatch,
+    ForegroundCaptureLost
 }
 
 /// <summary>
@@ -52,5 +53,21 @@ public sealed class WindowCaptureException : Exception
             $"Current foreground window is not '{expectedProcessName}'; it belongs to '{actualProcessName}'. " +
             $"Switch to the '{expectedProcessName}' window and keep it visible before retrying calibration.",
             WindowCaptureFailureReason.ForegroundWindowProcessMismatch);
+    }
+
+    public static WindowCaptureException ForegroundCaptureLost(string processName, string details)
+    {
+        return new WindowCaptureException(
+            $"Target window is no longer visible for foreground capture. Detection stopped safely for process '{processName}'. " +
+            "This visible-pixel capture path requires the target window to stay visible and uncovered. " +
+            "Restore audio was attempted if detection-driven audio may have been applied. " +
+            details,
+            WindowCaptureFailureReason.ForegroundCaptureLost);
+    }
+
+    public static bool IsForegroundCaptureLost(Exception exception)
+    {
+        return exception is WindowCaptureException windowCaptureException &&
+            windowCaptureException.Reason == WindowCaptureFailureReason.ForegroundCaptureLost;
     }
 }

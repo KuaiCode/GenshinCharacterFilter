@@ -19,6 +19,7 @@ public sealed class DetectionDryRunLoop
     private readonly DetectionAudioCoordinator? _audioCoordinator;
     private readonly string _audioActionLabel;
     private readonly TextWriter _log;
+    private readonly Action<DetectionDryRunResult>? _iterationCompleted;
 
     public DetectionDryRunLoop(
         IOcrService ocrService,
@@ -29,7 +30,8 @@ public sealed class DetectionDryRunLoop
         OcrFailureSampleSaver? failureSampleSaver = null,
         DetectionAudioCoordinator? audioCoordinator = null,
         string audioActionLabel = "Simulated audio action",
-        TextWriter? log = null)
+        TextWriter? log = null,
+        Action<DetectionDryRunResult>? iterationCompleted = null)
     {
         _ocrService = ocrService;
         _speakerMatcher = speakerMatcher;
@@ -42,6 +44,7 @@ public sealed class DetectionDryRunLoop
             ? "Audio action"
             : audioActionLabel;
         _log = log ?? TextWriter.Null;
+        _iterationCompleted = iterationCompleted;
     }
 
     /// <summary>
@@ -84,6 +87,7 @@ public sealed class DetectionDryRunLoop
                     liveCaptureSession,
                     iteration,
                     cancellationToken);
+                _iterationCompleted?.Invoke(result);
                 WriteResult(result);
 
                 if (options.LoopCount is not null && iteration >= options.LoopCount.Value)
@@ -274,6 +278,11 @@ public sealed class DetectionDryRunLoop
         }
         catch (Exception exception) when (exception is OcrRegionSourceException or WindowCaptureException or ArgumentException)
         {
+            if (WindowCaptureException.IsForegroundCaptureLost(exception))
+            {
+                throw;
+            }
+
             _log.WriteLine($"Region-only capture fallback reason: {exception.Message}");
             return null;
         }

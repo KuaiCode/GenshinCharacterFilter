@@ -377,3 +377,44 @@ Reasoning:
 - If `PaddleModelDirectory` or `PaddleRuntimeDirectory` changes, showing the previous Paddle instance as `Ready` is misleading because the next OCR call may recreate and reinitialize the backend.
 - The GUI backend cache now uses a key containing `OcrEngine`, `PaddleModelDirectory`, and `PaddleRuntimeDirectory`, while still allowing a previously warmed key to be reused when switching back.
 - Real audio safety gates, OCR recognition behavior, detection stability, and audio coordination are unchanged.
+
+## 2026-05-21: v0.19 WPF Persistent Control Dock / Interaction Layout
+
+Decision: add a persistent WPF control/status dock so common guarded real-audio controls and runtime status remain visible across all pages.
+
+Reasoning:
+
+- The WPF shell's page split made configuration and diagnostics clearer, but live guarded real-audio use still required navigating back to the Audio page to find Start, Stop, or restore-related controls.
+- Users need to see run state, audio state, OCR backend warm status, target process, target speakers, last OCR text, last detected speaker, and last audio action while moving between pages.
+- Start Guarded Real Audio, Stop, and Restore are promoted to the persistent dock, while the Audio page keeps safety explanations, audio mode, volume percent, and readiness details.
+- The dock uses WPF-independent status snapshots so MainWindow remains UI orchestration and the detection/audio/OCR logic stays in existing services.
+- Detection loop iteration results may update the dock through an optional observation callback, but raw OCR matches still do not directly drive real audio.
+- Guarded real audio still requires explicit UI arming, confirmation, preflight, a valid OCR region source, and stable detection.
+- Global hotkeys are intentionally deferred to v0.20; v0.19 focuses only on visible interaction layout and status.
+- Real audio safety gates, Paddle/Tesseract backend behavior, foreground-region-only capture, MuteCoordinator behavior, CLI behavior, and config safety rules are unchanged.
+- The behavior does not add tray integration, an always-on-top mini window, overlay, masking, OCR backend changes, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.
+
+## 2026-05-21: Foreground Capture Lost Is Recoverable
+
+Decision: treat foreground visible-pixel capture loss as a recoverable runtime state instead of allowing it to look like a UI hang.
+
+Reasoning:
+
+- Foreground detection sessions deliberately keep the validated foreground window handle and do not reacquire by process name, because automatically restoring/reacquiring the game window can fight user focus and is not reliable for exclusive fullscreen.
+- If the user switches back to WPF, the target window may minimize or stop being visible. That is a visible-pixel capture limitation, not a v0.19 dock layout regression.
+- Foreground capture loss is now classified separately from generic capture errors so region-only capture does not silently fall back to the same failing path.
+- Detection can stop safely, run the existing shutdown restore path if audio may have been reduced or muted, and return WPF to an operable state with logs available.
+- The UI may show CaptureLost / Error-style status and allow users to copy logs, clear logs, Stop/Restore if applicable, or start again through the existing guarded flow.
+- The project still does not implement background window capture, DirectX capture, hooks, injection, simulated Alt+Tab, keyboard/mouse automation, or game memory access.
+- Real audio safety gates and MuteCoordinator behavior are unchanged.
+
+## 2026-05-21: PaddleOCRSharp Console Banner Handling
+
+Decision: suppress managed stdout/stderr output during the narrow PaddleOCRSharp engine creation step and document that native console writes may still appear.
+
+Reasoning:
+
+- PaddleOCRSharp can print a third-party community-edition banner during initialization, and mojibake in that banner can look like an application error.
+- The app should not hide real Paddle initialization failures, so exception handling remains unchanged and initialization errors still surface as `OcrException`.
+- Redirecting .NET `Console.Out` and `Console.Error` around engine construction can suppress managed banner output without affecting OCR behavior.
+- Some native libraries can write directly to the process console and bypass .NET console redirection; if that happens, documentation explains that the banner is third-party diagnostic output, not a GenshinCharacterFilter error.

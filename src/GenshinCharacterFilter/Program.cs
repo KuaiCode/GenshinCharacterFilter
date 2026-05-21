@@ -152,7 +152,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.18 OCR Backend Replacement / Low-latency OCR Spike");
+Console.WriteLine("GenshinCharacterFilter v0.19 WPF Persistent Control Dock / Interaction Layout");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");

@@ -200,7 +200,8 @@ public sealed class GuiCommandService
         OcrEngine? ocrEngineOverride,
         bool simulateAudio,
         TextWriter log,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<DetectionDryRunResult>? iterationCompleted = null)
     {
         await RunDetectionLoopCoreAsync(
             configPath,
@@ -212,7 +213,8 @@ public sealed class GuiCommandService
             GuiLiveCaptureStartupMode.AutomaticTargetWindow,
             afterForegroundSessionReady: null,
             log,
-            cancellationToken);
+            cancellationToken,
+            iterationCompleted);
     }
 
     public async Task RunDetectionLoopFromForegroundWindowAsync(
@@ -246,7 +248,8 @@ public sealed class GuiCommandService
         bool simulateAudio,
         Func<Task>? afterForegroundSessionReady,
         TextWriter log,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<DetectionDryRunResult>? iterationCompleted = null)
     {
         await RunDetectionLoopCoreAsync(
             configPath,
@@ -258,7 +261,8 @@ public sealed class GuiCommandService
             GuiLiveCaptureStartupMode.ManualForegroundWindow,
             afterForegroundSessionReady,
             log,
-            cancellationToken);
+            cancellationToken,
+            iterationCompleted);
     }
 
     private async Task RunDetectionLoopCoreAsync(
@@ -271,7 +275,8 @@ public sealed class GuiCommandService
         GuiLiveCaptureStartupMode liveCaptureStartupMode,
         Func<Task>? afterForegroundSessionReady,
         TextWriter log,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<DetectionDryRunResult>? iterationCompleted)
     {
         List<string> arguments = ["--detect-loop"];
         if (simulateAudio)
@@ -320,7 +325,8 @@ public sealed class GuiCommandService
             new OcrInputPreparer(),
             audioCoordinator: audioCoordinator,
             audioActionLabel: "Simulated audio action",
-            log: log);
+            log: log,
+            iterationCompleted: iterationCompleted);
 
         await loop.RunAsync(dryRunOptions, cancellationToken);
     }
@@ -347,7 +353,8 @@ public sealed class GuiCommandService
         GuiDetectionTuningOptions tuningOptions,
         OcrEngine? ocrEngineOverride,
         TextWriter log,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<DetectionDryRunResult>? iterationCompleted = null)
     {
         await RunGuardedRealAudioDetectionCoreAsync(
             configPath,
@@ -357,7 +364,8 @@ public sealed class GuiCommandService
             GuiLiveCaptureStartupMode.AutomaticTargetWindow,
             afterForegroundSessionReady: null,
             log,
-            cancellationToken);
+            cancellationToken,
+            iterationCompleted);
     }
 
     public async Task RunGuardedRealAudioDetectionFromForegroundWindowAsync(
@@ -385,7 +393,8 @@ public sealed class GuiCommandService
         OcrEngine? ocrEngineOverride,
         Func<Task>? afterForegroundSessionReady,
         TextWriter log,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<DetectionDryRunResult>? iterationCompleted = null)
     {
         await RunGuardedRealAudioDetectionCoreAsync(
             configPath,
@@ -395,7 +404,8 @@ public sealed class GuiCommandService
             GuiLiveCaptureStartupMode.ManualForegroundWindow,
             afterForegroundSessionReady,
             log,
-            cancellationToken);
+            cancellationToken,
+            iterationCompleted);
     }
 
     private async Task RunGuardedRealAudioDetectionCoreAsync(
@@ -406,7 +416,8 @@ public sealed class GuiCommandService
         GuiLiveCaptureStartupMode liveCaptureStartupMode,
         Func<Task>? afterForegroundSessionReady,
         TextWriter log,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<DetectionDryRunResult>? iterationCompleted)
     {
         EnsureGuardedRealAudioAllowsDetectionInput(useFixedImageForDetection);
         AppCommandLineOptions options = BuildGuardedRealAudioOptions(configPath);
@@ -443,7 +454,8 @@ public sealed class GuiCommandService
             new OcrInputPreparer(),
             audioCoordinator: audioCoordinator,
             audioActionLabel: "Real audio action",
-            log: log);
+            log: log,
+            iterationCompleted: iterationCompleted);
 
         await loop.RunAsync(dryRunOptions, cancellationToken);
     }

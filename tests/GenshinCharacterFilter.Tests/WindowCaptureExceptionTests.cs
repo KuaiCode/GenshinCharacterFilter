@@ -25,6 +25,18 @@ public sealed class WindowCaptureExceptionTests
     }
 
     [Fact]
+    public void ForegroundCaptureLost_IncludesReasonAndRecoveryGuidance()
+    {
+        WindowCaptureException exception = WindowCaptureException.ForegroundCaptureLost("YuanShen", "minimized");
+
+        Assert.Equal(WindowCaptureFailureReason.ForegroundCaptureLost, exception.Reason);
+        Assert.True(WindowCaptureException.IsForegroundCaptureLost(exception));
+        Assert.Contains("YuanShen", exception.Message);
+        Assert.Contains("Detection stopped safely", exception.Message);
+        Assert.Contains("Restore audio was attempted", exception.Message);
+    }
+
+    [Fact]
     public void ForegroundProcessValidator_AcceptsMatchingExeAndPathNames()
     {
         WindowCaptureProcessValidator.ValidateForegroundProcess("YuanShen", @"C:\Games\YuanShen.exe");

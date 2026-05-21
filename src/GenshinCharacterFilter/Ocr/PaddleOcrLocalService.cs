@@ -8,6 +8,7 @@ namespace GenshinCharacterFilter.Ocr;
 /// </summary>
 public sealed class PaddleOcrLocalService : IOcrService, IOcrBackendWarmup, IDisposable
 {
+    private static readonly object ConsoleCaptureLock = new();
     private readonly SemaphoreSlim _engineLock = new(1, 1);
     private PaddleOCREngine? _engine;
     private PaddleRuntimeKey? _runtimeKey;
@@ -169,9 +170,39 @@ public sealed class PaddleOcrLocalService : IOcrService, IOcrBackendWarmup, IDis
             det = true,
             enable_mkldnn = true
         };
-        return modelConfig is null
-            ? new PaddleOCREngine(OCRModelConfig.Default, parameter)
-            : new PaddleOCREngine(modelConfig, parameter);
+        PaddleOCREngine? engine = null;
+        _ = CaptureThirdPartyConsoleOutput(() =>
+        {
+            engine = modelConfig is null
+                ? new PaddleOCREngine(OCRModelConfig.Default, parameter)
+                : new PaddleOCREngine(modelConfig, parameter);
+        });
+
+        return engine!;
+    }
+
+    public static string CaptureThirdPartyConsoleOutput(Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        lock (ConsoleCaptureLock)
+        {
+            TextWriter originalOut = Console.Out;
+            TextWriter originalError = Console.Error;
+            using StringWriter captured = new();
+            try
+            {
+                Console.SetOut(captured);
+                Console.SetError(captured);
+                action();
+                return captured.ToString();
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
+                Console.SetError(originalError);
+            }
+        }
     }
 
     private static OCRModelConfig CreateModelConfig(string modelDirectory)
