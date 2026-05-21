@@ -144,7 +144,8 @@ public sealed class GuiCommandService
 
         OcrOptions ocrOptions = BuildOcrOptionsForSettings(settings);
         log.WriteLine($"OCR backend warmup requested: {settings.Ocr.Engine}");
-        log.WriteLine($"OCR backend initialized before warmup: {IsOcrBackendWarm(settings.Ocr.Engine)}");
+        GuiOcrBackendCacheKey backendKey = GetOcrBackendCacheKey(settings);
+        log.WriteLine($"OCR backend initialized before warmup: {IsOcrBackendWarm(settings)}");
         if (settings.Ocr.Engine == OcrEngine.PaddleOcrLocal)
         {
             log.WriteLine($"Paddle model path: {FormatOptionalPath(settings.Ocr.PaddleModelDirectory)}");
@@ -152,7 +153,7 @@ public sealed class GuiCommandService
         }
 
         GuiOcrWarmupResult result = await _ocrServices.WarmUpAsync(
-            settings.Ocr.Engine,
+            backendKey,
             ocrOptions,
             cancellationToken);
         log.WriteLine($"OCR backend warmed up: {result.Engine}, elapsed: {result.ElapsedMs} ms");
@@ -161,7 +162,14 @@ public sealed class GuiCommandService
 
     public bool IsOcrBackendWarm(OcrEngine engine)
     {
-        return _ocrServices.IsWarm(engine);
+        return _ocrServices.IsWarm(GuiOcrBackendCacheKey.From(engine, null, null));
+    }
+
+    public bool IsOcrBackendWarm(string? configPath, OcrEngine? ocrEngineOverride)
+    {
+        AppSettings settings = LoadSettings(configPath);
+        ApplyGuiOcrEngineOverride(settings, ocrEngineOverride);
+        return IsOcrBackendWarm(settings);
     }
 
     public async Task RunDetectionLoopAsync(
@@ -306,7 +314,7 @@ public sealed class GuiCommandService
             : null;
 
         DetectionDryRunLoop loop = new(
-            _ocrServices.Get(settings.Ocr.Engine),
+            _ocrServices.Get(GetOcrBackendCacheKey(settings)),
             new SpeakerMatcher(),
             windowCapture,
             new OcrInputPreparer(),
@@ -429,7 +437,7 @@ public sealed class GuiCommandService
             settings.AudioFilter);
 
         DetectionDryRunLoop loop = new(
-            _ocrServices.Get(settings.Ocr.Engine),
+            _ocrServices.Get(GetOcrBackendCacheKey(settings)),
             new SpeakerMatcher(),
             windowCapture,
             new OcrInputPreparer(),
@@ -736,7 +744,7 @@ public sealed class GuiCommandService
             InputImagePath = preparedInputPath
         };
 
-        return await _ocrServices.Get(settings.Ocr.Engine).ExtractTextAsync(preparedOptions, cancellationToken);
+        return await _ocrServices.Get(GetOcrBackendCacheKey(settings)).ExtractTextAsync(preparedOptions, cancellationToken);
     }
 
     private static OcrOptions BuildOcrOptionsForSettings(AppSettings settings)
@@ -826,7 +834,7 @@ public sealed class GuiCommandService
 
     private void WriteOcrBackendState(AppSettings settings, TextWriter log)
     {
-        bool warm = _ocrServices.IsWarm(settings.Ocr.Engine);
+        bool warm = IsOcrBackendWarm(settings);
         log.WriteLine($"OCR backend initialized: {warm}");
         log.WriteLine($"OCR backend warm: {warm}");
         if (settings.Ocr.Engine == OcrEngine.PaddleOcrLocal && !warm)
@@ -843,6 +851,19 @@ public sealed class GuiCommandService
     private static string FormatOptionalPath(string? path)
     {
         return string.IsNullOrWhiteSpace(path) ? "(bundled/default)" : path.Trim();
+    }
+
+    private bool IsOcrBackendWarm(AppSettings settings)
+    {
+        return _ocrServices.IsWarm(GetOcrBackendCacheKey(settings));
+    }
+
+    private static GuiOcrBackendCacheKey GetOcrBackendCacheKey(AppSettings settings)
+    {
+        return GuiOcrBackendCacheKey.From(
+            settings.Ocr.Engine,
+            settings.Ocr.PaddleModelDirectory,
+            settings.Ocr.PaddleRuntimeDirectory);
     }
 
     private static void WritePreflightIssues(RuntimePreflightResult preflightResult, TextWriter log)

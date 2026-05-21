@@ -717,6 +717,7 @@ public partial class MainWindow : Window
             ? "Armed, confirmation required"
             : "Disabled";
         OverviewRealAudioTextBlock.Text = $"Real audio: {RealAudioStatusTextBlock.Text}";
+        RefreshOcrBackendStatusCore();
         RefreshGuardedRealAudioStatus();
     }
 
@@ -841,20 +842,27 @@ public partial class MainWindow : Window
             AppSettings? settings = TryLoadSettings();
             OcrEngine engine = settings?.Ocr.Engine ?? OcrEngine.TesseractCli;
             OcrEngineComboBox.SelectedItem = engine.ToString();
-            RefreshOcrBackendStatusCore(engine);
+            RefreshOcrBackendStatusCore();
         });
     }
 
     private void RefreshOcrBackendStatus()
     {
-        RunOnUiThread(() => RefreshOcrBackendStatusCore(GetSelectedOcrEngine()));
+        RunOnUiThread(RefreshOcrBackendStatusCore);
     }
 
-    private void RefreshOcrBackendStatusCore(OcrEngine engine)
+    private void RefreshOcrBackendStatusCore()
     {
-        OcrBackendStatusTextBlock.Text = _commandService.IsOcrBackendWarm(engine)
-            ? "Backend status: Ready"
-            : "Backend status: Not initialized";
+        try
+        {
+            OcrBackendStatusTextBlock.Text = _commandService.IsOcrBackendWarm(GetConfigPath(), GetSelectedOcrEngine())
+                ? "Backend status: Ready"
+                : "Backend status: Not initialized";
+        }
+        catch
+        {
+            OcrBackendStatusTextBlock.Text = "Backend status: Not initialized";
+        }
     }
 
     private Task SetOcrBackendStatusAsync(string status)

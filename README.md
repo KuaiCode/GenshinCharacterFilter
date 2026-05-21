@@ -181,6 +181,8 @@ If `PaddleOcrLocal` is selected and initialization fails, the app reports the Pa
 
 In WPF, select `PaddleOcrLocal` on the OCR page and click `Warm up OCR backend` before starting realtime detection. Paddle first-run initialization can take many seconds, while warm runs are the timing that matters for realtime detection. Start/Stop detection keeps the warmed Paddle service alive for the GUI app lifetime unless you switch engines or change relevant OCR runtime/model settings.
 
+The WPF backend status is keyed by OCR engine plus Paddle model/runtime settings. If you change `PaddleModelDirectory` or `PaddleRuntimeDirectory`, the UI treats that as a different backend instance and shows it as not initialized until it is warmed up.
+
 ## OCR Benchmark And Failure Samples
 
 Use `--ocr-benchmark` to compare engines against the same local crop. This does not start detection or audio.

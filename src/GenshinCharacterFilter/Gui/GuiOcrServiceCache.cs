@@ -8,40 +8,52 @@ namespace GenshinCharacterFilter.Gui;
 /// </summary>
 public sealed class GuiOcrServiceCache : IDisposable
 {
-    private IOcrService? _service;
-    private OcrEngine? _engine;
+    private readonly Func<OcrEngine, IOcrService> _serviceFactory;
+    private readonly Dictionary<GuiOcrBackendCacheKey, IOcrService> _services = [];
 
-    public IOcrService Get(OcrEngine engine)
+    public GuiOcrServiceCache()
+        : this(OcrServiceFactory.Create)
     {
-        if (_service is not null && _engine == engine)
-        {
-            return _service;
-        }
-
-        DisposeCurrentService();
-        _service = OcrServiceFactory.Create(engine);
-        _engine = engine;
-        return _service;
     }
 
-    public bool IsWarm(OcrEngine engine)
+    public GuiOcrServiceCache(Func<OcrEngine, IOcrService> serviceFactory)
     {
-        if (_service is null || _engine != engine)
+        _serviceFactory = serviceFactory ?? throw new ArgumentNullException(nameof(serviceFactory));
+    }
+
+    public IOcrService Get(GuiOcrBackendCacheKey key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        if (_services.TryGetValue(key, out IOcrService? service))
+        {
+            return service;
+        }
+
+        service = _serviceFactory(key.Engine);
+        _services.Add(key, service);
+        return service;
+    }
+
+    public bool IsWarm(GuiOcrBackendCacheKey key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        if (!_services.TryGetValue(key, out IOcrService? service))
         {
             return false;
         }
 
-        return _service is IOcrBackendWarmup warmup
+        return service is IOcrBackendWarmup warmup
             ? warmup.IsWarm
             : true;
     }
 
     public async Task<GuiOcrWarmupResult> WarmUpAsync(
-        OcrEngine engine,
+        GuiOcrBackendCacheKey key,
         OcrOptions options,
         CancellationToken cancellationToken)
     {
-        IOcrService service = Get(engine);
+        ArgumentNullException.ThrowIfNull(key);
+        IOcrService service = Get(key);
         Stopwatch stopwatch = Stopwatch.StartNew();
         if (service is IOcrBackendWarmup warmup)
         {
@@ -49,22 +61,19 @@ public sealed class GuiOcrServiceCache : IDisposable
         }
 
         stopwatch.Stop();
-        return new GuiOcrWarmupResult(engine, IsWarm(engine), stopwatch.ElapsedMilliseconds);
+        return new GuiOcrWarmupResult(key.Engine, IsWarm(key), stopwatch.ElapsedMilliseconds);
     }
 
     public void Dispose()
     {
-        DisposeCurrentService();
-    }
-
-    private void DisposeCurrentService()
-    {
-        if (_service is IDisposable disposable)
+        foreach (IOcrService service in _services.Values)
         {
-            disposable.Dispose();
+            if (service is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
         }
 
-        _service = null;
-        _engine = null;
+        _services.Clear();
     }
 }

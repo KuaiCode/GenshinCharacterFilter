@@ -366,3 +366,14 @@ Reasoning:
 - Optional preprocessing settings are explicit and disabled by default: scale, padding, grayscale, invert, and threshold. The default remains raw crop because earlier manual checks showed preprocessing can make small Chinese text worse.
 - Real audio safety gates, stable detection requirements, MuteCoordinator behavior, capture rules, and WPF guarded real audio confirmation are unchanged.
 - The behavior does not add overlay, masking, game memory access, hooks, injection, game file modification, or keyboard/mouse automation.
+
+## 2026-05-21: v0.18.1 OCR Backend Diagnostic Stabilization
+
+Decision: key WPF OCR backend warm/status state by the backend runtime identity instead of by `OcrEngine` alone.
+
+Reasoning:
+
+- Paddle warm status is only meaningful for the exact model/runtime settings that were initialized.
+- If `PaddleModelDirectory` or `PaddleRuntimeDirectory` changes, showing the previous Paddle instance as `Ready` is misleading because the next OCR call may recreate and reinitialize the backend.
+- The GUI backend cache now uses a key containing `OcrEngine`, `PaddleModelDirectory`, and `PaddleRuntimeDirectory`, while still allowing a previously warmed key to be reused when switching back.
+- Real audio safety gates, OCR recognition behavior, detection stability, and audio coordination are unchanged.

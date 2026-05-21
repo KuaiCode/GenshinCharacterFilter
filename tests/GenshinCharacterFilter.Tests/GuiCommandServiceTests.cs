@@ -266,12 +266,16 @@ public sealed class GuiCommandServiceTests
     }
 
     [Fact]
-    public void GuiOcrServiceCache_ReusesServiceForSameEngine()
+    public void GuiOcrServiceCache_ReusesServiceForSameKey()
     {
-        using GuiOcrServiceCache cache = new();
+        using GuiOcrServiceCache cache = new(engine => new FakeWarmOcrService(engine));
+        GuiOcrBackendCacheKey key = GuiOcrBackendCacheKey.From(
+            OcrEngine.PaddleOcrLocal,
+            "models-a",
+            "runtime-a");
 
-        IOcrService first = cache.Get(OcrEngine.PaddleOcrLocal);
-        IOcrService second = cache.Get(OcrEngine.PaddleOcrLocal);
+        IOcrService first = cache.Get(key);
+        IOcrService second = cache.Get(key);
 
         Assert.Same(first, second);
     }
@@ -279,13 +283,80 @@ public sealed class GuiCommandServiceTests
     [Fact]
     public void GuiOcrServiceCache_RecreatesWhenEngineChanges()
     {
-        using GuiOcrServiceCache cache = new();
+        using GuiOcrServiceCache cache = new(engine => new FakeWarmOcrService(engine));
+        GuiOcrBackendCacheKey paddleKey = GuiOcrBackendCacheKey.From(
+            OcrEngine.PaddleOcrLocal,
+            "models-a",
+            "runtime-a");
+        GuiOcrBackendCacheKey tesseractKey = GuiOcrBackendCacheKey.From(
+            OcrEngine.TesseractCli,
+            null,
+            null);
 
-        IOcrService first = cache.Get(OcrEngine.PaddleOcrLocal);
-        IOcrService second = cache.Get(OcrEngine.TesseractCli);
+        IOcrService first = cache.Get(paddleKey);
+        IOcrService second = cache.Get(tesseractKey);
 
         Assert.NotSame(first, second);
-        Assert.IsType<TesseractCliOcrService>(second);
+    }
+
+    [Fact]
+    public async Task GuiOcrServiceCache_DifferentModelPathIsNotIncorrectlyReady()
+    {
+        using GuiOcrServiceCache cache = new(engine => new FakeWarmOcrService(engine));
+        GuiOcrBackendCacheKey firstKey = GuiOcrBackendCacheKey.From(
+            OcrEngine.PaddleOcrLocal,
+            "models-a",
+            "runtime-a");
+        GuiOcrBackendCacheKey secondKey = GuiOcrBackendCacheKey.From(
+            OcrEngine.PaddleOcrLocal,
+            "models-b",
+            "runtime-a");
+
+        await cache.WarmUpAsync(firstKey, new OcrOptions { OcrEngine = OcrEngine.PaddleOcrLocal }, CancellationToken.None);
+
+        Assert.True(cache.IsWarm(firstKey));
+        Assert.False(cache.IsWarm(secondKey));
+    }
+
+    [Fact]
+    public async Task GuiOcrServiceCache_DifferentRuntimePathIsNotIncorrectlyReady()
+    {
+        using GuiOcrServiceCache cache = new(engine => new FakeWarmOcrService(engine));
+        GuiOcrBackendCacheKey firstKey = GuiOcrBackendCacheKey.From(
+            OcrEngine.PaddleOcrLocal,
+            "models-a",
+            "runtime-a");
+        GuiOcrBackendCacheKey secondKey = GuiOcrBackendCacheKey.From(
+            OcrEngine.PaddleOcrLocal,
+            "models-a",
+            "runtime-b");
+
+        await cache.WarmUpAsync(firstKey, new OcrOptions { OcrEngine = OcrEngine.PaddleOcrLocal }, CancellationToken.None);
+
+        Assert.True(cache.IsWarm(firstKey));
+        Assert.False(cache.IsWarm(secondKey));
+    }
+
+    [Fact]
+    public async Task GuiOcrServiceCache_SwitchingBackToPreviousKeyReusesWarmService()
+    {
+        using GuiOcrServiceCache cache = new(engine => new FakeWarmOcrService(engine));
+        GuiOcrBackendCacheKey firstKey = GuiOcrBackendCacheKey.From(
+            OcrEngine.PaddleOcrLocal,
+            "models-a",
+            "runtime-a");
+        GuiOcrBackendCacheKey secondKey = GuiOcrBackendCacheKey.From(
+            OcrEngine.PaddleOcrLocal,
+            "models-b",
+            "runtime-a");
+
+        IOcrService first = cache.Get(firstKey);
+        await cache.WarmUpAsync(firstKey, new OcrOptions { OcrEngine = OcrEngine.PaddleOcrLocal }, CancellationToken.None);
+        _ = cache.Get(secondKey);
+        IOcrService firstAgain = cache.Get(firstKey);
+
+        Assert.Same(first, firstAgain);
+        Assert.True(cache.IsWarm(firstKey));
     }
 
     [Fact]
@@ -302,6 +373,36 @@ public sealed class GuiCommandServiceTests
         int captureDelayMs = GuiCommandService.ResolveGuiCaptureDelayMs(500, options);
 
         Assert.Equal(100, captureDelayMs);
+    }
+
+    private sealed class FakeWarmOcrService : IOcrService, IOcrBackendWarmup, IDisposable
+    {
+        public FakeWarmOcrService(OcrEngine engine)
+        {
+            Engine = engine;
+        }
+
+        public OcrEngine Engine { get; }
+
+        public bool IsWarm { get; private set; }
+
+        public bool Disposed { get; private set; }
+
+        public Task WarmUpAsync(OcrOptions options, CancellationToken cancellationToken)
+        {
+            IsWarm = true;
+            return Task.CompletedTask;
+        }
+
+        public Task<OcrResult> ExtractTextAsync(OcrOptions options, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new OcrResult(string.Empty, Engine.ToString(), options.InputImagePath ?? string.Empty));
+        }
+
+        public void Dispose()
+        {
+            Disposed = true;
+        }
     }
 
     [Fact]
