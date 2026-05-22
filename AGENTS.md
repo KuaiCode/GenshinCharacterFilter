@@ -769,7 +769,20 @@ For v0.20:
 - Do not add arbitrary heavy dependencies.
 - If Windows.Graphics.Capture requires built-in Windows SDK / WinRT interop, document why.
 - Do not add third-party capture libraries without explicit justification.
-- Do not copy BetterGI code.
+- BetterGI code may be referenced, copied, or adapted only if its license is reviewed and complied with.
+- BetterGI is GPL-3.0 licensed; copying/adapting GPL code can impose GPL obligations on the distributed combined/derived work.
+- Prefer architecture-level reference and independent implementation when possible to avoid unnecessary license coupling.
+- If BetterGI code is copied or adapted:
+  - preserve copyright notices;
+  - preserve GPL-3.0 license text or required notices;
+  - document copied/adapted files and origins;
+  - update README/DECISIONS/NOTICE or equivalent attribution;
+  - ensure distribution obligations are understood before release.
+- Do not mix BetterGI GPL code into this project silently.
+- Do not remove or obscure BetterGI attribution.
+- Any copied third-party code must be tracked with license and attribution.
+- Before copying GPL code, decide whether the project is willing to distribute under GPL-compatible terms.
+- If the project should avoid GPL coupling, use BetterGI only as architectural reference and implement independently.
 - Existing minimal WinForms-based calibration window may remain.
 - WPF may be used for the GUI shell because the project already targets Windows desktop APIs.
 - Existing WinForms code may remain as calibration selector or fallback while WPF shell evolves.
