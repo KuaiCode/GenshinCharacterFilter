@@ -271,7 +271,11 @@ public partial class MainWindow : Window
     private Task PrintEffectiveConfigAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _commandService.PrintEffectiveConfig(GetConfigPath(), GetSelectedOcrEngine(), CreateLogWriter());
+        _commandService.PrintEffectiveConfig(
+            GetConfigPath(),
+            GetSelectedOcrEngine(),
+            GetSelectedCaptureBackendOptions(),
+            CreateLogWriter());
         return Task.CompletedTask;
     }
 
@@ -1217,12 +1221,18 @@ public partial class MainWindow : Window
         try
         {
             CaptureBackendOptions options = GetSelectedCaptureBackendOptions();
-            CaptureBackendStatusTextBlock.Text = options.Backend == CaptureBackend.WindowsGraphicsCapture
-                ? $"Capture backend: {options.Backend}; fallback: {options.AllowBackendFallback}. WGC spike will report diagnostics if unavailable."
-                : $"Capture backend: {options.Backend}; foreground visible-pixel capture.";
+            IGameCaptureBackend backend = options.Backend == CaptureBackend.WindowsGraphicsCapture
+                ? new WindowsGraphicsCaptureBackend(options.CaptureTimeoutMs)
+                : new VisiblePixelsCaptureBackend();
+            CaptureBackendAvailability availability = backend.CheckAvailability();
+            string status = availability.Available
+                ? "Ready"
+                : $"Unavailable: {availability.FailureReason}";
+            CaptureBackendStatusTextBlock.Text =
+                $"Capture backend: {options.Backend}; fallback: {options.AllowBackendFallback}. Status: {status}. {availability.Message}";
             ApplyRuntimeSnapshot(_runtimeStatus.SetCaptureBackend(
                 options.Backend.ToString(),
-                options.Backend == CaptureBackend.WindowsGraphicsCapture ? "Spike selected" : "Ready"));
+                status));
         }
         catch (Exception exception)
         {

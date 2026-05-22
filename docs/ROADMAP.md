@@ -17,7 +17,7 @@ The v0.20 milestone is limited to:
 - adding explicit backend fallback policy from `WindowsGraphicsCapture` to `VisiblePixels`;
 - logging selected capture backend and capture mode;
 - keeping fixed-image OCR independent from live capture backend;
-- adding a Windows.Graphics.Capture spike with clear diagnostics if WGC is unavailable or frame acquisition is not enabled;
+- adding a Windows.Graphics.Capture spike with real HWND frame acquisition and clear diagnostics if WGC is unavailable or frame acquisition fails;
 - no global hotkeys, tray icon, always-on-top mini window, overlay, masking, hooks, gameplay automation, game memory access, MuteCoordinator changes, OCR backend architecture changes, DirectX hooks, or real audio enabled by default.
 
 ## Phase Order

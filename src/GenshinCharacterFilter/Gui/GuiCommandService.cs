@@ -47,9 +47,19 @@ public sealed class GuiCommandService
 
     public void PrintEffectiveConfig(string? configPath, OcrEngine? ocrEngineOverride, TextWriter log)
     {
+        PrintEffectiveConfig(configPath, ocrEngineOverride, captureBackendOptions: null, log);
+    }
+
+    public void PrintEffectiveConfig(
+        string? configPath,
+        OcrEngine? ocrEngineOverride,
+        CaptureBackendOptions? captureBackendOptions,
+        TextWriter log)
+    {
         AppCommandLineOptions options = BuildOptions(configPath, "--print-effective-config");
         AppSettings settings = LoadMergedSettings(options);
         ApplyGuiOcrEngineOverride(settings, ocrEngineOverride);
+        ApplyGuiCaptureBackendOverride(settings, captureBackendOptions);
         new EffectiveConfigPrinter().Print(settings, options, log);
     }
 
@@ -648,6 +658,19 @@ public sealed class GuiCommandService
         }
 
         settings.Ocr.Engine = ocrEngineOverride.Value;
+        settings.Validate();
+    }
+
+    public static void ApplyGuiCaptureBackendOverride(AppSettings? settings, CaptureBackendOptions? captureBackendOptions)
+    {
+        if (settings is null || captureBackendOptions is null)
+        {
+            return;
+        }
+
+        settings.Capture.Backend = captureBackendOptions.Backend;
+        settings.Capture.AllowBackendFallback = captureBackendOptions.AllowBackendFallback;
+        settings.Capture.CaptureTimeoutMs = captureBackendOptions.CaptureTimeoutMs;
         settings.Validate();
     }
 

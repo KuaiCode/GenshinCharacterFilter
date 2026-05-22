@@ -5,19 +5,28 @@ namespace GenshinCharacterFilter.Capture;
 /// </summary>
 public sealed class CaptureBackendFactory
 {
-    private readonly Func<TextWriter?, IGameCaptureBackend> _visiblePixelsFactory;
-    private readonly Func<TextWriter?, IGameCaptureBackend> _windowsGraphicsCaptureFactory;
+    private readonly Func<CaptureBackendOptions, TextWriter?, IGameCaptureBackend> _visiblePixelsFactory;
+    private readonly Func<CaptureBackendOptions, TextWriter?, IGameCaptureBackend> _windowsGraphicsCaptureFactory;
 
     public CaptureBackendFactory()
         : this(
-            log => new VisiblePixelsCaptureBackend(log),
-            log => new WindowsGraphicsCaptureBackend(log))
+            (_, log) => new VisiblePixelsCaptureBackend(log),
+            (options, log) => new WindowsGraphicsCaptureBackend(options.CaptureTimeoutMs, log))
     {
     }
 
     public CaptureBackendFactory(
         Func<TextWriter?, IGameCaptureBackend> visiblePixelsFactory,
         Func<TextWriter?, IGameCaptureBackend> windowsGraphicsCaptureFactory)
+        : this(
+            (_, log) => visiblePixelsFactory(log),
+            (_, log) => windowsGraphicsCaptureFactory(log))
+    {
+    }
+
+    public CaptureBackendFactory(
+        Func<CaptureBackendOptions, TextWriter?, IGameCaptureBackend> visiblePixelsFactory,
+        Func<CaptureBackendOptions, TextWriter?, IGameCaptureBackend> windowsGraphicsCaptureFactory)
     {
         _visiblePixelsFactory = visiblePixelsFactory;
         _windowsGraphicsCaptureFactory = windowsGraphicsCaptureFactory;
@@ -29,10 +38,12 @@ public sealed class CaptureBackendFactory
         options.Validate();
         TextWriter writer = log ?? TextWriter.Null;
 
-        IGameCaptureBackend backend = CreateRequestedBackend(options.Backend, writer);
+        writer.WriteLine($"Requested capture backend: {options.Backend}");
+        IGameCaptureBackend backend = CreateRequestedBackend(options, writer);
         CaptureBackendAvailability availability = backend.CheckAvailability();
         if (availability.Available)
         {
+            writer.WriteLine($"Actual capture backend: {backend.Backend}");
             writer.WriteLine($"Capture backend: {backend.Backend}");
             writer.WriteLine($"Capture backend status: {availability.Message}");
             return backend;
@@ -42,8 +53,9 @@ public sealed class CaptureBackendFactory
         writer.WriteLine($"Capture backend unavailable: {availability.FailureReason}. {availability.Message}");
         if (options.Backend == CaptureBackend.WindowsGraphicsCapture && options.AllowBackendFallback)
         {
+            writer.WriteLine($"Fallback reason: {availability.FailureReason}. {availability.Message}");
             writer.WriteLine("Capture backend fallback enabled; falling back to VisiblePixels.");
-            IGameCaptureBackend fallback = _visiblePixelsFactory(writer);
+            IGameCaptureBackend fallback = _visiblePixelsFactory(options, writer);
             CaptureBackendAvailability fallbackAvailability = fallback.CheckAvailability();
             if (!fallbackAvailability.Available)
             {
@@ -53,6 +65,7 @@ public sealed class CaptureBackendFactory
                     fallbackAvailability.Message);
             }
 
+            writer.WriteLine($"Actual capture backend: {fallback.Backend}");
             writer.WriteLine($"Capture backend: {fallback.Backend}");
             writer.WriteLine($"Capture backend status: {fallbackAvailability.Message}");
             return fallback;
@@ -64,13 +77,13 @@ public sealed class CaptureBackendFactory
             availability.Message);
     }
 
-    private IGameCaptureBackend CreateRequestedBackend(CaptureBackend backend, TextWriter log)
+    private IGameCaptureBackend CreateRequestedBackend(CaptureBackendOptions options, TextWriter log)
     {
-        return backend switch
+        return options.Backend switch
         {
-            CaptureBackend.VisiblePixels => _visiblePixelsFactory(log),
-            CaptureBackend.WindowsGraphicsCapture => _windowsGraphicsCaptureFactory(log),
-            _ => throw new ArgumentException("Capture backend is not supported.", nameof(backend))
+            CaptureBackend.VisiblePixels => _visiblePixelsFactory(options, log),
+            CaptureBackend.WindowsGraphicsCapture => _windowsGraphicsCaptureFactory(options, log),
+            _ => throw new ArgumentException("Capture backend is not supported.", nameof(options))
         };
     }
 }

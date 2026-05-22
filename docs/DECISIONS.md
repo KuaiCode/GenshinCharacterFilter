@@ -462,3 +462,18 @@ Reasoning:
 - WGC failures are structured as backend diagnostics. Fallback to `VisiblePixels` happens only when explicitly configured.
 - Windows.Graphics.Capture is not a DirectX hook. DirectX hooks, game process injection, game memory access, game file modification, anti-cheat bypass logic, and gameplay automation remain out of scope.
 - Real audio remains guarded by explicit UI/CLI safety gates, preflight, valid OCR region, confirmation, and stable detection. Capture backend selection cannot start or bypass real audio.
+
+## 2026-05-22: v0.20 WindowsGraphicsCapture Frame Acquisition
+
+Decision: replace the skeleton-only `WindowsGraphicsCapture` boundary with a real HWND-based Windows.Graphics.Capture implementation while keeping `VisiblePixels` as the default and explicit fallback.
+
+Reasoning:
+
+- User testing showed that a selectable backend without frame acquisition still behaved like `VisiblePixels`, so it did not solve the foreground/minimized-window dependency.
+- BetterGI's public documentation and code structure were reviewed for capture architecture. Relevant pieces include a shared game-capture abstraction, BitBlt/GDI capture, WindowsGraphicsCapture, DXGI Desktop Duplication, window-management helpers, and capture-mode selection. This project uses those architecture ideas but implements the WGC backend independently against Microsoft APIs; no BetterGI code is copied or adapted in this change.
+- BetterGI is GPL-3.0 licensed. If a future change copies or adapts BetterGI code, it must preserve copyright and GPL notices, document file origins, add required attribution/NOTICE material, and understand distribution obligations before release.
+- The new WGC backend uses `IGraphicsCaptureItemInterop.CreateForWindow` to create a `GraphicsCaptureItem` from the target HWND, creates a Direct3D11-backed WinRT `IDirect3DDevice`, captures through `Direct3D11CaptureFramePool.CreateFreeThreaded`, encodes the acquired surface to PNG, and applies OCR-region cropping for realtime loops.
+- WGC failures are mapped to structured reasons such as unsupported OS/API unavailable, Direct3D device creation failure, capture item creation failure, frame timeout, invalid target window, minimized target window, access denied, or unknown error.
+- Requested and actual capture backend are logged. Fallback from `WindowsGraphicsCapture` to `VisiblePixels` remains explicit and only happens when configured.
+- The detection loop still depends only on the existing `IGameWindowCaptureSession` boundary and does not know whether frames come from WGC or visible-pixel capture.
+- The implementation does not add hooks, injection, game memory access, game file modification, anti-cheat bypass logic, gameplay automation, DirectX hooks, overlay, masking, global hotkeys, tray integration, or changes to real-audio safety gates.

@@ -7,9 +7,13 @@ public enum CaptureBackendFailureReason
 {
     BackendUnavailable,
     UnsupportedOS,
+    ApiUnavailable,
+    Direct3DDeviceCreationFailed,
+    CreateCaptureItemFailed,
     AccessDenied,
     TargetWindowInvalid,
     FrameTimeout,
+    TargetMinimized,
     MinimizedNotSupported,
     UnknownError
 }

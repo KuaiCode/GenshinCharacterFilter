@@ -49,6 +49,9 @@ public sealed class CaptureBackendFactoryTests
         }, log);
 
         Assert.Equal(CaptureBackend.VisiblePixels, backend.Backend);
+        Assert.Contains("Requested capture backend: WindowsGraphicsCapture", log.ToString());
+        Assert.Contains("Fallback reason: BackendUnavailable. fake unavailable", log.ToString());
+        Assert.Contains("Actual capture backend: VisiblePixels", log.ToString());
         Assert.Contains("falling back to VisiblePixels", log.ToString());
     }
 
