@@ -58,6 +58,7 @@ public sealed class CaptureBackendFactoryTests
     [Fact]
     public void Create_WgcUnavailableWithFallbackDisabledThrowsClearError()
     {
+        StringWriter log = new();
         CaptureBackendFactory factory = CreateFactory(
             visibleAvailable: true,
             wgcAvailable: false);
@@ -66,11 +67,14 @@ public sealed class CaptureBackendFactoryTests
         {
             Backend = CaptureBackend.WindowsGraphicsCapture,
             AllowBackendFallback = false
-        }));
+        }, log));
 
         Assert.Equal(CaptureBackend.WindowsGraphicsCapture, exception.Backend);
         Assert.Equal(CaptureBackendFailureReason.BackendUnavailable, exception.Reason);
         Assert.Contains("fake unavailable", exception.Message);
+        Assert.Contains("Requested capture backend: WindowsGraphicsCapture", log.ToString());
+        Assert.Contains("Actual capture backend: (none)", log.ToString());
+        Assert.Contains("Backend fallback disabled.", log.ToString());
     }
 
     private static CaptureBackendFactory CreateFactory(bool visibleAvailable, bool wgcAvailable)

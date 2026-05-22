@@ -124,10 +124,19 @@
                         <StackPanel Margin="0,0,12,8">
                             <TextBlock Text="Capture backend" Foreground="{DynamicResource MutedForegroundBrush}" />
                             <TextBlock x:Name="DockCaptureBackendTextBlock" FontWeight="SemiBold" />
+                            <ComboBox x:Name="DockCaptureBackendComboBox"
+                                      MinWidth="150"
+                                      Margin="0,4,0,0"
+                                      SelectionChanged="DockCaptureBackendSelectionChanged" />
                         </StackPanel>
                         <StackPanel Margin="0,0,12,8">
                             <TextBlock Text="Capture status" Foreground="{DynamicResource MutedForegroundBrush}" />
                             <TextBlock x:Name="DockCaptureStatusTextBlock" FontWeight="SemiBold" />
+                            <CheckBox x:Name="DockAllowCaptureBackendFallbackCheckBox"
+                                      Content="Allow backend fallback"
+                                      Margin="0,4,0,0"
+                                      Checked="DockCaptureFallbackChanged"
+                                      Unchecked="DockCaptureFallbackChanged" />
                         </StackPanel>
                         <StackPanel Margin="0,0,12,8">
                             <TextBlock Text="Target process" Foreground="{DynamicResource MutedForegroundBrush}" />
@@ -268,7 +277,7 @@
                                            Margin="0,10,0,14" />
                                 <WrapPanel>
                                     <Button x:Name="ValidateConfigButton" Content="Validate Config" Style="{StaticResource PrimaryButtonStyle}" Click="ValidateConfig" />
-                                    <Button x:Name="PrintEffectiveConfigButton" Content="Print Effective Config" Click="PrintEffectiveConfig" />
+                                    <Button x:Name="PrintEffectiveConfigButton" Content="Print Current Run Settings" Click="PrintEffectiveConfig" />
                                 </WrapPanel>
                             </StackPanel>
                         </Border>

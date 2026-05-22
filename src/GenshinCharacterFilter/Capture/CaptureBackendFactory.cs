@@ -51,9 +51,15 @@ public sealed class CaptureBackendFactory
 
         writer.WriteLine($"Capture backend: {backend.Backend}");
         writer.WriteLine($"Capture backend unavailable: {availability.FailureReason}. {availability.Message}");
+        if (backend.Backend == CaptureBackend.WindowsGraphicsCapture)
+        {
+            writer.WriteLine($"WGC failed: {availability.FailureReason}. {availability.Message}");
+        }
+
         if (options.Backend == CaptureBackend.WindowsGraphicsCapture && options.AllowBackendFallback)
         {
             writer.WriteLine($"Fallback reason: {availability.FailureReason}. {availability.Message}");
+            writer.WriteLine("Falling back to VisiblePixels.");
             writer.WriteLine("Capture backend fallback enabled; falling back to VisiblePixels.");
             IGameCaptureBackend fallback = _visiblePixelsFactory(options, writer);
             CaptureBackendAvailability fallbackAvailability = fallback.CheckAvailability();
@@ -69,6 +75,12 @@ public sealed class CaptureBackendFactory
             writer.WriteLine($"Capture backend: {fallback.Backend}");
             writer.WriteLine($"Capture backend status: {fallbackAvailability.Message}");
             return fallback;
+        }
+
+        writer.WriteLine("Actual capture backend: (none)");
+        if (options.Backend == CaptureBackend.WindowsGraphicsCapture)
+        {
+            writer.WriteLine("Backend fallback disabled.");
         }
 
         throw new CaptureBackendException(

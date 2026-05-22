@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private bool _closeAfterOperationStops;
     private bool _syncingGuardedRealAudioCheckBoxes;
     private bool _syncingInputForegroundFallbackCheckBoxes;
+    private bool _syncingCaptureBackendControls;
     private DetectionRunContext? _resumeContext;
 
     private enum DetectionOperationKind
@@ -71,6 +72,7 @@ public partial class MainWindow : Window
             : initialConfigPath;
         OcrEngineComboBox.ItemsSource = Enum.GetValues<OcrEngine>().Select(engine => engine.ToString()).ToArray();
         CaptureBackendComboBox.ItemsSource = Enum.GetValues<CaptureBackend>().Select(backend => backend.ToString()).ToArray();
+        DockCaptureBackendComboBox.ItemsSource = CaptureBackendComboBox.ItemsSource;
         OcrInputPathTextBox.Text = GuiCommandService.GetDefaultOcrInputPath();
         UseFixedImageForDetectionCheckBox.IsChecked = false;
         SaveDebugImagesCheckBox.IsChecked = false;
@@ -101,9 +103,8 @@ public partial class MainWindow : Window
         DockEnableInputForegroundFallbackCheckBox.Unchecked += (_, _) => SyncInputForegroundFallbackEnablement(fromDock: true);
         EnableInputForegroundFallbackCheckBox.Checked += (_, _) => SyncInputForegroundFallbackEnablement(fromDock: false);
         EnableInputForegroundFallbackCheckBox.Unchecked += (_, _) => SyncInputForegroundFallbackEnablement(fromDock: false);
-        CaptureBackendComboBox.SelectionChanged += (_, _) => RefreshCaptureBackendStatus();
-        AllowCaptureBackendFallbackCheckBox.Checked += (_, _) => RefreshCaptureBackendStatus();
-        AllowCaptureBackendFallbackCheckBox.Unchecked += (_, _) => RefreshCaptureBackendStatus();
+        AllowCaptureBackendFallbackCheckBox.Checked += CaptureFallbackChanged;
+        AllowCaptureBackendFallbackCheckBox.Unchecked += CaptureFallbackChanged;
         RunUntilStopCheckBox.Checked += (_, _) => UpdateLoopCountInputState();
         RunUntilStopCheckBox.Unchecked += (_, _) => UpdateLoopCountInputState();
 
@@ -271,10 +272,23 @@ public partial class MainWindow : Window
     private Task PrintEffectiveConfigAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        CaptureBackendOptions selectedCaptureOptions = GetSelectedCaptureBackendOptions();
+        CaptureBackend configCaptureBackend = TryLoadSettings()?.Capture.Backend ?? CaptureBackend.VisiblePixels;
+        AppendLogLine("Current run settings:");
+        AppendLogLine($"Config capture backend: {configCaptureBackend}");
+        AppendLogLine($"GUI selected capture backend: {selectedCaptureOptions.Backend}");
+        AppendLogLine($"Current run requested backend: {selectedCaptureOptions.Backend}");
+        AppendLogLine($"Allow backend fallback: {selectedCaptureOptions.AllowBackendFallback}");
+        AppendLogLine($"Actual backend last used: {_runtimeStatus.Snapshot.CaptureBackend}");
+        if (configCaptureBackend != selectedCaptureOptions.Backend)
+        {
+            AppendLogLine("GUI override active.");
+        }
+
         _commandService.PrintEffectiveConfig(
             GetConfigPath(),
             GetSelectedOcrEngine(),
-            GetSelectedCaptureBackendOptions(),
+            selectedCaptureOptions,
             CreateLogWriter());
         return Task.CompletedTask;
     }
@@ -282,6 +296,10 @@ public partial class MainWindow : Window
     private async Task CalibrateOcrRegionAsync(CancellationToken cancellationToken)
     {
         CaptureBackendOptions captureBackendOptions = GetSelectedCaptureBackendOptions();
+        LogGuiSelectedCaptureBackend(captureBackendOptions);
+        ApplyRuntimeSnapshot(_runtimeStatus.SetCaptureBackend(
+            captureBackendOptions.Backend.ToString(),
+            FormatSelectedCaptureBackendStatus(captureBackendOptions.Backend)));
         if (captureBackendOptions.Backend == CaptureBackend.WindowsGraphicsCapture)
         {
             AppendLogLine("WindowsGraphicsCapture selected for calibration; using selected capture backend without foreground activation.");
@@ -474,15 +492,21 @@ public partial class MainWindow : Window
         Func<Func<Task>, CancellationToken, Task> foregroundOperation,
         CancellationToken cancellationToken)
     {
-        if (launch.UseFixedImageForDetection)
-        {
-            await normalOperation(cancellationToken);
-            return;
-        }
+        LogGuiSelectedCaptureBackend(launch.TuningOptions.CaptureBackendOptions);
+        ApplyRuntimeSnapshot(_runtimeStatus.SetCaptureBackend(
+            launch.TuningOptions.CaptureBackendOptions.Backend.ToString(),
+            FormatSelectedCaptureBackendStatus(launch.TuningOptions.CaptureBackendOptions.Backend)));
 
-        if (launch.TuningOptions.CaptureBackendOptions.Backend == CaptureBackend.WindowsGraphicsCapture)
+        if (!GuiForegroundActivationPolicy.ShouldUseForegroundStartup(
+            launch.TuningOptions.CaptureBackendOptions.Backend,
+            launch.UseFixedImageForDetection))
         {
-            AppendLogLine("WindowsGraphicsCapture selected; starting through capture backend without foreground activation.");
+            if (launch.TuningOptions.CaptureBackendOptions.Backend == CaptureBackend.WindowsGraphicsCapture &&
+                !launch.UseFixedImageForDetection)
+            {
+                AppendLogLine("WindowsGraphicsCapture selected; starting through capture backend without foreground activation.");
+            }
+
             await normalOperation(cancellationToken);
             return;
         }
@@ -1166,14 +1190,61 @@ public partial class MainWindow : Window
         {
             AppSettings? settings = TryLoadSettings();
             CaptureBackend backend = settings?.Capture.Backend ?? CaptureBackend.VisiblePixels;
-            CaptureBackendComboBox.SelectedItem = backend.ToString();
-            AllowCaptureBackendFallbackCheckBox.IsChecked = settings?.Capture.AllowBackendFallback ?? false;
+            SetCaptureBackendSelection(backend, settings?.Capture.AllowBackendFallback ?? false);
             RefreshCaptureBackendStatusCore();
         });
     }
 
     private void CaptureBackendSelectionChanged(object? sender, SelectionChangedEventArgs eventArgs)
     {
+        if (_syncingCaptureBackendControls)
+        {
+            return;
+        }
+
+        SetCaptureBackendSelection(GetSelectedCaptureBackend(), AllowCaptureBackendFallbackCheckBox.IsChecked == true);
+        RefreshCaptureBackendStatus();
+        RefreshStatus();
+    }
+
+    private void DockCaptureBackendSelectionChanged(object? sender, SelectionChangedEventArgs eventArgs)
+    {
+        if (_syncingCaptureBackendControls)
+        {
+            return;
+        }
+
+        string value = DockCaptureBackendComboBox.SelectedItem?.ToString() ?? CaptureBackend.VisiblePixels.ToString();
+        if (!TryParseCaptureBackend(value, out CaptureBackend backend))
+        {
+            backend = CaptureBackend.VisiblePixels;
+        }
+
+        SetCaptureBackendSelection(backend, DockAllowCaptureBackendFallbackCheckBox.IsChecked == true);
+        RefreshCaptureBackendStatus();
+        RefreshStatus();
+    }
+
+    private void CaptureFallbackChanged(object? sender, RoutedEventArgs eventArgs)
+    {
+        if (_syncingCaptureBackendControls)
+        {
+            return;
+        }
+
+        SetCaptureBackendSelection(GetSelectedCaptureBackend(), AllowCaptureBackendFallbackCheckBox.IsChecked == true);
+        RefreshCaptureBackendStatus();
+        RefreshStatus();
+    }
+
+    private void DockCaptureFallbackChanged(object? sender, RoutedEventArgs eventArgs)
+    {
+        if (_syncingCaptureBackendControls)
+        {
+            return;
+        }
+
+        SetCaptureBackendSelection(GetSelectedCaptureBackend(), DockAllowCaptureBackendFallbackCheckBox.IsChecked == true);
         RefreshCaptureBackendStatus();
         RefreshStatus();
     }
@@ -1216,6 +1287,19 @@ public partial class MainWindow : Window
         RunOnUiThread(RefreshCaptureBackendStatusCore);
     }
 
+    private void LogGuiSelectedCaptureBackend(CaptureBackendOptions options)
+    {
+        AppendLogLine($"GUI selected capture backend: {options.Backend}");
+        AppendLogLine($"GUI allow backend fallback: {options.AllowBackendFallback}");
+    }
+
+    private static string FormatSelectedCaptureBackendStatus(CaptureBackend backend)
+    {
+        return backend == CaptureBackend.WindowsGraphicsCapture
+            ? "WindowsGraphicsCapture selected."
+            : "VisiblePixels requires target window to stay visible.";
+    }
+
     private void RefreshCaptureBackendStatusCore()
     {
         try
@@ -1232,7 +1316,7 @@ public partial class MainWindow : Window
                 $"Capture backend: {options.Backend}; fallback: {options.AllowBackendFallback}. Status: {status}. {availability.Message}";
             ApplyRuntimeSnapshot(_runtimeStatus.SetCaptureBackend(
                 options.Backend.ToString(),
-                status));
+                $"{status}. {FormatSelectedCaptureBackendStatus(options.Backend)}"));
         }
         catch (Exception exception)
         {
@@ -1246,15 +1330,47 @@ public partial class MainWindow : Window
         return RunOnUiThread(() =>
         {
             string value = CaptureBackendComboBox.SelectedItem?.ToString() ?? CaptureBackend.VisiblePixels.ToString();
-            foreach (CaptureBackend backend in Enum.GetValues<CaptureBackend>())
+            if (TryParseCaptureBackend(value, out CaptureBackend backend))
             {
-                if (string.Equals(value, backend.ToString(), StringComparison.OrdinalIgnoreCase))
-                {
-                    return backend;
-                }
+                return backend;
             }
 
             throw new ArgumentException("Capture backend must be 'VisiblePixels' or 'WindowsGraphicsCapture'.");
+        });
+    }
+
+    private static bool TryParseCaptureBackend(string value, out CaptureBackend result)
+    {
+        foreach (CaptureBackend backend in Enum.GetValues<CaptureBackend>())
+        {
+            if (string.Equals(value, backend.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                result = backend;
+                return true;
+            }
+        }
+
+        result = CaptureBackend.VisiblePixels;
+        return false;
+    }
+
+    private void SetCaptureBackendSelection(CaptureBackend backend, bool allowFallback)
+    {
+        RunOnUiThread(() =>
+        {
+            _syncingCaptureBackendControls = true;
+            try
+            {
+                string value = backend.ToString();
+                CaptureBackendComboBox.SelectedItem = value;
+                DockCaptureBackendComboBox.SelectedItem = value;
+                AllowCaptureBackendFallbackCheckBox.IsChecked = allowFallback;
+                DockAllowCaptureBackendFallbackCheckBox.IsChecked = allowFallback;
+            }
+            finally
+            {
+                _syncingCaptureBackendControls = false;
+            }
         });
     }
 
@@ -1263,7 +1379,9 @@ public partial class MainWindow : Window
         return RunOnUiThread(() => new CaptureBackendOptions
         {
             Backend = GetSelectedCaptureBackend(),
-            AllowBackendFallback = AllowCaptureBackendFallbackCheckBox.IsChecked == true
+            AllowBackendFallback =
+                AllowCaptureBackendFallbackCheckBox.IsChecked == true ||
+                DockAllowCaptureBackendFallbackCheckBox.IsChecked == true
         });
     }
 

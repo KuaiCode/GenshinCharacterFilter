@@ -25,4 +25,14 @@ public static class GuiForegroundActivationPolicy
         return !result.Success &&
             result.FailureReason == TargetWindowActivationFailureReason.TargetNotFound;
     }
+
+    public static bool ShouldUseForegroundStartup(CaptureBackend captureBackend, bool useFixedImageForDetection)
+    {
+        if (useFixedImageForDetection)
+        {
+            return false;
+        }
+
+        return captureBackend == CaptureBackend.VisiblePixels;
+    }
 }

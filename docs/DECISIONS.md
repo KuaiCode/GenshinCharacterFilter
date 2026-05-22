@@ -477,3 +477,17 @@ Reasoning:
 - Requested and actual capture backend are logged. Fallback from `WindowsGraphicsCapture` to `VisiblePixels` remains explicit and only happens when configured.
 - The detection loop still depends only on the existing `IGameWindowCaptureSession` boundary and does not know whether frames come from WGC or visible-pixel capture.
 - The implementation does not add hooks, injection, game memory access, game file modification, anti-cheat bypass logic, gameplay automation, DirectX hooks, overlay, masking, global hotkeys, tray integration, or changes to real-audio safety gates.
+
+## 2026-05-23: v0.20 WPF Capture Backend Current-Run Wiring
+
+Decision: make WPF capture backend selection visible in the persistent dock and ensure the selected backend flows into calibration, detection, simulated audio, guarded real audio, Resume/Reconnect context, and current-run diagnostics.
+
+Reasoning:
+
+- Manual testing after the WGC implementation still showed `Trying Win32 activation for calibration` and `Requested capture backend: VisiblePixels`, which means the actual run was still using the default visible-pixel backend rather than the GUI-selected WGC backend.
+- The capture backend selector now exists in the persistent dock as well as the Detection page, and both controls are synchronized so users do not need to hunt through pages before starting calibration or guarded real audio.
+- WPF logs `GUI selected capture backend` before calibration and detection startup. `Print Current Run Settings` shows config backend, GUI selected backend, current requested backend, fallback policy, last actual backend/status, and whether a GUI override is active.
+- `WindowsGraphicsCapture` current-run selection bypasses Win32 foreground activation and manual foreground fallback. It goes directly through the selected capture backend. `VisiblePixels` keeps the existing foreground/manual fallback behavior.
+- Backend creation and startup now log requested backend, actual backend, fallback reason, and `(none)` when WGC fails with fallback disabled.
+- If WGC is available at factory creation but fails during calibration capture or detection session initialization, explicit fallback to `VisiblePixels` is attempted only when backend fallback is enabled; otherwise the WGC-specific error is surfaced.
+- Real audio safety gates, stable-detection requirements, OCR backend behavior, MuteCoordinator behavior, and default safe startup are unchanged.

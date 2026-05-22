@@ -90,7 +90,32 @@ public sealed class GuiCommandService
             new CaptureBackendFactory().Create(context.Settings.Capture.ToOptions(), log),
             log);
 
-        OcrRegionCalibrationResult result = await calibrator.CalibrateAsync(context.CalibrationOptions, cancellationToken);
+        OcrRegionCalibrationResult result;
+        try
+        {
+            result = await calibrator.CalibrateAsync(context.CalibrationOptions, cancellationToken);
+        }
+        catch (CaptureBackendException exception) when (
+            context.Settings.Capture.Backend == CaptureBackend.WindowsGraphicsCapture &&
+            context.Settings.Capture.AllowBackendFallback)
+        {
+            log.WriteLine($"WGC failed: {exception.Reason}. {exception.Message}");
+            log.WriteLine($"Fallback reason: {exception.Reason}. {exception.Message}");
+            log.WriteLine("Falling back to VisiblePixels.");
+            context.Settings.Capture.Backend = CaptureBackend.VisiblePixels;
+            WindowsOcrRegionCalibrator fallbackCalibrator = new(
+                new CaptureBackendFactory().Create(context.Settings.Capture.ToOptions(), log),
+                log);
+            result = await fallbackCalibrator.CalibrateAsync(context.CalibrationOptions, cancellationToken);
+        }
+        catch (CaptureBackendException exception) when (context.Settings.Capture.Backend == CaptureBackend.WindowsGraphicsCapture)
+        {
+            log.WriteLine($"WGC failed: {exception.Reason}. {exception.Message}");
+            log.WriteLine("Actual capture backend: (none)");
+            log.WriteLine("Backend fallback disabled.");
+            throw;
+        }
+
         WriteCalibrationResult(context.CalibrationOptions, result, log);
     }
 
@@ -516,18 +541,50 @@ public sealed class GuiCommandService
         CancellationToken cancellationToken)
     {
         IGameCaptureBackend backend = new CaptureBackendFactory().Create(dryRunOptions.CaptureBackendOptions, log);
+        if (backend.Backend != dryRunOptions.CaptureBackendOptions.Backend)
+        {
+            CaptureBackendOptions actualOptions = dryRunOptions.CaptureBackendOptions.Clone();
+            actualOptions.Backend = backend.Backend;
+            dryRunOptions.CaptureBackendOptions = actualOptions;
+        }
+
         if (hasFixedImageInput)
         {
             return backend;
         }
 
         WindowCaptureOptions captureOptions = BuildWindowCaptureOptions(dryRunOptions);
-        IGameWindowCaptureSession session =
-            liveCaptureStartupMode == GuiLiveCaptureStartupMode.ManualForegroundWindow &&
-            backend is VisiblePixelsCaptureBackend visiblePixelsBackend
-                ? visiblePixelsBackend.CreateForegroundSession(captureOptions)
-                : backend.CreateSession(captureOptions);
-        await session.InitializeAsync(cancellationToken);
+        IGameWindowCaptureSession session;
+        try
+        {
+            session =
+                liveCaptureStartupMode == GuiLiveCaptureStartupMode.ManualForegroundWindow &&
+                backend is VisiblePixelsCaptureBackend visiblePixelsBackend
+                    ? visiblePixelsBackend.CreateForegroundSession(captureOptions)
+                    : backend.CreateSession(captureOptions);
+            await session.InitializeAsync(cancellationToken);
+        }
+        catch (CaptureBackendException exception) when (
+            dryRunOptions.CaptureBackendOptions.Backend == CaptureBackend.WindowsGraphicsCapture &&
+            dryRunOptions.CaptureBackendOptions.AllowBackendFallback)
+        {
+            log.WriteLine($"WGC failed: {exception.Reason}. {exception.Message}");
+            log.WriteLine($"Fallback reason: {exception.Reason}. {exception.Message}");
+            log.WriteLine("Falling back to VisiblePixels.");
+            CaptureBackendOptions fallbackOptions = dryRunOptions.CaptureBackendOptions.Clone();
+            fallbackOptions.Backend = CaptureBackend.VisiblePixels;
+            IGameCaptureBackend fallbackBackend = new CaptureBackendFactory().Create(fallbackOptions, log);
+            dryRunOptions.CaptureBackendOptions = fallbackOptions;
+            session = fallbackBackend.CreateSession(captureOptions);
+            await session.InitializeAsync(cancellationToken);
+        }
+        catch (CaptureBackendException exception) when (dryRunOptions.CaptureBackendOptions.Backend == CaptureBackend.WindowsGraphicsCapture)
+        {
+            log.WriteLine($"WGC failed: {exception.Reason}. {exception.Message}");
+            log.WriteLine("Actual capture backend: (none)");
+            log.WriteLine("Backend fallback disabled.");
+            throw;
+        }
 
         if (liveCaptureStartupMode == GuiLiveCaptureStartupMode.ManualForegroundWindow &&
             afterForegroundSessionReady is not null)

@@ -304,6 +304,23 @@ public sealed class GuiCommandServiceTests
         Assert.True(settings.Capture.AllowBackendFallback);
     }
 
+    [Fact]
+    public void ApplyGuiCaptureBackendOverride_PropagatesCurrentRunSelection()
+    {
+        AppSettings settings = new();
+
+        GuiCommandService.ApplyGuiCaptureBackendOverride(settings, new CaptureBackendOptions
+        {
+            Backend = CaptureBackend.WindowsGraphicsCapture,
+            AllowBackendFallback = true,
+            CaptureTimeoutMs = 1500
+        });
+
+        Assert.Equal(CaptureBackend.WindowsGraphicsCapture, settings.Capture.Backend);
+        Assert.True(settings.Capture.AllowBackendFallback);
+        Assert.Equal(1500, settings.Capture.CaptureTimeoutMs);
+    }
+
     [Theory]
     [InlineData("TesseractCli", OcrEngine.TesseractCli)]
     [InlineData("paddleocrlocal", OcrEngine.PaddleOcrLocal)]
@@ -577,5 +594,29 @@ public sealed class GuiCommandServiceTests
             "Foreground window is not target.");
 
         Assert.True(GuiForegroundActivationPolicy.ShouldUseManualFallback(result));
+    }
+
+    [Fact]
+    public void ForegroundActivationPolicy_VisiblePixelsLiveCaptureUsesForegroundStartup()
+    {
+        Assert.True(GuiForegroundActivationPolicy.ShouldUseForegroundStartup(
+            CaptureBackend.VisiblePixels,
+            useFixedImageForDetection: false));
+    }
+
+    [Fact]
+    public void ForegroundActivationPolicy_WindowsGraphicsCaptureBypassesForegroundStartup()
+    {
+        Assert.False(GuiForegroundActivationPolicy.ShouldUseForegroundStartup(
+            CaptureBackend.WindowsGraphicsCapture,
+            useFixedImageForDetection: false));
+    }
+
+    [Fact]
+    public void ForegroundActivationPolicy_FixedImageBypassesForegroundStartup()
+    {
+        Assert.False(GuiForegroundActivationPolicy.ShouldUseForegroundStartup(
+            CaptureBackend.VisiblePixels,
+            useFixedImageForDetection: true));
     }
 }
