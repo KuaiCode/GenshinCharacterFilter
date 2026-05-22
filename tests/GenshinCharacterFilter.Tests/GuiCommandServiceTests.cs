@@ -147,6 +147,21 @@ public sealed class GuiCommandServiceTests
         Assert.True(options.SaveDebugImages);
     }
 
+    [Fact]
+    public void ParseGuiDetectionTuning_ReadsInputForegroundFallback()
+    {
+        GuiDetectionTuningOptions options = GuiDetectionTuningOptions.Parse(
+            runUntilStop: true,
+            loopCount: "",
+            loopIntervalMs: "",
+            captureDelayMs: "",
+            matchThreshold: "",
+            missThreshold: "",
+            enableInputForegroundFallback: true);
+
+        Assert.True(options.EnableInputForegroundFallback);
+    }
+
     [Theory]
     [InlineData("abc", "100", "2", "1", "Loop interval")]
     [InlineData("49", "100", "2", "1", "Loop interval")]
@@ -232,6 +247,24 @@ public sealed class GuiCommandServiceTests
         Assert.Equal(2, settings.Detection.MatchThreshold);
         Assert.Equal(1, settings.Detection.MissThreshold);
         Assert.False(settings.Detection.SaveDebugImages);
+    }
+
+    [Fact]
+    public void ApplyGuiDetectionTuningOverrides_PropagatesInputForegroundFallback()
+    {
+        AppSettings settings = new();
+        GuiDetectionTuningOptions options = GuiDetectionTuningOptions.Parse(
+            runUntilStop: true,
+            loopCount: "",
+            loopIntervalMs: "",
+            captureDelayMs: "",
+            matchThreshold: "",
+            missThreshold: "",
+            enableInputForegroundFallback: true);
+
+        GuiCommandService.ApplyGuiDetectionTuningOverrides(settings, options);
+
+        Assert.True(settings.Detection.EnableInputForegroundFallback);
     }
 
     [Theory]
@@ -451,5 +484,61 @@ public sealed class GuiCommandServiceTests
     {
         Assert.True(GuiManualForegroundFallbackFlow.ShouldRestoreAfterSessionFailure);
         Assert.True(GuiManualForegroundFallbackFlow.ShouldRestoreAfterUserCancel);
+    }
+
+    [Fact]
+    public void ForegroundActivationPolicy_SuccessSkipsFallbacks()
+    {
+        TargetWindowActivationResult result = TargetWindowActivationResult.Succeeded(TargetWindowActivationMethod.Win32);
+
+        Assert.False(GuiForegroundActivationPolicy.ShouldTryInputFallback(result, inputFallbackEnabled: true));
+        Assert.False(GuiForegroundActivationPolicy.ShouldUseManualFallback(result));
+        Assert.False(GuiForegroundActivationPolicy.ShouldFailImmediately(result));
+    }
+
+    [Fact]
+    public void ForegroundActivationPolicy_FailedActivationCanTryInputFallbackWhenEnabled()
+    {
+        TargetWindowActivationResult result = TargetWindowActivationResult.Failed(
+            TargetWindowActivationFailureReason.ActivationDenied,
+            "Windows denied foreground activation.");
+
+        Assert.True(GuiForegroundActivationPolicy.ShouldTryInputFallback(result, inputFallbackEnabled: true));
+        Assert.False(GuiForegroundActivationPolicy.ShouldTryInputFallback(result, inputFallbackEnabled: false));
+        Assert.True(GuiForegroundActivationPolicy.ShouldUseManualFallback(result));
+    }
+
+    [Fact]
+    public void ForegroundActivationPolicy_InputFallbackFailureStillUsesManualFallback()
+    {
+        TargetWindowActivationResult result = TargetWindowActivationResult.Failed(
+            TargetWindowActivationFailureReason.StillMinimized,
+            "Target stayed minimized.",
+            inputFallbackAttempted: true);
+
+        Assert.True(GuiForegroundActivationPolicy.ShouldUseManualFallback(result));
+        Assert.False(GuiForegroundActivationPolicy.ShouldFailImmediately(result));
+    }
+
+    [Fact]
+    public void ForegroundActivationPolicy_TargetNotFoundFailsImmediately()
+    {
+        TargetWindowActivationResult result = TargetWindowActivationResult.Failed(
+            TargetWindowActivationFailureReason.TargetNotFound,
+            "No running process named 'YuanShen' was found.");
+
+        Assert.False(GuiForegroundActivationPolicy.ShouldTryInputFallback(result, inputFallbackEnabled: true));
+        Assert.False(GuiForegroundActivationPolicy.ShouldUseManualFallback(result));
+        Assert.True(GuiForegroundActivationPolicy.ShouldFailImmediately(result));
+    }
+
+    [Fact]
+    public void ForegroundActivationPolicy_ForegroundMismatchUsesManualFallback()
+    {
+        TargetWindowActivationResult result = TargetWindowActivationResult.Failed(
+            TargetWindowActivationFailureReason.ForegroundMismatch,
+            "Foreground window is not target.");
+
+        Assert.True(GuiForegroundActivationPolicy.ShouldUseManualFallback(result));
     }
 }

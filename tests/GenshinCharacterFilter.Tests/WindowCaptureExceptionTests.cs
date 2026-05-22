@@ -52,4 +52,39 @@ public sealed class WindowCaptureExceptionTests
         Assert.Contains("Current foreground window is not 'YuanShen'", exception.Message);
         Assert.Contains("notepad", exception.Message);
     }
+
+    [Fact]
+    public void TargetWindowActivationResult_SuccessUsesNoFailureReason()
+    {
+        TargetWindowActivationResult result = TargetWindowActivationResult.Succeeded(TargetWindowActivationMethod.Win32);
+
+        Assert.True(result.Success);
+        Assert.Equal(TargetWindowActivationFailureReason.None, result.FailureReason);
+        Assert.Equal(TargetWindowActivationMethod.Win32, result.Method);
+        Assert.False(result.InputFallbackAttempted);
+    }
+
+    [Fact]
+    public void TargetWindowActivationResult_InputFallbackSuccessMarksFallbackAttempted()
+    {
+        TargetWindowActivationResult result = TargetWindowActivationResult.Succeeded(TargetWindowActivationMethod.InputFallback);
+
+        Assert.True(result.Success);
+        Assert.True(result.InputFallbackAttempted);
+        Assert.Contains("InputFallback", result.UserMessage);
+    }
+
+    [Fact]
+    public void TargetWindowActivationResult_FailureKeepsUserMessage()
+    {
+        TargetWindowActivationResult result = TargetWindowActivationResult.Failed(
+            TargetWindowActivationFailureReason.ForegroundMismatch,
+            "Foreground window is not target.",
+            inputFallbackAttempted: true);
+
+        Assert.False(result.Success);
+        Assert.Equal(TargetWindowActivationFailureReason.ForegroundMismatch, result.FailureReason);
+        Assert.Equal("Foreground window is not target.", result.UserMessage);
+        Assert.True(result.InputFallbackAttempted);
+    }
 }

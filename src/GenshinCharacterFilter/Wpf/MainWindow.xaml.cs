@@ -26,6 +26,15 @@ public partial class MainWindow : Window
     private Task? _operationTask;
     private bool _closeAfterOperationStops;
     private bool _syncingGuardedRealAudioCheckBoxes;
+    private bool _syncingInputForegroundFallbackCheckBoxes;
+    private DetectionRunContext? _resumeContext;
+
+    private enum DetectionOperationKind
+    {
+        DryRun,
+        SimulatedAudio,
+        GuardedRealAudio
+    }
 
     private readonly record struct GuiDetectionTuningInput(
         bool RunUntilStop,
@@ -35,7 +44,8 @@ public partial class MainWindow : Window
         string MatchThreshold,
         string MissThreshold,
         bool SaveDebugImages,
-        bool SaveOcrFailureSamples);
+        bool SaveOcrFailureSamples,
+        bool EnableInputForegroundFallback);
 
     private readonly record struct DetectionLaunchInput(
         string? ConfigPath,
@@ -43,6 +53,10 @@ public partial class MainWindow : Window
         bool UseFixedImageForDetection,
         OcrEngine OcrEngine,
         GuiDetectionTuningOptions TuningOptions);
+
+    private readonly record struct DetectionRunContext(
+        DetectionOperationKind OperationKind,
+        DetectionLaunchInput Launch);
 
     public MainWindow(string? initialConfigPath, WpfAppTheme theme)
     {
@@ -65,6 +79,9 @@ public partial class MainWindow : Window
         MatchThresholdTextBox.Text = GuiDetectionTuningOptions.DefaultMatchThreshold.ToString();
         MissThresholdTextBox.Text = GuiDetectionTuningOptions.DefaultMissThreshold.ToString();
         RefreshOcrEngineSelectionFromConfig();
+        bool inputForegroundFallbackEnabled = TryLoadSettings()?.Detection.EnableInputForegroundFallback ?? false;
+        EnableInputForegroundFallbackCheckBox.IsChecked = inputForegroundFallbackEnabled;
+        DockEnableInputForegroundFallbackCheckBox.IsChecked = inputForegroundFallbackEnabled;
 
         Closing += OnWindowClosing;
         ConfigPathTextBox.TextChanged += (_, _) => RefreshStatus();
@@ -76,6 +93,10 @@ public partial class MainWindow : Window
         DockEnableGuardedRealAudioCheckBox.Unchecked += (_, _) => SyncGuardedRealAudioEnablement(fromDock: true);
         EnableGuardedRealAudioCheckBox.Checked += (_, _) => SyncGuardedRealAudioEnablement(fromDock: false);
         EnableGuardedRealAudioCheckBox.Unchecked += (_, _) => SyncGuardedRealAudioEnablement(fromDock: false);
+        DockEnableInputForegroundFallbackCheckBox.Checked += (_, _) => SyncInputForegroundFallbackEnablement(fromDock: true);
+        DockEnableInputForegroundFallbackCheckBox.Unchecked += (_, _) => SyncInputForegroundFallbackEnablement(fromDock: true);
+        EnableInputForegroundFallbackCheckBox.Checked += (_, _) => SyncInputForegroundFallbackEnablement(fromDock: false);
+        EnableInputForegroundFallbackCheckBox.Unchecked += (_, _) => SyncInputForegroundFallbackEnablement(fromDock: false);
         RunUntilStopCheckBox.Checked += (_, _) => UpdateLoopCountInputState();
         RunUntilStopCheckBox.Unchecked += (_, _) => UpdateLoopCountInputState();
 
@@ -199,6 +220,11 @@ public partial class MainWindow : Window
         CancelCurrentOperation();
     }
 
+    private async void ResumeReconnect(object? sender, RoutedEventArgs eventArgs)
+    {
+        await ResumeReconnectAsync();
+    }
+
     private void ClearLog(object? sender, RoutedEventArgs eventArgs)
     {
         RunOnUiThread(() => LogTextBox.Clear());
@@ -244,23 +270,43 @@ public partial class MainWindow : Window
 
     private async Task CalibrateOcrRegionAsync(CancellationToken cancellationToken)
     {
-        try
+        TargetWindowActivationResult activationResult = await RunAutomaticForegroundActivationAsync(
+            "calibration",
+            GetInputForegroundFallbackEnabled(),
+            cancellationToken);
+
+        if (activationResult.Success)
         {
-            await _commandService.CalibrateOcrRegionAsync(GetConfigPath(), CreateLogWriter(), cancellationToken);
-        }
-        catch (WindowCaptureException exception)
-            when (exception.Reason == WindowCaptureFailureReason.TargetWindowMinimizedCannotRestore)
-        {
-            AppendLogLine(exception.Message);
-            bool retry = await PromptManualForegroundRetryAsync(exception.Message, cancellationToken);
-            if (!retry)
+            try
             {
-                throw;
+                await _commandService.CalibrateOcrRegionFromForegroundWindowAsync(
+                    GetConfigPath(),
+                    CreateLogWriter(),
+                    cancellationToken);
+            }
+            finally
+            {
+                await RestoreAfterManualForegroundCalibrationAsync(WindowState.Normal);
             }
 
-            await RunManualForegroundCalibrationFallbackAsync(cancellationToken);
+            RefreshStatus();
+            return;
         }
 
+        await RestoreAfterManualForegroundCalibrationAsync(WindowState.Normal);
+        if (GuiForegroundActivationPolicy.ShouldFailImmediately(activationResult))
+        {
+            throw new WindowCaptureException(activationResult.UserMessage);
+        }
+
+        AppendLogLine("Falling back to manual foreground calibration.");
+        bool retry = await PromptManualForegroundRetryAsync(activationResult.UserMessage, cancellationToken);
+        if (!retry)
+        {
+            throw new OperationCanceledException("Manual foreground calibration was cancelled.");
+        }
+
+        await RunManualForegroundCalibrationFallbackAsync(cancellationToken);
         RefreshStatus();
     }
 
@@ -296,41 +342,60 @@ public partial class MainWindow : Window
     private async Task StartDryRunDetectionAsync(CancellationToken cancellationToken)
     {
         ApplyRuntimeSnapshot(_runtimeStatus.MarkDetecting());
-        DetectionLaunchInput launch = GetDetectionLaunchInput();
-        await RunDetectionWithManualForegroundFallbackAsync(
-            launch,
-            "dry-run detection",
-            normalOperation: token => _commandService.RunDetectionLoopAsync(
-                launch.ConfigPath,
-                launch.OcrInputPath,
-                launch.UseFixedImageForDetection,
-                launch.TuningOptions,
-                launch.OcrEngine,
-                false,
-                CreateLogWriter(),
-                token,
-                OnDetectionIterationCompleted),
-            foregroundOperation: (afterForegroundSessionReady, token) => _commandService.RunDetectionLoopFromForegroundWindowAsync(
-                launch.ConfigPath,
-                launch.OcrInputPath,
-                launch.UseFixedImageForDetection,
-                launch.TuningOptions,
-                launch.OcrEngine,
-                false,
-                afterForegroundSessionReady,
-                CreateLogWriter(),
-                token,
-                OnDetectionIterationCompleted),
-            cancellationToken);
+        DetectionRunContext context = new(DetectionOperationKind.DryRun, GetDetectionLaunchInput());
+        _resumeContext = context;
+        await RunDetectionRunContextAsync(context, cancellationToken);
     }
 
     private async Task StartSimulatedDetectionAudioAsync(CancellationToken cancellationToken)
     {
         ApplyRuntimeSnapshot(_runtimeStatus.MarkDetecting());
-        DetectionLaunchInput launch = GetDetectionLaunchInput();
-        await RunDetectionWithManualForegroundFallbackAsync(
-            launch,
-            "simulated detection audio",
+        DetectionRunContext context = new(DetectionOperationKind.SimulatedAudio, GetDetectionLaunchInput());
+        _resumeContext = context;
+        await RunDetectionRunContextAsync(context, cancellationToken);
+    }
+
+    private async Task StartGuardedRealAudioDetectionAsync(CancellationToken cancellationToken)
+    {
+        ApplyRuntimeSnapshot(_runtimeStatus.MarkDetecting());
+        DetectionRunContext context = new(DetectionOperationKind.GuardedRealAudio, GetDetectionLaunchInput());
+        _resumeContext = context;
+        await RunDetectionRunContextAsync(context, cancellationToken);
+    }
+
+    private Task RunDetectionRunContextAsync(DetectionRunContext context, CancellationToken cancellationToken)
+    {
+        DetectionLaunchInput launch = context.Launch;
+        return context.OperationKind switch
+        {
+            DetectionOperationKind.DryRun => RunDetectionWithForegroundStartupAsync(
+                launch,
+                "dry-run detection",
+            normalOperation: token => _commandService.RunDetectionLoopAsync(
+                launch.ConfigPath,
+                launch.OcrInputPath,
+                launch.UseFixedImageForDetection,
+                launch.TuningOptions,
+                launch.OcrEngine,
+                false,
+                CreateLogWriter(),
+                token,
+                OnDetectionIterationCompleted),
+            foregroundOperation: (afterForegroundSessionReady, token) => _commandService.RunDetectionLoopFromForegroundWindowAsync(
+                launch.ConfigPath,
+                launch.OcrInputPath,
+                launch.UseFixedImageForDetection,
+                launch.TuningOptions,
+                launch.OcrEngine,
+                false,
+                afterForegroundSessionReady,
+                CreateLogWriter(),
+                token,
+                OnDetectionIterationCompleted),
+                cancellationToken),
+            DetectionOperationKind.SimulatedAudio => RunDetectionWithForegroundStartupAsync(
+                launch,
+                "simulated detection audio",
             normalOperation: token => _commandService.RunDetectionLoopAsync(
                 launch.ConfigPath,
                 launch.OcrInputPath,
@@ -352,16 +417,10 @@ public partial class MainWindow : Window
                 CreateLogWriter(),
                 token,
                 OnDetectionIterationCompleted),
-            cancellationToken);
-    }
-
-    private async Task StartGuardedRealAudioDetectionAsync(CancellationToken cancellationToken)
-    {
-        ApplyRuntimeSnapshot(_runtimeStatus.MarkDetecting());
-        DetectionLaunchInput launch = GetDetectionLaunchInput();
-        await RunDetectionWithManualForegroundFallbackAsync(
-            launch,
-            "guarded real audio detection",
+                cancellationToken),
+            DetectionOperationKind.GuardedRealAudio => RunDetectionWithForegroundStartupAsync(
+                launch,
+                "guarded real audio detection",
             normalOperation: token => _commandService.RunGuardedRealAudioDetectionAsync(
                 launch.ConfigPath,
                 launch.UseFixedImageForDetection,
@@ -379,32 +438,129 @@ public partial class MainWindow : Window
                 CreateLogWriter(),
                 token,
                 OnDetectionIterationCompleted),
-            cancellationToken);
+                cancellationToken),
+            _ => throw new InvalidOperationException("Unknown detection operation.")
+        };
     }
 
-    private async Task RunDetectionWithManualForegroundFallbackAsync(
+    private async Task RunDetectionWithForegroundStartupAsync(
         DetectionLaunchInput launch,
         string operationName,
         Func<CancellationToken, Task> normalOperation,
         Func<Func<Task>, CancellationToken, Task> foregroundOperation,
         CancellationToken cancellationToken)
     {
-        try
+        if (launch.UseFixedImageForDetection)
         {
             await normalOperation(cancellationToken);
+            return;
         }
-        catch (Exception exception) when (GuiManualForegroundFallbackPolicy.ShouldPromptForDetection(
-            exception,
-            launch.UseFixedImageForDetection))
+
+        TargetWindowActivationResult activationResult = await RunAutomaticForegroundActivationAsync(
+            "detection startup",
+            launch.TuningOptions.EnableInputForegroundFallback,
+            cancellationToken);
+
+        if (activationResult.Success)
         {
-            AppendLogLine(exception.Message);
-            bool retry = await PromptManualForegroundDetectionRetryAsync(exception.Message, cancellationToken);
-            if (!retry)
+            AppendLogLine("Activation succeeded; creating foreground capture session.");
+            try
             {
-                throw new OperationCanceledException($"Manual foreground startup for {operationName} was cancelled.");
+                await foregroundOperation(
+                    () =>
+                    {
+                        AppendLogLine($"Foreground capture session started for {operationName}; WPF shell will remain minimized until detection stops.");
+                        return Task.CompletedTask;
+                    },
+                    cancellationToken);
+            }
+            finally
+            {
+                await RestoreAfterManualForegroundCalibrationAsync(WindowState.Normal);
             }
 
-            await RunManualForegroundDetectionFallbackAsync(operationName, foregroundOperation, cancellationToken);
+            return;
+        }
+
+        await RestoreAfterManualForegroundCalibrationAsync(WindowState.Normal);
+        if (GuiForegroundActivationPolicy.ShouldFailImmediately(activationResult))
+        {
+            throw new WindowCaptureException(activationResult.UserMessage);
+        }
+
+        AppendLogLine("Falling back to manual foreground startup.");
+        bool retry = await PromptManualForegroundDetectionRetryAsync(activationResult.UserMessage, cancellationToken);
+        if (!retry)
+        {
+            throw new OperationCanceledException($"Manual foreground startup for {operationName} was cancelled.");
+        }
+
+        await RunManualForegroundDetectionFallbackAsync(operationName, foregroundOperation, cancellationToken);
+    }
+
+    private async Task<TargetWindowActivationResult> RunAutomaticForegroundActivationAsync(
+        string purpose,
+        bool inputFallbackEnabled,
+        CancellationToken cancellationToken)
+    {
+        WindowState previousState = await MinimizeForManualForegroundCalibrationAsync();
+        try
+        {
+            AppendLogLine($"Trying Win32 activation for {purpose}.");
+            TargetWindowActivationResult result = await _commandService.TryActivateTargetWindowAsync(
+                GetConfigPath(),
+                GetCaptureDelayMsForActivation(),
+                inputFallbackEnabled,
+                CreateLogWriter(),
+                cancellationToken);
+
+            if (result.Success)
+            {
+                if (result.Method == TargetWindowActivationMethod.InputFallback)
+                {
+                    AppendLogLine($"Trying input fallback for {purpose}.");
+                    AppendLogLine("Input foreground fallback succeeded.");
+                    AppendLogLine($"Activation succeeded: {result.UserMessage}");
+                    return result;
+                }
+
+                AppendLogLine($"Win32 activation succeeded: {result.UserMessage}");
+                return result;
+            }
+
+            AppendLogLine($"Win32 activation failed: {result.FailureReason}. {result.UserMessage}");
+            if (inputFallbackEnabled)
+            {
+                if (result.InputFallbackAttempted)
+                {
+                    AppendLogLine($"Trying input fallback for {purpose}.");
+                    AppendLogLine($"Input foreground fallback failed: {result.FailureReason}. {result.UserMessage}");
+                }
+                else
+                {
+                    AppendLogLine("Input fallback was enabled but was not attempted.");
+                }
+            }
+            else
+            {
+                AppendLogLine("Input fallback disabled; falling back to manual foreground.");
+            }
+
+            if (GuiManualForegroundFallbackFlow.ShouldRestoreAfterSessionFailure)
+            {
+                await RestoreAfterManualForegroundCalibrationAsync(previousState);
+            }
+
+            return result;
+        }
+        catch
+        {
+            if (GuiManualForegroundFallbackFlow.ShouldRestoreAfterSessionFailure)
+            {
+                await RestoreAfterManualForegroundCalibrationAsync(previousState);
+            }
+
+            throw;
         }
     }
 
@@ -445,6 +601,53 @@ public partial class MainWindow : Window
             AppendLogLine($"Guarded real audio error: {exception.Message}");
             ApplyUiState(_stateController.FailOperation());
         }
+    }
+
+    private async Task ResumeReconnectAsync()
+    {
+        DetectionRunContext? context = _resumeContext;
+        if (context is null || !CanResumeReconnect())
+        {
+            AppendLogLine("Resume/Reconnect is not available. Start detection again from the normal controls.");
+            return;
+        }
+
+        AppendLogLine("Resume requested.");
+        if (context.Value.OperationKind == DetectionOperationKind.GuardedRealAudio)
+        {
+            GuardedRealAudioUiEligibility eligibility = GetGuardedRealAudioEligibility();
+            if (!eligibility.CanRequestConfirmation)
+            {
+                AppendLogLine($"Resume blocked: guarded real audio is not ready: {eligibility.DisabledReason}");
+                RefreshStatus();
+                return;
+            }
+
+            MessageBoxResult result = System.Windows.MessageBox.Show(
+                this,
+                "Resume guarded real audio detection with the previous run settings?\n\n" +
+                "This still controls the configured target process audio only after stable OCR detection. Stop/close will try to restore audio.",
+                "Confirm Guarded Real Audio Resume",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                AppendLogLine("Resume cancelled by user.");
+                return;
+            }
+        }
+
+        await RunOperationAsync(
+            async token =>
+            {
+                ApplyRuntimeSnapshot(_runtimeStatus.MarkReconnecting());
+                AppendLogLine("Reconnecting foreground capture session.");
+                await RunDetectionRunContextAsync(context.Value, token);
+                AppendLogLine("Resume succeeded.");
+            },
+            cancellable: true);
     }
 
     private async Task<bool> PromptManualForegroundRetryAsync(string failureMessage, CancellationToken cancellationToken)
@@ -586,19 +789,31 @@ public partial class MainWindow : Window
             AppendLogLine($"> {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}");
             await Task.Run(async () => await operation(cancellationToken), cancellationToken);
             AppendLogLine("Operation completed.");
+            _resumeContext = null;
             ApplyUiState(_stateController.CompleteOperation());
             ApplyRuntimeSnapshot(_runtimeStatus.MarkIdle());
         }
         catch (OperationCanceledException)
         {
             AppendLogLine("Operation cancelled.");
+            _resumeContext = null;
             ApplyUiState(_stateController.CompleteOperation());
             ApplyRuntimeSnapshot(_runtimeStatus.MarkIdle());
         }
         catch (WindowCaptureException exception) when (WindowCaptureException.IsForegroundCaptureLost(exception))
         {
             AppendLogLine($"Capture lost: {exception.Message}");
-            AppendLogLine("Target window is no longer visible. Detection stopped safely. Restore audio attempted if needed.");
+            GuiAudioState previousAudioState = _runtimeStatus.Snapshot.AudioState;
+            if (previousAudioState is GuiAudioState.Reduced or GuiAudioState.Muted)
+            {
+                AppendLogLine("Capture lost; restore requested.");
+            }
+            else
+            {
+                AppendLogLine("Capture lost while audio was already restored.");
+            }
+
+            AppendLogLine("Target window is no longer visible. Detection stopped safely.");
             ApplyUiState(_stateController.FailOperation());
             ApplyRuntimeSnapshot(_runtimeStatus.MarkCaptureLost());
         }
@@ -613,6 +828,7 @@ public partial class MainWindow : Window
             _operationCancellation?.Dispose();
             _operationCancellation = null;
             RefreshStatus();
+            DockResumeReconnectButton.IsEnabled = CanResumeReconnect();
         }
     }
 
@@ -682,6 +898,8 @@ public partial class MainWindow : Window
             CaptureDelayTextBox,
             MatchThresholdTextBox,
             MissThresholdTextBox,
+            EnableInputForegroundFallbackCheckBox,
+            DockEnableInputForegroundFallbackCheckBox,
             StartDryRunButton,
             OverviewStartDryRunButton,
             StartSimulatedAudioButton,
@@ -692,6 +910,7 @@ public partial class MainWindow : Window
         UpdateLoopCountInputState();
         HeaderStopButton.IsEnabled = uiState.StopButtonEnabled;
         DockStopButton.IsEnabled = uiState.StopButtonEnabled;
+        DockResumeReconnectButton.IsEnabled = CanResumeReconnect();
         DockRestoreButton.IsEnabled = uiState.StopButtonEnabled;
         DetectionStopButton.IsEnabled = uiState.StopButtonEnabled;
         AudioStopButton.IsEnabled = uiState.StopButtonEnabled;
@@ -712,6 +931,7 @@ public partial class MainWindow : Window
         DockLastOcrTextBlock.Text = snapshot.LastOcrText;
         DockLastDetectedSpeakerTextBlock.Text = snapshot.LastDetectedSpeaker;
         DockLastAudioActionTextBlock.Text = snapshot.LastAudioAction;
+        DockResumeReconnectButton.IsEnabled = CanResumeReconnect();
     }
 
     private void OnDetectionIterationCompleted(DetectionDryRunResult result)
@@ -972,6 +1192,13 @@ public partial class MainWindow : Window
             DockEnableGuardedRealAudioCheckBox.IsChecked == true);
     }
 
+    private bool CanResumeReconnect()
+    {
+        return _resumeContext is not null &&
+            !_stateController.OperationActive &&
+            _runtimeStatus.Snapshot.RunState is GuiRuntimeRunState.CaptureLost or GuiRuntimeRunState.Error;
+    }
+
     private void SyncGuardedRealAudioEnablement(bool fromDock)
     {
         if (_syncingGuardedRealAudioCheckBoxes)
@@ -999,6 +1226,31 @@ public partial class MainWindow : Window
         });
     }
 
+    private void SyncInputForegroundFallbackEnablement(bool fromDock)
+    {
+        if (_syncingInputForegroundFallbackCheckBoxes)
+        {
+            return;
+        }
+
+        RunOnUiThread(() =>
+        {
+            _syncingInputForegroundFallbackCheckBoxes = true;
+            try
+            {
+                bool value = fromDock
+                    ? DockEnableInputForegroundFallbackCheckBox.IsChecked == true
+                    : EnableInputForegroundFallbackCheckBox.IsChecked == true;
+                DockEnableInputForegroundFallbackCheckBox.IsChecked = value;
+                EnableInputForegroundFallbackCheckBox.IsChecked = value;
+            }
+            finally
+            {
+                _syncingInputForegroundFallbackCheckBoxes = false;
+            }
+        });
+    }
+
     private GuiDetectionTuningOptions ParseGuiDetectionTuning()
     {
         GuiDetectionTuningInput input = GetDetectionTuningInput();
@@ -1010,7 +1262,8 @@ public partial class MainWindow : Window
             input.MatchThreshold,
             input.MissThreshold,
             input.SaveDebugImages,
-            input.SaveOcrFailureSamples);
+            input.SaveOcrFailureSamples,
+            input.EnableInputForegroundFallback);
     }
 
     private DetectionLaunchInput GetDetectionLaunchInput()
@@ -1033,7 +1286,28 @@ public partial class MainWindow : Window
             MatchThresholdTextBox.Text,
             MissThresholdTextBox.Text,
             SaveDebugImagesCheckBox.IsChecked == true,
-            SaveOcrFailureSamplesCheckBox.IsChecked == true));
+            SaveOcrFailureSamplesCheckBox.IsChecked == true,
+            EnableInputForegroundFallbackCheckBox.IsChecked == true ||
+            DockEnableInputForegroundFallbackCheckBox.IsChecked == true));
+    }
+
+    private bool GetInputForegroundFallbackEnabled()
+    {
+        return RunOnUiThread(() =>
+            EnableInputForegroundFallbackCheckBox.IsChecked == true ||
+            DockEnableInputForegroundFallbackCheckBox.IsChecked == true);
+    }
+
+    private int GetCaptureDelayMsForActivation()
+    {
+        try
+        {
+            return ParseGuiDetectionTuning().CaptureDelayMs ?? GuiDetectionTuningOptions.DefaultCaptureDelayMs;
+        }
+        catch
+        {
+            return GuiDetectionTuningOptions.DefaultCaptureDelayMs;
+        }
     }
 
     private void RunBrowseAction(string label, Action action)

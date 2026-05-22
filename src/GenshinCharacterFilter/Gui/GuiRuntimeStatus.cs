@@ -37,8 +37,10 @@ public sealed class GuiRuntimeStatus
         AudioState = GuiAudioState.Restored,
         LastAudioAction = Snapshot.AudioState is GuiAudioState.Reduced or GuiAudioState.Muted
             ? "restore"
-            : Snapshot.LastAudioAction
+            : "none (already restored)"
     });
+
+    public GuiStatusSnapshot MarkReconnecting() => Update(Snapshot with { RunState = GuiRuntimeRunState.Reconnecting });
 
     public GuiStatusSnapshot ApplyObservation(GuiLastObservation observation)
     {

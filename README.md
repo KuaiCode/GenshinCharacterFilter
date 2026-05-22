@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.19 WPF Persistent Control Dock / Interaction Layout**.
+Current milestone: **v0.19.2 Foreground UX / Resume Flow**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, v0.12 Configuration Integration, v0.13 Usability Hardening, v0.14 Minimal WinForms Control Panel, v0.15 GUI Hardening, v0.16 GUI Guarded Real Audio Page, v0.17 WPF Modern GUI Shell, v0.18 OCR Backend Replacement, and v0.18.1 OCR Backend Diagnostic Stabilization are implemented. v0.19 adds a persistent WPF control/status dock so core guarded real-audio controls and runtime status are visible across pages while real-audio safety gates remain unchanged.
+The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, v0.12 Configuration Integration, v0.13 Usability Hardening, v0.14 Minimal WinForms Control Panel, v0.15 GUI Hardening, v0.16 GUI Guarded Real Audio Page, v0.17 WPF Modern GUI Shell, v0.18 OCR Backend Replacement, v0.18.1 OCR Backend Diagnostic Stabilization, v0.19 WPF Persistent Control Dock, and v0.19.1 CaptureLost UI Recovery are implemented. v0.19.2 improves foreground activation and Resume/Reconnect for visible-pixel capture while real-audio safety gates remain unchanged.
 
 ## Current Scope
 
@@ -30,8 +30,11 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Optional `PaddleOcrLocal` backend for low-latency OCR experiments, with `TesseractCli` retained as the default fallback.
 - OCR benchmark and failure-sample diagnostics for comparing backend speed and inspecting bad crops.
 - Persistent WPF control/status dock visible across pages for guarded real audio controls, run state, OCR backend status, last OCR text, last detected speaker, and last audio action.
+- Best-effort Win32 foreground activation before calibration and live detection startup.
+- Optional, explicit input foreground fallback for window switching only; it is disabled by default.
+- CaptureLost Resume/Reconnect from the WPF dock.
 
-Out of scope: GUI config editor, saving edited config, default automatic real audio, config-only guarded real audio, unguarded real detection audio, production auto mute, automatic OCR region detection, fabricated preset coordinates, fuzzy matching, speaker recognition from image, WinUI, overlay, masking, hotkeys, tray icon, always-on-top mini window, game memory access, hooks, DLL injection, game file modification, and input automation.
+Out of scope: GUI config editor, saving edited config, default automatic real audio, config-only guarded real audio, unguarded real detection audio, production auto mute, automatic OCR region detection, fabricated preset coordinates, fuzzy matching, speaker recognition from image, WinUI, overlay, masking, hotkeys, tray icon, always-on-top mini window, Windows.Graphics.Capture / DirectX capture backend implementation for this milestone, game memory access, hooks, DLL injection, game file modification, and gameplay automation. Limited `SendInput` foreground switching is allowed only when explicitly enabled and only to bring the target window to the foreground.
 
 ## Commands
 
@@ -92,7 +95,9 @@ Use reduce-volume mode for the first real audio test. The GUI does not create `W
 
 Guarded real audio includes OCR jitter tolerance for near target-speaker text. Strong OCR matches can enter the stable matched state, while weak near-matches and short/empty noisy OCR are used to avoid rapid restore/reduce flicker after a stable target hit. Clear non-target text can still restore quickly according to the configured miss threshold.
 
-Capture, calibration, and live detection use visible screen pixels. The target window must be restored, visible, and not covered. For Genshin, prefer windowed or borderless window mode; exclusive fullscreen can minimize or block visible-pixel capture when focus moves to the GUI. If calibration or live detection startup cannot automatically restore the target window, the WPF GUI can run a manual foreground fallback: it prompts you, minimizes the WPF window, waits briefly while you manually switch to the target, then captures or initializes detection from the current foreground window only if its process matches `TargetProcessName`. This applies to dry-run detection, simulated detection audio, and guarded real audio startup; guarded real audio still requires the checkbox, preflight, and confirmation first. For detection fallback, the WPF window stays minimized until detection stops or fails so it does not immediately steal focus back from the game. If you switch back to WPF during detection, the game may minimize again and visible-pixel capture can stop. When this capture-lost state is detected, the app stops detection safely, attempts audio restore if needed, keeps the WPF UI usable, and lets you copy logs or start again. Windowed/borderless mode, a second monitor, or the future v0.20 hotkey/status-window work can reduce the need to switch back to WPF during detection.
+Capture, calibration, and live detection use visible screen pixels. The target window must be restored, visible, and not covered. For Genshin, prefer windowed or borderless window mode; exclusive fullscreen can minimize or block visible-pixel capture when focus moves to the GUI. Before calibration or live detection startup, the WPF GUI first minimizes itself and tries Win32 foreground activation for `TargetProcessName`. The `Enable Alt+Tab / SendInput foreground fallback` checkbox is off by default; when enabled, the app may use a limited Alt+Tab/SendInput foreground-switching attempt after Win32 activation fails. This fallback is only for bringing the target window to the foreground and does not send gameplay commands. The log clearly reports whether input fallback is disabled, attempted, succeeded, or failed. If automatic activation still fails, the GUI falls back to the manual foreground flow: it prompts you, minimizes the WPF window, waits briefly while you manually switch to the target, then captures or initializes detection from the current foreground window only if its process matches `TargetProcessName`. This applies to calibration, dry-run detection, simulated detection audio, and guarded real audio startup; guarded real audio still requires the checkbox, preflight, and confirmation first. For detection fallback, the WPF window stays minimized until detection stops or fails so it does not immediately steal focus back from the game. If you switch back to WPF during detection, the game may minimize again and visible-pixel capture can stop. When this capture-lost state is detected, the app stops detection safely, attempts audio restore if needed, keeps the WPF UI usable, shows CaptureLost plus Restored/not-filtering state in the dock, and enables Resume/Reconnect from the persistent dock when the last run context can be reused. Resume/Reconnect creates a fresh foreground capture session and does not reuse the old window handle; guarded real audio resume still requires the guarded enablement and confirmation flow. Windowed/borderless mode, a second monitor, or the future v0.20 hotkey/status-window work can reduce the need to switch back to WPF during detection.
+
+The project has not implemented Windows.Graphics.Capture or a DirectX capture backend in v0.19.2. Those capture paths are not prohibited, but they are deferred to a separate capture backend spike where latency, stability, coordinate mapping, compatibility, and reduced foreground-window dependence can be evaluated independently.
 
 After OCR region calibration succeeds, the app also writes `debug-ocr/calibration-region-latest.png`. Open that preview to confirm the saved region actually contains the speaker-name text before testing OCR or real audio.
 
@@ -390,7 +395,8 @@ Example shape:
     "MatchThreshold": 2,
     "MissThreshold": 2,
     "SaveDebugImages": false,
-    "SaveOcrFailureSamples": false
+    "SaveOcrFailureSamples": false,
+    "EnableInputForegroundFallback": false
   }
 }
 ```
@@ -435,7 +441,8 @@ Reduce-volume configuration remains available through `AudioFilter`:
     "LoopIntervalMs": 500,
     "MatchThreshold": 2,
     "MissThreshold": 2,
-    "SaveDebugImages": false
+    "SaveDebugImages": false,
+    "EnableInputForegroundFallback": false
   }
 }
 ```

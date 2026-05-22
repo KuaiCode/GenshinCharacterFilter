@@ -167,6 +167,14 @@
                             <TextBlock x:Name="DockAudioFilterTextBlock"
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource DangerForegroundBrush}" />
+                            <CheckBox x:Name="DockEnableInputForegroundFallbackCheckBox"
+                                      Content="Enable Alt+Tab / SendInput foreground fallback"
+                                      Foreground="{DynamicResource DangerForegroundBrush}"
+                                      Margin="0,8,0,0" />
+                            <TextBlock Text="Window switch only; no gameplay keys."
+                                       Foreground="{DynamicResource DangerForegroundBrush}"
+                                       FontSize="11"
+                                       Margin="0,2,0,0" />
                         </StackPanel>
                     </Border>
 
@@ -183,6 +191,11 @@
                                 MinWidth="180"
                                 Style="{StaticResource DangerButtonStyle}"
                                 Click="StopOperation" />
+                        <Button x:Name="DockResumeReconnectButton"
+                                Content="Resume / Reconnect"
+                                MinWidth="180"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Click="ResumeReconnect" />
                         <Button x:Name="DockRestoreButton"
                                 Content="Restore"
                                 MinWidth="180"
@@ -289,6 +302,7 @@
                                     <Button x:Name="BrowseOcrImageButton" Grid.Column="1" Content="Browse OCR Image" Margin="10,0,0,0" Click="BrowseOcrInput" />
                                 </Grid>
                                 <CheckBox x:Name="UseFixedImageForDetectionCheckBox" Content="Use fixed image for detection loop (debug only)" Margin="0,14,0,0" />
+                                <CheckBox x:Name="EnableInputForegroundFallbackCheckBox" Content="Enable Alt+Tab / SendInput foreground fallback (window switch only; no gameplay keys)" />
                                 <CheckBox x:Name="SaveDebugImagesCheckBox" Content="Save debug images" />
                                 <CheckBox x:Name="SaveOcrFailureSamplesCheckBox" Content="Save OCR failure samples" />
                                 <TextBlock x:Name="RegionSourceSummaryTextBlock"

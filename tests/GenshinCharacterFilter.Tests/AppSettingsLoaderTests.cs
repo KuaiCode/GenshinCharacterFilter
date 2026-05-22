@@ -38,6 +38,7 @@ public sealed class AppSettingsLoaderTests
         Assert.Equal(2, settings.Detection.MissThreshold);
         Assert.False(settings.Detection.SaveDebugImages);
         Assert.False(settings.Detection.SaveOcrFailureSamples);
+        Assert.False(settings.Detection.EnableInputForegroundFallback);
     }
 
     [Fact]
@@ -74,7 +75,8 @@ public sealed class AppSettingsLoaderTests
                 "MatchThreshold": 3,
                 "MissThreshold": 4,
                 "SaveDebugImages": true,
-                "SaveOcrFailureSamples": true
+                "SaveOcrFailureSamples": true,
+                "EnableInputForegroundFallback": true
               }
             }
             """);
@@ -105,6 +107,7 @@ public sealed class AppSettingsLoaderTests
         Assert.Equal(4, settings.Detection.MissThreshold);
         Assert.True(settings.Detection.SaveDebugImages);
         Assert.True(settings.Detection.SaveOcrFailureSamples);
+        Assert.True(settings.Detection.EnableInputForegroundFallback);
     }
 
     [Fact]

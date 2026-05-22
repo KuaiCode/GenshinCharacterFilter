@@ -29,6 +29,8 @@ public sealed class GuiDetectionTuningOptions
 
     public bool SaveOcrFailureSamples { get; init; }
 
+    public bool EnableInputForegroundFallback { get; init; }
+
     public static GuiDetectionTuningOptions Parse(
         bool runUntilStop,
         string? loopCount,
@@ -37,7 +39,8 @@ public sealed class GuiDetectionTuningOptions
         string? matchThreshold,
         string? missThreshold,
         bool saveDebugImages = false,
-        bool saveOcrFailureSamples = false)
+        bool saveOcrFailureSamples = false,
+        bool enableInputForegroundFallback = false)
     {
         return new GuiDetectionTuningOptions
         {
@@ -48,7 +51,8 @@ public sealed class GuiDetectionTuningOptions
             MatchThreshold = ParseOptionalThreshold(matchThreshold, "Match threshold"),
             MissThreshold = ParseOptionalThreshold(missThreshold, "Miss threshold"),
             SaveDebugImages = saveDebugImages,
-            SaveOcrFailureSamples = saveOcrFailureSamples
+            SaveOcrFailureSamples = saveOcrFailureSamples,
+            EnableInputForegroundFallback = enableInputForegroundFallback
         };
     }
 

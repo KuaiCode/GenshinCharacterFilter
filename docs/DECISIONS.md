@@ -418,3 +418,32 @@ Reasoning:
 - The app should not hide real Paddle initialization failures, so exception handling remains unchanged and initialization errors still surface as `OcrException`.
 - Redirecting .NET `Console.Out` and `Console.Error` around engine construction can suppress managed banner output without affecting OCR behavior.
 - Some native libraries can write directly to the process console and bypass .NET console redirection; if that happens, documentation explains that the banner is third-party diagnostic output, not a GenshinCharacterFilter error.
+
+## 2026-05-21: v0.19.2 Foreground UX / Resume Flow
+
+Decision: improve visible-pixel foreground capture usability with best-effort Win32 target-window activation, an optional explicit input foreground fallback, and Resume/Reconnect after CaptureLost.
+
+Reasoning:
+
+- The current foreground-region-only capture path is fast, but it still depends on the target window staying visible and foreground enough for screen-pixel capture.
+- Calibration and live detection should first try normal Win32 foreground activation before asking the user to switch windows manually.
+- A limited `SendInput` foreground fallback is allowed only when explicitly enabled and only to help bring the target window to the foreground; it must not send gameplay commands, macro loops, auto-clicks, dialogue skips, combat inputs, or task automation.
+- If automatic activation fails, the existing manual foreground fallback remains available and validates that the foreground process matches `TargetProcessName`.
+- CaptureLost is treated as recoverable: the UI remains responsive, restore is attempted if audio may have been reduced or muted, and Resume/Reconnect can create a fresh foreground capture session from the last run settings.
+- Guarded real audio resume must still require the guarded enablement state, confirmation, preflight, a valid OCR region source, and stable detection. Raw OCR matches still do not directly control audio.
+- This work does not implement Windows.Graphics.Capture or a DirectX capture backend. Those are not prohibited, but they should be evaluated later as a separate capture backend spike covering latency, stability, coordinate mapping, compatibility, and reduced dependence on foreground visibility.
+- The project still does not implement hooks, injection, game memory access, game file modification, anti-cheat bypasses, or gameplay automation.
+- Real audio safety gates, MuteCoordinator behavior, OCR backend architecture, CLI behavior, and default safe startup are unchanged.
+
+## 2026-05-22: v0.19.2 Foreground UX Bugfix
+
+Decision: make foreground fallback attempts visible and complete, keep calibration selector foregrounded after a successful capture, and clarify CaptureLost audio status in the persistent dock.
+
+Reasoning:
+
+- Manual testing showed Win32 activation could fail with `StillMinimized` and then fall back directly to manual foreground without making it obvious whether the optional input fallback was disabled or attempted.
+- The WPF shell now exposes the input foreground fallback in the persistent dock as well as the OCR page, synchronizes both checkboxes, and logs disabled/attempted/succeeded/failed fallback outcomes.
+- The input fallback remains limited to foreground switching by SendInput/Alt+Tab-style key input and is never used for gameplay commands, macro loops, auto-clicking, or dialogue/task automation.
+- After calibration capture succeeds, the WinForms selector is explicitly brought to the foreground briefly and logs selector shown/completed/cancelled so a saved screenshot cannot silently look like a completed calibration if the selector failed to appear.
+- CaptureLost now distinguishes between "restore requested" and "already restored/not filtering" so the persistent dock and logs make the stopped/restored state clearer.
+- Real audio safety gates, stable-detection requirements, MuteCoordinator behavior, OCR backend architecture, and default safe startup are unchanged.

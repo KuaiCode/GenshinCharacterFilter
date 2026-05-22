@@ -11,6 +11,7 @@ public enum GuiRuntimeRunState
     Reduced,
     Restored,
     CaptureLost,
+    Reconnecting,
     Stopping,
     Error
 }

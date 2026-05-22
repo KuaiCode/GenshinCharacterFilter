@@ -19,6 +19,8 @@ public sealed class AppDetectionSettings
 
     public bool SaveOcrFailureSamples { get; set; } = DetectionDryRunOptions.DefaultSaveOcrFailureSamples;
 
+    public bool EnableInputForegroundFallback { get; set; }
+
     /// <summary>
     /// Validates detection timing and stability settings.
     /// </summary>

@@ -29,6 +29,7 @@
     "MatchThreshold": 2,
     "MissThreshold": 2,
     "SaveDebugImages": false,
-    "SaveOcrFailureSamples": false
+    "SaveOcrFailureSamples": false,
+    "EnableInputForegroundFallback": false
   }
 }

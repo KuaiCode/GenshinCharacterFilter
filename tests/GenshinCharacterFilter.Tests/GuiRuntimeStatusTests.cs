@@ -29,6 +29,7 @@ public sealed class GuiRuntimeStatusTests
         Assert.Equal(GuiRuntimeRunState.Starting, status.MarkStarting().RunState);
         Assert.Equal(GuiRuntimeRunState.Detecting, status.MarkDetecting().RunState);
         Assert.Equal(GuiRuntimeRunState.CaptureLost, status.MarkCaptureLost().RunState);
+        Assert.Equal(GuiRuntimeRunState.Reconnecting, status.MarkReconnecting().RunState);
         Assert.Equal(GuiRuntimeRunState.Stopping, status.MarkStopping().RunState);
         Assert.Equal(GuiRuntimeRunState.Error, status.MarkError().RunState);
         Assert.Equal(GuiRuntimeRunState.Idle, status.MarkIdle().RunState);
@@ -72,6 +73,17 @@ public sealed class GuiRuntimeStatusTests
     }
 
     [Fact]
+    public void MarkReconnecting_AfterCaptureLostShowsReconnectState()
+    {
+        GuiRuntimeStatus status = new();
+        status.MarkCaptureLost();
+
+        GuiStatusSnapshot snapshot = status.MarkReconnecting();
+
+        Assert.Equal(GuiRuntimeRunState.Reconnecting, snapshot.RunState);
+    }
+
+    [Fact]
     public void MarkCaptureLost_AfterReducedShowsRestoredAudioState()
     {
         GuiRuntimeStatus status = new();
@@ -86,6 +98,18 @@ public sealed class GuiRuntimeStatusTests
         Assert.Equal(GuiRuntimeRunState.CaptureLost, snapshot.RunState);
         Assert.Equal(GuiAudioState.Restored, snapshot.AudioState);
         Assert.Equal("restore", snapshot.LastAudioAction);
+    }
+
+    [Fact]
+    public void MarkCaptureLost_WhenAlreadyRestoredShowsNotFilteringState()
+    {
+        GuiRuntimeStatus status = new();
+
+        GuiStatusSnapshot snapshot = status.MarkCaptureLost();
+
+        Assert.Equal(GuiRuntimeRunState.CaptureLost, snapshot.RunState);
+        Assert.Equal(GuiAudioState.Restored, snapshot.AudioState);
+        Assert.Equal("none (already restored)", snapshot.LastAudioAction);
     }
 
     private static DetectionDryRunResult CreateResult(

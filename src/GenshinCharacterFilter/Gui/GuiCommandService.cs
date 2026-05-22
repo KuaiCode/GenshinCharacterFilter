@@ -91,6 +91,27 @@ public sealed class GuiCommandService
         WriteCalibrationResult(context.CalibrationOptions, result, log);
     }
 
+    public async Task<TargetWindowActivationResult> TryActivateTargetWindowAsync(
+        string? configPath,
+        int delayMs,
+        bool enableInputForegroundFallback,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
+        AppSettings settings = LoadSettings(configPath);
+        settings.Validate();
+        WindowsTargetWindowActivator activator = new(log);
+        return await activator.TryActivateTargetWindowAsync(
+            settings.TargetProcessName,
+            delayMs,
+            new TargetWindowActivationOptions
+            {
+                EnableInputForegroundFallback = enableInputForegroundFallback,
+                VerifyForegroundProcess = true
+            },
+            cancellationToken);
+    }
+
     private static void WriteCalibrationResult(
         OcrRegionCalibrationOptions calibrationOptions,
         OcrRegionCalibrationResult result,
@@ -594,6 +615,7 @@ public sealed class GuiCommandService
 
         settings.Detection.SaveDebugImages = tuningOptions.SaveDebugImages;
         settings.Detection.SaveOcrFailureSamples = tuningOptions.SaveOcrFailureSamples;
+        settings.Detection.EnableInputForegroundFallback = tuningOptions.EnableInputForegroundFallback;
         settings.Validate();
     }
 

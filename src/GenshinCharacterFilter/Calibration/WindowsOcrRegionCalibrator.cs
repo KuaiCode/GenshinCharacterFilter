@@ -95,7 +95,7 @@ public sealed class WindowsOcrRegionCalibrator
         }
     }
 
-    private static OcrRegion? SelectRegion(Bitmap screenshot)
+    private OcrRegion? SelectRegion(Bitmap screenshot)
     {
         OcrRegion? selectedRegion = null;
         Exception? uiException = null;
@@ -109,10 +109,23 @@ public sealed class WindowsOcrRegionCalibrator
                 TrySetCompatibleTextRenderingDefault();
                 using Bitmap uiBitmap = new(screenshot);
                 using CalibrationSelectionForm form = new(uiBitmap);
+                form.Shown += (_, _) =>
+                {
+                    _log.WriteLine("Calibration selector shown.");
+                    form.TopMost = true;
+                    form.Activate();
+                    form.BringToFront();
+                    form.BeginInvoke(new Action(() => form.TopMost = false));
+                };
                 DialogResult result = form.ShowDialog();
                 if (result == DialogResult.OK)
                 {
+                    _log.WriteLine("Calibration selector completed.");
                     selectedRegion = form.SelectedRegion;
+                }
+                else
+                {
+                    _log.WriteLine("Calibration selector cancelled.");
                 }
             }
             catch (Exception exception)
