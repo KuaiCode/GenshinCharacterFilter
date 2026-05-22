@@ -103,7 +103,9 @@ public sealed class DetectionDryRunLoopTests
         Assert.Equal(1, capture.Session.RegionCaptureCount);
         Assert.Equal(0, capture.Session.CaptureCount);
         Assert.Equal(new CaptureRegion(1, 2, 3, 4), capture.Session.LastRegion);
-        Assert.Contains("Capture mode: process-region-only", log.ToString());
+        string output = log.ToString();
+        Assert.Contains("Capture backend: VisiblePixels", output);
+        Assert.Contains("Capture mode: process-region-only", output);
     }
 
     [Fact]
@@ -163,6 +165,7 @@ public sealed class DetectionDryRunLoopTests
         await loop.RunAsync(CreateOptions(input.Path), CancellationToken.None);
 
         string output = log.ToString();
+        Assert.Contains("Capture backend: fixed image", output);
         Assert.Contains("Raw matched: True", output);
         Assert.Contains("Stable matched: True", output);
         Assert.Contains("Consecutive match count: 2", output);

@@ -10,6 +10,8 @@ public sealed class GuiRuntimeStatus
     public GuiStatusSnapshot Snapshot { get; private set; } = new(
         GuiRuntimeRunState.Idle,
         GuiAudioState.Restored,
+        CaptureBackend: "VisiblePixels",
+        CaptureStatus: "Ready",
         LastOcrText: "(none)",
         LastDetectedSpeaker: "(none)",
         LastAudioAction: "none");
@@ -41,6 +43,12 @@ public sealed class GuiRuntimeStatus
     });
 
     public GuiStatusSnapshot MarkReconnecting() => Update(Snapshot with { RunState = GuiRuntimeRunState.Reconnecting });
+
+    public GuiStatusSnapshot SetCaptureBackend(string backend, string status) => Update(Snapshot with
+    {
+        CaptureBackend = string.IsNullOrWhiteSpace(backend) ? "(unknown)" : backend.Trim(),
+        CaptureStatus = string.IsNullOrWhiteSpace(status) ? "(unknown)" : status.Trim()
+    });
 
     public GuiStatusSnapshot ApplyObservation(GuiLastObservation observation)
     {

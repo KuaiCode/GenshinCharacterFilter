@@ -56,6 +56,9 @@ public sealed class DetectionDryRunLoop
         options.Validate();
 
         DetectionStabilityGate stabilityGate = new(options.Stability);
+        _log.WriteLine(!string.IsNullOrWhiteSpace(options.OcrInputPath)
+            ? "Capture backend: fixed image (live capture backend not used)"
+            : $"Capture backend: {options.CaptureBackendOptions.Backend}");
         _log.WriteLine($"OCR engine: {options.OcrEngine}");
         _log.WriteLine($"OCR backend initialized: {IsOcrBackendInitialized()}");
         _log.WriteLine($"OCR backend warm: {IsOcrBackendWarm()}");

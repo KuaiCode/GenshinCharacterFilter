@@ -152,7 +152,7 @@ MuteCoordinator coordinator = new(
         TargetSpeakers = new HashSet<string>(settings.TargetSpeakers)
     });
 
-Console.WriteLine("GenshinCharacterFilter v0.19.2 Foreground UX / Resume Flow");
+Console.WriteLine("GenshinCharacterFilter v0.20 Capture Backend Spike / BetterGI-style Capture Backend Evaluation");
 Console.WriteLine(settings.RealAudioEnabled
     ? $"REAL audio mode enabled for process '{settings.TargetProcessName}'."
     : "Simulation mode; this run does not control real system audio.");
@@ -197,7 +197,7 @@ static async Task CaptureOnceAsync(AppSettings settings, AppCommandLineOptions c
         CaptureDelayMs = commandLineOptions.CaptureDelayMs
     };
 
-    IGameWindowCapture capture = new WindowsGameWindowCapture(Console.Out);
+    IGameWindowCapture capture = new CaptureBackendFactory().Create(settings.Capture.ToOptions(), Console.Out);
     Console.WriteLine("Capture mode; this run does not control real system audio.");
 
     try
@@ -205,7 +205,7 @@ static async Task CaptureOnceAsync(AppSettings settings, AppCommandLineOptions c
         string outputPath = await capture.CaptureOnceAsync(captureOptions, CancellationToken.None);
         Console.WriteLine($"Capture completed: {outputPath}");
     }
-    catch (Exception exception) when (exception is WindowCaptureException or PlatformNotSupportedException)
+    catch (Exception exception) when (exception is WindowCaptureException or CaptureBackendException or PlatformNotSupportedException)
     {
         Console.Error.WriteLine($"Capture error: {exception.Message}");
     }
@@ -279,7 +279,7 @@ static async Task CalibrateOcrRegionAsync(AppSettings settings, AppCommandLineOp
     };
 
     WindowsOcrRegionCalibrator calibrator = new(
-        new WindowsGameWindowCapture(Console.Out),
+        new CaptureBackendFactory().Create(settings.Capture.ToOptions(), Console.Out),
         Console.Out);
 
     try
@@ -294,7 +294,7 @@ static async Task CalibrateOcrRegionAsync(AppSettings settings, AppCommandLineOp
         Console.WriteLine(
             $"Region ratio: x={result.RegionRatio.X:F6}, y={result.RegionRatio.Y:F6}, width={result.RegionRatio.Width:F6}, height={result.RegionRatio.Height:F6}");
     }
-    catch (Exception exception) when (exception is CalibrationException or WindowCaptureException or ArgumentException or IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+    catch (Exception exception) when (exception is CalibrationException or WindowCaptureException or CaptureBackendException or ArgumentException or IOException or UnauthorizedAccessException or PlatformNotSupportedException)
     {
         Console.Error.WriteLine($"Calibration error: {exception.Message}");
     }
@@ -360,6 +360,7 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
             CaptureDelayMs = commandLineOptions.CaptureDelayMs,
             SaveDebugImages = settings.Detection.SaveDebugImages,
             SaveOcrFailureSamples = settings.Detection.SaveOcrFailureSamples,
+            CaptureBackendOptions = settings.Capture.ToOptions(),
             Stability = new DetectionStabilityOptions
             {
                 MatchThreshold = settings.Detection.MatchThreshold,
@@ -374,6 +375,8 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
         Console.WriteLine($"Miss threshold: {dryRunOptions.Stability.MissThreshold}");
         Console.WriteLine($"Save debug images: {dryRunOptions.SaveDebugImages}");
         Console.WriteLine($"Save OCR failure samples: {dryRunOptions.SaveOcrFailureSamples}");
+        Console.WriteLine($"Capture backend: {dryRunOptions.CaptureBackendOptions.Backend}");
+        Console.WriteLine($"Allow capture backend fallback: {dryRunOptions.CaptureBackendOptions.AllowBackendFallback}");
 
         DetectionAudioCoordinator? audioCoordinator = null;
         string audioActionLabel = "Simulated audio action";
@@ -394,7 +397,7 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
         DetectionDryRunLoop loop = new(
             OcrServiceFactory.Create(settings.Ocr.Engine),
             new SpeakerMatcher(),
-            new WindowsGameWindowCapture(Console.Out),
+            new CaptureBackendFactory().Create(settings.Capture.ToOptions(), Console.Out),
             new OcrInputPreparer(),
             audioCoordinator: audioCoordinator,
             audioActionLabel: audioActionLabel,
@@ -406,7 +409,7 @@ static async Task DetectLoopAsync(AppSettings settings, AppCommandLineOptions co
     {
         Console.WriteLine("Detect loop stopped.");
     }
-    catch (Exception exception) when (exception is OcrException or OcrRegionSourceException or WindowCaptureException or ArgumentException or FileNotFoundException or PlatformNotSupportedException)
+    catch (Exception exception) when (exception is OcrException or OcrRegionSourceException or WindowCaptureException or CaptureBackendException or ArgumentException or FileNotFoundException or PlatformNotSupportedException)
     {
         Console.Error.WriteLine($"Detect loop error: {exception.Message}");
     }

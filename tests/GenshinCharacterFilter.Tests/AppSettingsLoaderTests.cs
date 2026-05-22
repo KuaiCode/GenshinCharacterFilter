@@ -1,5 +1,6 @@
 using GenshinCharacterFilter;
 using GenshinCharacterFilter.Audio;
+using GenshinCharacterFilter.Capture;
 using GenshinCharacterFilter.Ocr;
 
 namespace GenshinCharacterFilter.Tests;
@@ -39,6 +40,8 @@ public sealed class AppSettingsLoaderTests
         Assert.False(settings.Detection.SaveDebugImages);
         Assert.False(settings.Detection.SaveOcrFailureSamples);
         Assert.False(settings.Detection.EnableInputForegroundFallback);
+        Assert.Equal(CaptureBackend.VisiblePixels, settings.Capture.Backend);
+        Assert.False(settings.Capture.AllowBackendFallback);
     }
 
     [Fact]
@@ -77,6 +80,11 @@ public sealed class AppSettingsLoaderTests
                 "SaveDebugImages": true,
                 "SaveOcrFailureSamples": true,
                 "EnableInputForegroundFallback": true
+              },
+              "Capture": {
+                "Backend": "WindowsGraphicsCapture",
+                "AllowBackendFallback": true,
+                "CaptureTimeoutMs": 3000
               }
             }
             """);
@@ -108,6 +116,9 @@ public sealed class AppSettingsLoaderTests
         Assert.True(settings.Detection.SaveDebugImages);
         Assert.True(settings.Detection.SaveOcrFailureSamples);
         Assert.True(settings.Detection.EnableInputForegroundFallback);
+        Assert.Equal(CaptureBackend.WindowsGraphicsCapture, settings.Capture.Backend);
+        Assert.True(settings.Capture.AllowBackendFallback);
+        Assert.Equal(3000, settings.Capture.CaptureTimeoutMs);
     }
 
     [Fact]
@@ -292,6 +303,26 @@ public sealed class AppSettingsLoaderTests
         Assert.Contains("Loop interval", exception.Message);
     }
 
+    [Fact]
+    public void LoadFromFile_InvalidCaptureBackendIsRejected()
+    {
+        using TempJsonFile configFile = TempJsonFile.Create(
+            """
+            {
+              "TargetProcessName": "GenshinImpact",
+              "TargetSpeakers": [ "Wanderer" ],
+              "RealAudioEnabled": false,
+              "AudioFilter": { "Mode": "Mute", "VolumePercent": 30 },
+              "Capture": { "Backend": "OtherBackend" }
+            }
+            """);
+
+        AppSettingsException exception = Assert.Throws<AppSettingsException>(
+            () => new AppSettingsLoader().LoadFromFile(configFile.Path));
+
+        Assert.Contains("invalid JSON", exception.Message);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(101)]
@@ -327,6 +358,7 @@ public sealed class AppSettingsLoaderTests
         Assert.Equal(500, settings.Detection.LoopIntervalMs);
         Assert.False(settings.Detection.SaveDebugImages);
         Assert.False(settings.Detection.SaveOcrFailureSamples);
+        Assert.Equal(CaptureBackend.VisiblePixels, settings.Capture.Backend);
     }
 
     [Fact]

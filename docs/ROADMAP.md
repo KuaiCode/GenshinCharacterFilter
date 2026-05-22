@@ -1,25 +1,24 @@
 # Roadmap
 
-## Current Milestone: v0.19.2 Foreground UX / Resume Flow
+## Current Milestone: v0.20 Capture Backend Spike / BetterGI-style Capture Backend Evaluation
 
 Status: in progress.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, v0.12 Configuration Integration, v0.13 Usability Hardening, v0.14 Minimal WinForms Control Panel, v0.15 GUI Hardening, v0.16 GUI Guarded Real Audio Page, v0.17 WPF Modern GUI Shell, v0.18 OCR Backend Replacement, v0.18.1 OCR Backend Diagnostic Stabilization, v0.19 WPF Persistent Control Dock, and v0.19.1 CaptureLost UI Recovery milestones have been manually verified where applicable. The v0.19.2 milestone is limited to:
+The v0.1 Audio MVP through v0.19.2 Foreground UX / Resume Flow milestones are implemented or stage-complete where applicable. v0.19.2 improved foreground activation, optional input fallback, and Resume/Reconnect, but manual testing still showed `StillMinimized` and `SendInput error: 87` failures. v0.20 shifts focus to capture backend abstraction and a Windows.Graphics.Capture spike instead of more foreground-switching patches.
+
+The v0.20 milestone is limited to:
 
 - preserving console app and WPF GUI behavior;
 - keeping real-audio safety gates unchanged;
 - preserving Paddle OCR backend selection, warm-up, and cache-key behavior;
-- preserving foreground-region-only capture behavior;
-- preserving the persistent WPF control/status dock visible across pages;
-- preserving CaptureLost UI recovery so switching back to WPF does not freeze the UI;
-- trying best-effort Win32 foreground activation before calibration and live detection startup;
-- allowing an optional, explicit, user-visible/configurable `SendInput` foreground fallback only for bringing the target window to foreground;
-- logging whether input foreground fallback is disabled, attempted, succeeded, or failed before manual fallback;
-- keeping the OCR calibration selector visible in front after a successful calibration screenshot;
-- making CaptureLost dock state clearly show restored/not-filtering audio status;
-- adding Resume/Reconnect for CaptureLost where the last run context is reusable;
-- falling back to manual foreground flow if automatic activation fails;
-- no global hotkeys, tray icon, always-on-top mini window, overlay, masking, hooks, gameplay automation, game memory access, MuteCoordinator changes, OCR backend architecture changes, Windows.Graphics.Capture / DirectX capture backend implementation, or real audio enabled by default.
+- preserving the existing VisiblePixels / foreground-region-only capture backend;
+- adding a capture backend abstraction used by calibration, live OCR/detection, simulated audio, and guarded real audio;
+- adding config/GUI selection for `VisiblePixels` and `WindowsGraphicsCapture`;
+- adding explicit backend fallback policy from `WindowsGraphicsCapture` to `VisiblePixels`;
+- logging selected capture backend and capture mode;
+- keeping fixed-image OCR independent from live capture backend;
+- adding a Windows.Graphics.Capture spike with clear diagnostics if WGC is unavailable or frame acquisition is not enabled;
+- no global hotkeys, tray icon, always-on-top mini window, overlay, masking, hooks, gameplay automation, game memory access, MuteCoordinator changes, OCR backend architecture changes, DirectX hooks, or real audio enabled by default.
 
 ## Phase Order
 
@@ -45,12 +44,13 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 20. v0.19 WPF persistent control dock / interaction layout.
 21. v0.19.1 CaptureLost UI recovery.
 22. v0.19.2 Foreground UX / Resume Flow.
-23. v0.20 Global hotkey / tray / status mini-window.
-24. Future capture backend spike for Windows.Graphics.Capture / DirectX capture evaluation.
-25. Stable mute/unmute coordination with debounce and recovery.
-26. Optional masking.
+23. v0.20 Capture backend spike / Windows.Graphics.Capture evaluation.
+24. Future DXGI / BitBlt backend evaluation if Windows.Graphics.Capture is insufficient.
+25. Future global hotkey / tray / status mini-window.
+26. Stable mute/unmute coordination with debounce and recovery.
+27. Optional masking.
 
-## Out of Scope for v0.19.2
+## Out of Scope for v0.20
 
 - New major features.
 - GUI config editor.
@@ -58,7 +58,8 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Global hotkeys.
 - Tray icon.
 - Always-on-top mini status window.
-- Windows.Graphics.Capture / DirectX capture backend implementation.
+- DXGI / BitBlt backend implementation unless explicitly scoped later.
+- DirectX hooks.
 - Real audio enabled by default.
 - Bypassing guarded real audio safety semantics.
 - Changing detection/audio safety gates.

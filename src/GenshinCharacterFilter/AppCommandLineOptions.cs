@@ -33,6 +33,8 @@ public sealed class AppCommandLineOptions
     private bool _loopCountSpecified;
     private bool _matchThresholdSpecified;
     private bool _missThresholdSpecified;
+    private bool _captureBackendSpecified;
+    private bool _captureBackendFallbackSpecified;
 
     public string? ConfigPath { get; private init; }
 
@@ -112,6 +114,8 @@ public sealed class AppCommandLineOptions
 
     public string CalibrationOutputPath { get; private init; } = OcrRegionCalibrationOptions.DefaultOutputPath;
 
+    public CaptureBackendOptions CaptureBackendOptions { get; private init; } = new();
+
     /// <summary>
     /// Parses command-line arguments into application options.
     /// </summary>
@@ -143,6 +147,18 @@ public sealed class AppCommandLineOptions
         string? processName = GetOptionValue(arguments, "--process");
         string? captureOutputDirectory = GetOptionValue(arguments, "--capture-output");
         string? captureDelayValue = GetOptionValue(arguments, "--capture-delay-ms");
+        string? captureBackendValue = GetOptionValue(arguments, "--capture-backend");
+        bool captureBackendSpecified = captureBackendValue is not null;
+        bool captureBackendFallbackSpecified = HasFlag(arguments, "--allow-capture-backend-fallback");
+        CaptureBackend captureBackend = captureBackendValue is null
+            ? CaptureBackend.VisiblePixels
+            : ParseCaptureBackend(captureBackendValue);
+        CaptureBackendOptions captureBackendOptions = new()
+        {
+            Backend = captureBackend,
+            AllowBackendFallback = captureBackendFallbackSpecified
+        };
+        captureBackendOptions.Validate();
         int captureDelayMs = WindowCaptureOptions.DefaultCaptureDelayMs;
         if (captureDelayValue is not null &&
             !int.TryParse(captureDelayValue, out captureDelayMs))
@@ -375,6 +391,7 @@ public sealed class AppCommandLineOptions
             MissThreshold = missThreshold,
             OcrRepeat = ocrRepeat,
             CalibrationOutputPath = calibrationOutputPath ?? OcrRegionCalibrationOptions.DefaultOutputPath,
+            CaptureBackendOptions = captureBackendOptions,
             _realAudioSpecified = useRealAudio,
             _targetProcessSpecified = processName is not null,
             _audioModeSpecified = audioModeSpecified,
@@ -396,7 +413,9 @@ public sealed class AppCommandLineOptions
             _loopIntervalMsSpecified = loopIntervalMsSpecified,
             _loopCountSpecified = loopCountSpecified,
             _matchThresholdSpecified = matchThresholdSpecified,
-            _missThresholdSpecified = missThresholdSpecified
+            _missThresholdSpecified = missThresholdSpecified,
+            _captureBackendSpecified = captureBackendSpecified,
+            _captureBackendFallbackSpecified = captureBackendFallbackSpecified
         };
     }
 
@@ -444,7 +463,14 @@ public sealed class AppCommandLineOptions
                 MatchThreshold = _matchThresholdSpecified ? MatchThreshold : settings.Detection.MatchThreshold,
                 MissThreshold = _missThresholdSpecified ? MissThreshold : settings.Detection.MissThreshold,
                 SaveDebugImages = settings.Detection.SaveDebugImages,
-                SaveOcrFailureSamples = settings.Detection.SaveOcrFailureSamples
+                SaveOcrFailureSamples = settings.Detection.SaveOcrFailureSamples,
+                EnableInputForegroundFallback = settings.Detection.EnableInputForegroundFallback
+            },
+            Capture = new AppCaptureSettings
+            {
+                Backend = _captureBackendSpecified ? CaptureBackendOptions.Backend : settings.Capture.Backend,
+                AllowBackendFallback = _captureBackendFallbackSpecified ? CaptureBackendOptions.AllowBackendFallback : settings.Capture.AllowBackendFallback,
+                CaptureTimeoutMs = settings.Capture.CaptureTimeoutMs
             }
         };
 
@@ -476,6 +502,20 @@ public sealed class AppCommandLineOptions
         }
 
         throw new ArgumentException("OCR engine must be 'TesseractCli' or 'PaddleOcrLocal'.", nameof(value));
+    }
+
+    private static CaptureBackend ParseCaptureBackend(string value)
+    {
+        string normalized = value.Trim();
+        foreach (CaptureBackend backend in Enum.GetValues<CaptureBackend>())
+        {
+            if (string.Equals(normalized, backend.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                return backend;
+            }
+        }
+
+        throw new ArgumentException("Capture backend must be 'VisiblePixels' or 'WindowsGraphicsCapture'.", nameof(value));
     }
 
     /// <summary>

@@ -162,6 +162,23 @@ public sealed class GuiCommandServiceTests
         Assert.True(options.EnableInputForegroundFallback);
     }
 
+    [Fact]
+    public void ParseGuiDetectionTuning_ReadsCaptureBackend()
+    {
+        GuiDetectionTuningOptions options = GuiDetectionTuningOptions.Parse(
+            runUntilStop: true,
+            loopCount: "",
+            loopIntervalMs: "",
+            captureDelayMs: "",
+            matchThreshold: "",
+            missThreshold: "",
+            captureBackend: CaptureBackend.WindowsGraphicsCapture,
+            allowCaptureBackendFallback: true);
+
+        Assert.Equal(CaptureBackend.WindowsGraphicsCapture, options.CaptureBackendOptions.Backend);
+        Assert.True(options.CaptureBackendOptions.AllowBackendFallback);
+    }
+
     [Theory]
     [InlineData("abc", "100", "2", "1", "Loop interval")]
     [InlineData("49", "100", "2", "1", "Loop interval")]
@@ -265,6 +282,26 @@ public sealed class GuiCommandServiceTests
         GuiCommandService.ApplyGuiDetectionTuningOverrides(settings, options);
 
         Assert.True(settings.Detection.EnableInputForegroundFallback);
+    }
+
+    [Fact]
+    public void ApplyGuiDetectionTuningOverrides_PropagatesCaptureBackend()
+    {
+        AppSettings settings = new();
+        GuiDetectionTuningOptions options = GuiDetectionTuningOptions.Parse(
+            runUntilStop: true,
+            loopCount: "",
+            loopIntervalMs: "",
+            captureDelayMs: "",
+            matchThreshold: "",
+            missThreshold: "",
+            captureBackend: CaptureBackend.WindowsGraphicsCapture,
+            allowCaptureBackendFallback: true);
+
+        GuiCommandService.ApplyGuiDetectionTuningOverrides(settings, options);
+
+        Assert.Equal(CaptureBackend.WindowsGraphicsCapture, settings.Capture.Backend);
+        Assert.True(settings.Capture.AllowBackendFallback);
     }
 
     [Theory]

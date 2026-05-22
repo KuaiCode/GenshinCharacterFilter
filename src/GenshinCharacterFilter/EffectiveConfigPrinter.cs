@@ -47,6 +47,9 @@ public sealed class EffectiveConfigPrinter
         writer.WriteLine($"Detection.MissThreshold: {settings.Detection.MissThreshold}");
         writer.WriteLine($"Detection.SaveDebugImages: {settings.Detection.SaveDebugImages}");
         writer.WriteLine($"Detection.SaveOcrFailureSamples: {settings.Detection.SaveOcrFailureSamples}");
+        writer.WriteLine($"Capture.Backend: {settings.Capture.Backend}");
+        writer.WriteLine($"Capture.AllowBackendFallback: {settings.Capture.AllowBackendFallback}");
+        writer.WriteLine($"Capture.CaptureTimeoutMs: {settings.Capture.CaptureTimeoutMs}");
     }
 
     private static string DescribeRegionSource(OcrRegionSourceOptions options)

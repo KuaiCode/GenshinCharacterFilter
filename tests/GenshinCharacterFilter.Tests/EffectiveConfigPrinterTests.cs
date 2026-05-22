@@ -19,6 +19,7 @@ public sealed class EffectiveConfigPrinterTests
         Assert.Contains("Detection real audio allowed: False", output);
         Assert.Contains("TargetProcessName: GenshinImpact", output);
         Assert.Contains("TargetSpeakers: Wanderer", output);
+        Assert.Contains("Capture.Backend: VisiblePixels", output);
     }
 
     [Fact]

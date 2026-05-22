@@ -38,6 +38,11 @@ public sealed class AppSettings
     public AppDetectionSettings Detection { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets live capture backend defaults used by explicit capture, calibration, and detection commands.
+    /// </summary>
+    public AppCaptureSettings Capture { get; set; } = new();
+
+    /// <summary>
     /// Creates a safe default configuration.
     /// </summary>
     public static AppSettings CreateDefault()
@@ -100,6 +105,11 @@ public sealed class AppSettings
             throw new AppSettingsException("Detection is required.");
         }
 
+        if (Capture is null)
+        {
+            throw new AppSettingsException("Capture is required.");
+        }
+
         try
         {
             // 音频参数在进入服务层前统一校验，避免非法百分比影响真实音频恢复。
@@ -112,5 +122,6 @@ public sealed class AppSettings
 
         Ocr.Validate();
         Detection.Validate();
+        Capture.Validate();
     }
 }

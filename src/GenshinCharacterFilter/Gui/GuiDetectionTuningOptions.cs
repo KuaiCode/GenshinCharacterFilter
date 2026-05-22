@@ -31,6 +31,8 @@ public sealed class GuiDetectionTuningOptions
 
     public bool EnableInputForegroundFallback { get; init; }
 
+    public CaptureBackendOptions CaptureBackendOptions { get; init; } = new();
+
     public static GuiDetectionTuningOptions Parse(
         bool runUntilStop,
         string? loopCount,
@@ -40,8 +42,17 @@ public sealed class GuiDetectionTuningOptions
         string? missThreshold,
         bool saveDebugImages = false,
         bool saveOcrFailureSamples = false,
-        bool enableInputForegroundFallback = false)
+        bool enableInputForegroundFallback = false,
+        CaptureBackend captureBackend = CaptureBackend.VisiblePixels,
+        bool allowCaptureBackendFallback = false)
     {
+        CaptureBackendOptions captureBackendOptions = new()
+        {
+            Backend = captureBackend,
+            AllowBackendFallback = allowCaptureBackendFallback
+        };
+        captureBackendOptions.Validate();
+
         return new GuiDetectionTuningOptions
         {
             RunUntilStop = runUntilStop,
@@ -52,7 +63,8 @@ public sealed class GuiDetectionTuningOptions
             MissThreshold = ParseOptionalThreshold(missThreshold, "Miss threshold"),
             SaveDebugImages = saveDebugImages,
             SaveOcrFailureSamples = saveOcrFailureSamples,
-            EnableInputForegroundFallback = enableInputForegroundFallback
+            EnableInputForegroundFallback = enableInputForegroundFallback,
+            CaptureBackendOptions = captureBackendOptions
         };
     }
 

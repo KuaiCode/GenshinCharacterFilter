@@ -104,6 +104,8 @@ public sealed class DetectionDryRunOptions
     /// </summary>
     public bool SaveOcrFailureSamples { get; set; } = DefaultSaveOcrFailureSamples;
 
+    public CaptureBackendOptions CaptureBackendOptions { get; set; } = new();
+
     public int OcrInputScale { get; set; } = OcrOptions.DefaultInputScale;
 
     public int OcrPaddingPixels { get; set; } = OcrOptions.DefaultPaddingPixels;
@@ -159,6 +161,7 @@ public sealed class DetectionDryRunOptions
         }
 
         OcrOptions.ValidatePreparationOptions(OcrInputScale, OcrPaddingPixels, OcrThreshold);
+        CaptureBackendOptions.Validate();
 
         OcrRegion?.ValidateShape();
         GetOcrRegionSourceOptions().Validate();

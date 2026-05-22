@@ -16,6 +16,8 @@ public sealed class GuiRuntimeStatusTests
 
         Assert.Equal(GuiRuntimeRunState.Idle, snapshot.RunState);
         Assert.Equal(GuiAudioState.Restored, snapshot.AudioState);
+        Assert.Equal("VisiblePixels", snapshot.CaptureBackend);
+        Assert.Equal("Ready", snapshot.CaptureStatus);
         Assert.Equal("(none)", snapshot.LastOcrText);
         Assert.Equal("(none)", snapshot.LastDetectedSpeaker);
         Assert.Equal("none", snapshot.LastAudioAction);
@@ -110,6 +112,17 @@ public sealed class GuiRuntimeStatusTests
         Assert.Equal(GuiRuntimeRunState.CaptureLost, snapshot.RunState);
         Assert.Equal(GuiAudioState.Restored, snapshot.AudioState);
         Assert.Equal("none (already restored)", snapshot.LastAudioAction);
+    }
+
+    [Fact]
+    public void SetCaptureBackend_UpdatesBackendStatus()
+    {
+        GuiRuntimeStatus status = new();
+
+        GuiStatusSnapshot snapshot = status.SetCaptureBackend("WindowsGraphicsCapture", "Unavailable");
+
+        Assert.Equal("WindowsGraphicsCapture", snapshot.CaptureBackend);
+        Assert.Equal("Unavailable", snapshot.CaptureStatus);
     }
 
     private static DetectionDryRunResult CreateResult(

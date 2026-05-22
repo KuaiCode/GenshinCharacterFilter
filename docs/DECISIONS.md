@@ -447,3 +447,18 @@ Reasoning:
 - After calibration capture succeeds, the WinForms selector is explicitly brought to the foreground briefly and logs selector shown/completed/cancelled so a saved screenshot cannot silently look like a completed calibration if the selector failed to appear.
 - CaptureLost now distinguishes between "restore requested" and "already restored/not filtering" so the persistent dock and logs make the stopped/restored state clearer.
 - Real audio safety gates, stable-detection requirements, MuteCoordinator behavior, OCR backend architecture, and default safe startup are unchanged.
+
+## 2026-05-22: v0.20 Capture Backend Spike / BetterGI-style Capture Backend Evaluation
+
+Decision: introduce a capture backend abstraction with `VisiblePixels` as the default backend and an isolated `WindowsGraphicsCapture` spike behind the same calibration/detection interfaces.
+
+Reasoning:
+
+- BetterGI publicly documents a multi-backend capture approach, including GDI/BitBlt and DXGI/WindowsGraphicsCapture-style options. This project uses that architectural idea only; no BetterGI source code or dependency is copied, and no BetterGI gameplay automation features are implemented.
+- v0.19.2 foreground activation and optional input fallback improved usability but did not remove the visible-pixel dependency. Manual testing still showed `StillMinimized` and `SendInput error: 87`, so continuing to patch Alt+Tab/foreground switching is not the right next step.
+- `VisiblePixels` remains the default to preserve existing behavior and keep safe console/GUI runs unchanged.
+- `WindowsGraphicsCapture` is exposed as a selectable spike so config, WPF UI, logging, fallback, and diagnostics can be evaluated without changing OCR, detection stability, or audio safety gates.
+- The detection loop depends on the existing `IGameWindowCaptureSession` boundary and does not know whether frames come from `VisiblePixels` or a future WGC implementation.
+- WGC failures are structured as backend diagnostics. Fallback to `VisiblePixels` happens only when explicitly configured.
+- Windows.Graphics.Capture is not a DirectX hook. DirectX hooks, game process injection, game memory access, game file modification, anti-cheat bypass logic, and gameplay automation remain out of scope.
+- Real audio remains guarded by explicit UI/CLI safety gates, preflight, valid OCR region, confirmation, and stable detection. Capture backend selection cannot start or bypass real audio.

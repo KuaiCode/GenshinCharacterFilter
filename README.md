@@ -2,9 +2,9 @@
 
 GenshinCharacterFilter is a Windows console accessibility/preferences utility prototype for muting or reducing target process audio when a configured character is speaking.
 
-Current milestone: **v0.19.2 Foreground UX / Resume Flow**.
+Current milestone: **v0.20 Capture Backend Spike / BetterGI-style Capture Backend Evaluation**.
 
-The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype, v0.4 OCR Text Extraction Prototype, v0.5 Speaker Detection from OCR Text Prototype, v0.6 OCR-driven Detection Dry Run, v0.7 Detection Stability Gate, v0.8 Simulated Audio Integration, v0.9 Guarded Real Audio Integration, v0.10 Manual OCR Region Calibration, v0.11 OCR Region Source Resolution, v0.12 Configuration Integration, v0.13 Usability Hardening, v0.14 Minimal WinForms Control Panel, v0.15 GUI Hardening, v0.16 GUI Guarded Real Audio Page, v0.17 WPF Modern GUI Shell, v0.18 OCR Backend Replacement, v0.18.1 OCR Backend Diagnostic Stabilization, v0.19 WPF Persistent Control Dock, and v0.19.1 CaptureLost UI Recovery are implemented. v0.19.2 improves foreground activation and Resume/Reconnect for visible-pixel capture while real-audio safety gates remain unchanged.
+The v0.1 Audio MVP through v0.19.2 Foreground UX / Resume Flow milestones are implemented or stage-complete where applicable. v0.20 introduces a BetterGI-style multi-backend capture abstraction and a Windows.Graphics.Capture spike while real-audio safety gates remain unchanged.
 
 ## Current Scope
 
@@ -33,8 +33,11 @@ The v0.1 Audio MVP, v0.2 Local JSON Configuration, v0.3 Window Capture Prototype
 - Best-effort Win32 foreground activation before calibration and live detection startup.
 - Optional, explicit input foreground fallback for window switching only; it is disabled by default.
 - CaptureLost Resume/Reconnect from the WPF dock.
+- Capture backend selection through config and WPF:
+  - `VisiblePixels`, the existing foreground visible-pixel path.
+  - `WindowsGraphicsCapture`, an isolated spike with clear diagnostics and optional configured fallback.
 
-Out of scope: GUI config editor, saving edited config, default automatic real audio, config-only guarded real audio, unguarded real detection audio, production auto mute, automatic OCR region detection, fabricated preset coordinates, fuzzy matching, speaker recognition from image, WinUI, overlay, masking, hotkeys, tray icon, always-on-top mini window, Windows.Graphics.Capture / DirectX capture backend implementation for this milestone, game memory access, hooks, DLL injection, game file modification, and gameplay automation. Limited `SendInput` foreground switching is allowed only when explicitly enabled and only to bring the target window to the foreground.
+Out of scope: GUI config editor, saving edited config, default automatic real audio, config-only guarded real audio, unguarded real detection audio, production auto mute, automatic OCR region detection, fabricated preset coordinates, fuzzy matching, speaker recognition from image, WinUI, overlay, masking, hotkeys, tray icon, always-on-top mini window, DXGI / BitBlt backend implementation, DirectX hooks, game memory access, hooks, DLL injection, game file modification, and gameplay automation. Windows.Graphics.Capture is treated as a non-invasive capture backend spike, not as a hook or game integration.
 
 ## Commands
 
@@ -95,9 +98,40 @@ Use reduce-volume mode for the first real audio test. The GUI does not create `W
 
 Guarded real audio includes OCR jitter tolerance for near target-speaker text. Strong OCR matches can enter the stable matched state, while weak near-matches and short/empty noisy OCR are used to avoid rapid restore/reduce flicker after a stable target hit. Clear non-target text can still restore quickly according to the configured miss threshold.
 
-Capture, calibration, and live detection use visible screen pixels. The target window must be restored, visible, and not covered. For Genshin, prefer windowed or borderless window mode; exclusive fullscreen can minimize or block visible-pixel capture when focus moves to the GUI. Before calibration or live detection startup, the WPF GUI first minimizes itself and tries Win32 foreground activation for `TargetProcessName`. The `Enable Alt+Tab / SendInput foreground fallback` checkbox is off by default; when enabled, the app may use a limited Alt+Tab/SendInput foreground-switching attempt after Win32 activation fails. This fallback is only for bringing the target window to the foreground and does not send gameplay commands. The log clearly reports whether input fallback is disabled, attempted, succeeded, or failed. If automatic activation still fails, the GUI falls back to the manual foreground flow: it prompts you, minimizes the WPF window, waits briefly while you manually switch to the target, then captures or initializes detection from the current foreground window only if its process matches `TargetProcessName`. This applies to calibration, dry-run detection, simulated detection audio, and guarded real audio startup; guarded real audio still requires the checkbox, preflight, and confirmation first. For detection fallback, the WPF window stays minimized until detection stops or fails so it does not immediately steal focus back from the game. If you switch back to WPF during detection, the game may minimize again and visible-pixel capture can stop. When this capture-lost state is detected, the app stops detection safely, attempts audio restore if needed, keeps the WPF UI usable, shows CaptureLost plus Restored/not-filtering state in the dock, and enables Resume/Reconnect from the persistent dock when the last run context can be reused. Resume/Reconnect creates a fresh foreground capture session and does not reuse the old window handle; guarded real audio resume still requires the guarded enablement and confirmation flow. Windowed/borderless mode, a second monitor, or the future v0.20 hotkey/status-window work can reduce the need to switch back to WPF during detection.
+Capture, calibration, and live detection use visible screen pixels when the `VisiblePixels` backend is selected. The target window must be restored, visible, and not covered. For Genshin, prefer windowed or borderless window mode; exclusive fullscreen can minimize or block visible-pixel capture when focus moves to the GUI. Before calibration or live detection startup, the WPF GUI first minimizes itself and tries Win32 foreground activation for `TargetProcessName`. The `Enable Alt+Tab / SendInput foreground fallback` checkbox is off by default; when enabled, the app may use a limited Alt+Tab/SendInput foreground-switching attempt after Win32 activation fails. This fallback is only for bringing the target window to the foreground and does not send gameplay commands. The log clearly reports whether input fallback is disabled, attempted, succeeded, or failed. If automatic activation still fails, the GUI falls back to the manual foreground flow: it prompts you, minimizes the WPF window, waits briefly while you manually switch to the target, then captures or initializes detection from the current foreground window only if its process matches `TargetProcessName`. This applies to calibration, dry-run detection, simulated detection audio, and guarded real audio startup; guarded real audio still requires the checkbox, preflight, and confirmation first. For detection fallback, the WPF window stays minimized until detection stops or fails so it does not immediately steal focus back from the game. If you switch back to WPF during detection, the game may minimize again and visible-pixel capture can stop. When this capture-lost state is detected, the app stops detection safely, attempts audio restore if needed, keeps the WPF UI usable, shows CaptureLost plus Restored/not-filtering state in the dock, and enables Resume/Reconnect from the persistent dock when the last run context can be reused. Resume/Reconnect creates a fresh foreground capture session and does not reuse the old window handle; guarded real audio resume still requires the guarded enablement and confirmation flow. Windowed/borderless mode, a second monitor, or future hotkey/status-window work can reduce the need to switch back to WPF during detection.
 
-The project has not implemented Windows.Graphics.Capture or a DirectX capture backend in v0.19.2. Those capture paths are not prohibited, but they are deferred to a separate capture backend spike where latency, stability, coordinate mapping, compatibility, and reduced foreground-window dependence can be evaluated independently.
+v0.20 begins that separate capture backend spike by adding selection, diagnostics, and fallback policy around `VisiblePixels` and `WindowsGraphicsCapture`.
+
+## Capture Backend Selection
+
+v0.20 adds a capture backend boundary inspired by BetterGI-style multi-backend capture tools. BetterGI publicly documents multiple image capture approaches such as GDI/BitBlt and DXGI/WindowsGraphicsCapture-style modes; this project only borrows the architectural idea of selectable capture backends. No BetterGI source code or dependencies are copied, and no BetterGI gameplay automation features are implemented.
+
+Available backend names:
+
+- `VisiblePixels`: the existing Win32/BitBlt visible-pixel capture path. It remains the default and preserves current behavior. It still requires the target window to be visible enough for screen-pixel capture.
+- `WindowsGraphicsCapture`: an isolated Windows.Graphics.Capture spike. It is selectable so configuration, GUI status, fallback, and diagnostics can be exercised separately from OCR/audio logic. If the runtime or current build cannot acquire WGC frames, the app reports a structured backend error instead of hanging the WPF UI.
+
+Config example:
+
+```json
+"Capture": {
+  "Backend": "VisiblePixels",
+  "AllowBackendFallback": false,
+  "CaptureTimeoutMs": 2000
+}
+```
+
+CLI overrides:
+
+```powershell
+dotnet run --project src/GenshinCharacterFilter/GenshinCharacterFilter.csproj -- --config config.local.json --detect-loop --capture-backend WindowsGraphicsCapture --allow-capture-backend-fallback
+```
+
+Fallback is explicit. If `WindowsGraphicsCapture` is selected and unavailable, the app falls back to `VisiblePixels` only when `AllowBackendFallback` is `true` or `--allow-capture-backend-fallback` is supplied. Otherwise it reports a clear capture backend error. Fixed-image OCR/debug mode does not use a live capture backend.
+
+The WPF Detection page can select the capture backend for the current run and choose whether backend fallback is allowed. The persistent dock/status area shows selected capture backend and status where practical. Detection logs include `Capture backend: ...` and each iteration still logs capture mode/timing.
+
+Windows.Graphics.Capture is not a DirectX hook. The project still does not inject into the game, read or write game memory, modify game files, send screenshots to cloud services, or automate gameplay. DirectX hooks remain out of scope unless explicitly discussed and approved later. Future work may separately evaluate DXGI / BitBlt backends if WGC is insufficient.
 
 After OCR region calibration succeeds, the app also writes `debug-ocr/calibration-region-latest.png`. Open that preview to confirm the saved region actually contains the speaker-name text before testing OCR or real audio.
 
@@ -397,6 +431,11 @@ Example shape:
     "SaveDebugImages": false,
     "SaveOcrFailureSamples": false,
     "EnableInputForegroundFallback": false
+  },
+  "Capture": {
+    "Backend": "VisiblePixels",
+    "AllowBackendFallback": false,
+    "CaptureTimeoutMs": 2000
   }
 }
 ```
@@ -470,6 +509,8 @@ Supported overrides:
 - `--capture-once`
 - `--capture-output <directory>`
 - `--capture-delay-ms <number>`
+- `--capture-backend VisiblePixels|WindowsGraphicsCapture`
+- `--allow-capture-backend-fallback`
 - `--ocr-once`
 - `--ocr-input <imagePath>`
 - `--ocr-engine TesseractCli|PaddleOcrLocal`

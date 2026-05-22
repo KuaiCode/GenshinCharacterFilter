@@ -55,13 +55,29 @@ public sealed class GuiCommandService
 
     public async Task CalibrateOcrRegionAsync(string? configPath, TextWriter log, CancellationToken cancellationToken)
     {
+        await CalibrateOcrRegionAsync(configPath, captureBackendOptions: null, log, cancellationToken);
+    }
+
+    public async Task CalibrateOcrRegionAsync(
+        string? configPath,
+        CaptureBackendOptions? captureBackendOptions,
+        TextWriter log,
+        CancellationToken cancellationToken)
+    {
         CalibrationCommandContext context = BuildCalibrationContext(configPath);
+        if (captureBackendOptions is not null)
+        {
+            context.Settings.Capture.Backend = captureBackendOptions.Backend;
+            context.Settings.Capture.AllowBackendFallback = captureBackendOptions.AllowBackendFallback;
+            context.Settings.Capture.CaptureTimeoutMs = captureBackendOptions.CaptureTimeoutMs;
+            context.Settings.Validate();
+        }
 
         EnsurePreflightPassed(context.Settings, context.Options);
         log.WriteLine("Starting OCR region calibration.");
 
         WindowsOcrRegionCalibrator calibrator = new(
-            new WindowsGameWindowCapture(log),
+            new CaptureBackendFactory().Create(context.Settings.Capture.ToOptions(), log),
             log);
 
         OcrRegionCalibrationResult result = await calibrator.CalibrateAsync(context.CalibrationOptions, cancellationToken);
@@ -489,16 +505,18 @@ public sealed class GuiCommandService
         TextWriter log,
         CancellationToken cancellationToken)
     {
-        WindowsGameWindowCapture capture = new(log);
+        IGameCaptureBackend backend = new CaptureBackendFactory().Create(dryRunOptions.CaptureBackendOptions, log);
         if (hasFixedImageInput)
         {
-            return capture;
+            return backend;
         }
 
         WindowCaptureOptions captureOptions = BuildWindowCaptureOptions(dryRunOptions);
-        IGameWindowCaptureSession session = liveCaptureStartupMode == GuiLiveCaptureStartupMode.ManualForegroundWindow
-            ? capture.CreateForegroundSession(captureOptions)
-            : capture.CreateSession(captureOptions);
+        IGameWindowCaptureSession session =
+            liveCaptureStartupMode == GuiLiveCaptureStartupMode.ManualForegroundWindow &&
+            backend is VisiblePixelsCaptureBackend visiblePixelsBackend
+                ? visiblePixelsBackend.CreateForegroundSession(captureOptions)
+                : backend.CreateSession(captureOptions);
         await session.InitializeAsync(cancellationToken);
 
         if (liveCaptureStartupMode == GuiLiveCaptureStartupMode.ManualForegroundWindow &&
@@ -616,6 +634,9 @@ public sealed class GuiCommandService
         settings.Detection.SaveDebugImages = tuningOptions.SaveDebugImages;
         settings.Detection.SaveOcrFailureSamples = tuningOptions.SaveOcrFailureSamples;
         settings.Detection.EnableInputForegroundFallback = tuningOptions.EnableInputForegroundFallback;
+        settings.Capture.Backend = tuningOptions.CaptureBackendOptions.Backend;
+        settings.Capture.AllowBackendFallback = tuningOptions.CaptureBackendOptions.AllowBackendFallback;
+        settings.Capture.CaptureTimeoutMs = tuningOptions.CaptureBackendOptions.CaptureTimeoutMs;
         settings.Validate();
     }
 
@@ -830,6 +851,7 @@ public sealed class GuiCommandService
             CaptureDelayMs = ResolveGuiCaptureDelayMs(options.CaptureDelayMs, tuningOptions),
             SaveDebugImages = settings.Detection.SaveDebugImages,
             SaveOcrFailureSamples = settings.Detection.SaveOcrFailureSamples,
+            CaptureBackendOptions = settings.Capture.ToOptions(),
             Stability = new DetectionStabilityOptions
             {
                 MatchThreshold = settings.Detection.MatchThreshold,
@@ -861,6 +883,8 @@ public sealed class GuiCommandService
         log.WriteLine($"Miss threshold: {dryRunOptions.Stability.MissThreshold}");
         log.WriteLine($"Save debug images: {dryRunOptions.SaveDebugImages}");
         log.WriteLine($"Save OCR failure samples: {dryRunOptions.SaveOcrFailureSamples}");
+        log.WriteLine($"Capture backend: {dryRunOptions.CaptureBackendOptions.Backend}");
+        log.WriteLine($"Allow capture backend fallback: {dryRunOptions.CaptureBackendOptions.AllowBackendFallback}");
         log.WriteLine($"OCR engine: {dryRunOptions.OcrEngine}");
         log.WriteLine(
             $"OCR preprocessing: scale={dryRunOptions.OcrInputScale}, padding={dryRunOptions.OcrPaddingPixels}, grayscale={dryRunOptions.OcrGrayscale}, invert={dryRunOptions.OcrInvert}, threshold={dryRunOptions.OcrThreshold?.ToString() ?? "none"}");

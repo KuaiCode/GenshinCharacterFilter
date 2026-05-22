@@ -31,5 +31,10 @@
     "SaveDebugImages": false,
     "SaveOcrFailureSamples": false,
     "EnableInputForegroundFallback": false
+  },
+  "Capture": {
+    "Backend": "VisiblePixels",
+    "AllowBackendFallback": false,
+    "CaptureTimeoutMs": 2000
   }
 }

@@ -1,6 +1,7 @@
 using GenshinCharacterFilter;
 using GenshinCharacterFilter.Audio;
 using GenshinCharacterFilter.Calibration;
+using GenshinCharacterFilter.Capture;
 using GenshinCharacterFilter.Ocr;
 
 namespace GenshinCharacterFilter.Tests;
@@ -83,6 +84,25 @@ public sealed class AppCommandLineOptionsTests
         Assert.True(options.CaptureOnce);
         Assert.Equal(500, options.CaptureDelayMs);
         Assert.False(options.UseRealAudio);
+    }
+
+    [Fact]
+    public void Parse_ReadsCaptureBackendOptions()
+    {
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--capture-backend", "WindowsGraphicsCapture", "--allow-capture-backend-fallback"]);
+
+        Assert.Equal(CaptureBackend.WindowsGraphicsCapture, options.CaptureBackendOptions.Backend);
+        Assert.True(options.CaptureBackendOptions.AllowBackendFallback);
+    }
+
+    [Fact]
+    public void Parse_RejectsInvalidCaptureBackend()
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(
+            () => AppCommandLineOptions.Parse(["--capture-backend", "Other"]));
+
+        Assert.Contains("Capture backend", exception.Message);
     }
 
     [Fact]
@@ -362,6 +382,7 @@ public sealed class AppCommandLineOptionsTests
     [InlineData("--volume-percent")]
     [InlineData("--capture-output")]
     [InlineData("--capture-delay-ms")]
+    [InlineData("--capture-backend")]
     [InlineData("--ocr-input")]
     [InlineData("--ocr-engine")]
     [InlineData("--ocr-lang")]
@@ -839,6 +860,20 @@ public sealed class AppCommandLineOptionsTests
         AppSettings merged = options.ApplyOverrides(settings);
 
         Assert.Equal(500, merged.Detection.LoopIntervalMs);
+    }
+
+    [Fact]
+    public void ApplyOverrides_CanOverrideCaptureBackend()
+    {
+        AppSettings settings = CreateBaseSettings();
+        settings.Capture.Backend = CaptureBackend.VisiblePixels;
+        AppCommandLineOptions options = AppCommandLineOptions.Parse(
+            ["--capture-backend", "WindowsGraphicsCapture", "--allow-capture-backend-fallback"]);
+
+        AppSettings merged = options.ApplyOverrides(settings);
+
+        Assert.Equal(CaptureBackend.WindowsGraphicsCapture, merged.Capture.Backend);
+        Assert.True(merged.Capture.AllowBackendFallback);
     }
 
     [Fact]

@@ -6,6 +6,8 @@ namespace GenshinCharacterFilter.Gui;
 public readonly record struct GuiStatusSnapshot(
     GuiRuntimeRunState RunState,
     GuiAudioState AudioState,
+    string CaptureBackend,
+    string CaptureStatus,
     string LastOcrText,
     string LastDetectedSpeaker,
     string LastAudioAction);
