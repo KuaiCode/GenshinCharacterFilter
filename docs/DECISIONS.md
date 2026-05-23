@@ -480,14 +480,15 @@ Reasoning:
 
 ## 2026-05-23: v0.20 WPF Capture Backend Current-Run Wiring
 
-Decision: make WPF capture backend selection visible in the persistent dock and ensure the selected backend flows into calibration, detection, simulated audio, guarded real audio, Resume/Reconnect context, and current-run diagnostics.
+Decision: make WPF capture backend selection flow into calibration, detection, simulated audio, guarded real audio, Resume/Reconnect context, and current-run diagnostics while keeping the persistent dock as a compact runtime-status surface.
 
 Reasoning:
 
 - Manual testing after the WGC implementation still showed `Trying Win32 activation for calibration` and `Requested capture backend: VisiblePixels`, which means the actual run was still using the default visible-pixel backend rather than the GUI-selected WGC backend.
-- The capture backend selector now exists in the persistent dock as well as the Detection page, and both controls are synchronized so users do not need to hunt through pages before starting calibration or guarded real audio.
+- The Detection page is the single editable capture backend source for current runs. The persistent dock displays requested backend, actual backend, capture status, and fallback/error state without duplicating the selector or fallback checkbox.
 - WPF logs `GUI selected capture backend` before calibration and detection startup. `Print Current Run Settings` shows config backend, GUI selected backend, current requested backend, fallback policy, last actual backend/status, and whether a GUI override is active.
 - `WindowsGraphicsCapture` current-run selection bypasses Win32 foreground activation and manual foreground fallback. It goes directly through the selected capture backend. `VisiblePixels` keeps the existing foreground/manual fallback behavior.
+- The WPF layout was trimmed so capture backend/fallback editing lives on the Detection page, the persistent dock stays focused on runtime state and common Start/Stop/Restore/Resume controls, and the guarded real-audio dock area remains compact.
 - Backend creation and startup now log requested backend, actual backend, fallback reason, and `(none)` when WGC fails with fallback disabled.
 - If WGC is available at factory creation but fails during calibration capture or detection session initialization, explicit fallback to `VisiblePixels` is attempted only when backend fallback is enabled; otherwise the WGC-specific error is surfaced.
 - Real audio safety gates, stable-detection requirements, OCR backend behavior, MuteCoordinator behavior, and default safe startup are unchanged.

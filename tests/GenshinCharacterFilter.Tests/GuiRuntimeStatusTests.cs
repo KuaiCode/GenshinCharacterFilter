@@ -16,6 +16,8 @@ public sealed class GuiRuntimeStatusTests
 
         Assert.Equal(GuiRuntimeRunState.Idle, snapshot.RunState);
         Assert.Equal(GuiAudioState.Restored, snapshot.AudioState);
+        Assert.Equal("VisiblePixels", snapshot.RequestedCaptureBackend);
+        Assert.Equal("VisiblePixels", snapshot.ActualCaptureBackend);
         Assert.Equal("VisiblePixels", snapshot.CaptureBackend);
         Assert.Equal("Ready", snapshot.CaptureStatus);
         Assert.Equal("(none)", snapshot.LastOcrText);
@@ -121,8 +123,26 @@ public sealed class GuiRuntimeStatusTests
 
         GuiStatusSnapshot snapshot = status.SetCaptureBackend("WindowsGraphicsCapture", "Unavailable");
 
+        Assert.Equal("WindowsGraphicsCapture", snapshot.RequestedCaptureBackend);
+        Assert.Equal("WindowsGraphicsCapture", snapshot.ActualCaptureBackend);
         Assert.Equal("WindowsGraphicsCapture", snapshot.CaptureBackend);
         Assert.Equal("Unavailable", snapshot.CaptureStatus);
+    }
+
+    [Fact]
+    public void SetCaptureBackend_CanShowRequestedAndActualBackendSeparately()
+    {
+        GuiRuntimeStatus status = new();
+
+        GuiStatusSnapshot snapshot = status.SetCaptureBackend(
+            "WindowsGraphicsCapture",
+            "VisiblePixels",
+            "Fallback to VisiblePixels: FrameTimeout");
+
+        Assert.Equal("WindowsGraphicsCapture", snapshot.RequestedCaptureBackend);
+        Assert.Equal("VisiblePixels", snapshot.ActualCaptureBackend);
+        Assert.Equal("Requested: WindowsGraphicsCapture; actual: VisiblePixels", snapshot.CaptureBackend);
+        Assert.Equal("Fallback to VisiblePixels: FrameTimeout", snapshot.CaptureStatus);
     }
 
     private static DetectionDryRunResult CreateResult(

@@ -10,7 +10,8 @@ public sealed class GuiRuntimeStatus
     public GuiStatusSnapshot Snapshot { get; private set; } = new(
         GuiRuntimeRunState.Idle,
         GuiAudioState.Restored,
-        CaptureBackend: "VisiblePixels",
+        RequestedCaptureBackend: "VisiblePixels",
+        ActualCaptureBackend: "VisiblePixels",
         CaptureStatus: "Ready",
         LastOcrText: "(none)",
         LastDetectedSpeaker: "(none)",
@@ -44,9 +45,16 @@ public sealed class GuiRuntimeStatus
 
     public GuiStatusSnapshot MarkReconnecting() => Update(Snapshot with { RunState = GuiRuntimeRunState.Reconnecting });
 
-    public GuiStatusSnapshot SetCaptureBackend(string backend, string status) => Update(Snapshot with
+    public GuiStatusSnapshot SetCaptureBackend(string backend, string status)
     {
-        CaptureBackend = string.IsNullOrWhiteSpace(backend) ? "(unknown)" : backend.Trim(),
+        string normalized = NormalizeBackend(backend);
+        return SetCaptureBackend(normalized, normalized, status);
+    }
+
+    public GuiStatusSnapshot SetCaptureBackend(string requestedBackend, string actualBackend, string status) => Update(Snapshot with
+    {
+        RequestedCaptureBackend = NormalizeBackend(requestedBackend),
+        ActualCaptureBackend = NormalizeBackend(actualBackend),
         CaptureStatus = string.IsNullOrWhiteSpace(status) ? "(unknown)" : status.Trim()
     });
 
@@ -102,6 +110,11 @@ public sealed class GuiRuntimeStatus
     private static string FormatValue(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? "(empty)" : value.Trim();
+    }
+
+    private static string NormalizeBackend(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "(unknown)" : value.Trim();
     }
 
     private static string FormatAudioAction(DetectionAudioAction action)

@@ -6,7 +6,7 @@ Status: in progress.
 
 The v0.1 Audio MVP through v0.19.2 Foreground UX / Resume Flow milestones are implemented or stage-complete where applicable. v0.19.2 improved foreground activation, optional input fallback, and Resume/Reconnect, but manual testing still showed `StillMinimized` and `SendInput error: 87` failures. v0.20 shifts focus to capture backend abstraction and a Windows.Graphics.Capture spike instead of more foreground-switching patches.
 
-Latest v0.20 progress: Windows.Graphics.Capture now has real HWND frame acquisition, and WPF current-run wiring is being tightened so the GUI-selected backend is visible in the persistent dock and flows into calibration, dry-run, simulated audio, guarded real audio, and current-run diagnostics.
+Latest v0.20 progress: Windows.Graphics.Capture now has real HWND frame acquisition, and WPF current-run wiring is being tightened so the Detection-page selected backend flows into calibration, dry-run, simulated audio, guarded real audio, and current-run diagnostics. The persistent dock now displays requested/actual capture backend and status without duplicating backend configuration controls.
 
 The v0.20 milestone is limited to:
 

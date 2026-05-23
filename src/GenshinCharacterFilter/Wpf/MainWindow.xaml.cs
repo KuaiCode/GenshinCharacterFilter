@@ -26,8 +26,6 @@ public partial class MainWindow : Window
     private Task? _operationTask;
     private bool _closeAfterOperationStops;
     private bool _syncingGuardedRealAudioCheckBoxes;
-    private bool _syncingInputForegroundFallbackCheckBoxes;
-    private bool _syncingCaptureBackendControls;
     private DetectionRunContext? _resumeContext;
 
     private enum DetectionOperationKind
@@ -72,7 +70,6 @@ public partial class MainWindow : Window
             : initialConfigPath;
         OcrEngineComboBox.ItemsSource = Enum.GetValues<OcrEngine>().Select(engine => engine.ToString()).ToArray();
         CaptureBackendComboBox.ItemsSource = Enum.GetValues<CaptureBackend>().Select(backend => backend.ToString()).ToArray();
-        DockCaptureBackendComboBox.ItemsSource = CaptureBackendComboBox.ItemsSource;
         OcrInputPathTextBox.Text = GuiCommandService.GetDefaultOcrInputPath();
         UseFixedImageForDetectionCheckBox.IsChecked = false;
         SaveDebugImagesCheckBox.IsChecked = false;
@@ -87,7 +84,6 @@ public partial class MainWindow : Window
         RefreshCaptureBackendSelectionFromConfig();
         bool inputForegroundFallbackEnabled = TryLoadSettings()?.Detection.EnableInputForegroundFallback ?? false;
         EnableInputForegroundFallbackCheckBox.IsChecked = inputForegroundFallbackEnabled;
-        DockEnableInputForegroundFallbackCheckBox.IsChecked = inputForegroundFallbackEnabled;
 
         Closing += OnWindowClosing;
         ConfigPathTextBox.TextChanged += (_, _) => RefreshStatus();
@@ -99,10 +95,8 @@ public partial class MainWindow : Window
         DockEnableGuardedRealAudioCheckBox.Unchecked += (_, _) => SyncGuardedRealAudioEnablement(fromDock: true);
         EnableGuardedRealAudioCheckBox.Checked += (_, _) => SyncGuardedRealAudioEnablement(fromDock: false);
         EnableGuardedRealAudioCheckBox.Unchecked += (_, _) => SyncGuardedRealAudioEnablement(fromDock: false);
-        DockEnableInputForegroundFallbackCheckBox.Checked += (_, _) => SyncInputForegroundFallbackEnablement(fromDock: true);
-        DockEnableInputForegroundFallbackCheckBox.Unchecked += (_, _) => SyncInputForegroundFallbackEnablement(fromDock: true);
-        EnableInputForegroundFallbackCheckBox.Checked += (_, _) => SyncInputForegroundFallbackEnablement(fromDock: false);
-        EnableInputForegroundFallbackCheckBox.Unchecked += (_, _) => SyncInputForegroundFallbackEnablement(fromDock: false);
+        EnableInputForegroundFallbackCheckBox.Checked += (_, _) => RefreshStatus();
+        EnableInputForegroundFallbackCheckBox.Unchecked += (_, _) => RefreshStatus();
         AllowCaptureBackendFallbackCheckBox.Checked += CaptureFallbackChanged;
         AllowCaptureBackendFallbackCheckBox.Unchecked += CaptureFallbackChanged;
         RunUntilStopCheckBox.Checked += (_, _) => UpdateLoopCountInputState();
@@ -279,10 +273,10 @@ public partial class MainWindow : Window
         AppendLogLine($"GUI selected capture backend: {selectedCaptureOptions.Backend}");
         AppendLogLine($"Current run requested backend: {selectedCaptureOptions.Backend}");
         AppendLogLine($"Allow backend fallback: {selectedCaptureOptions.AllowBackendFallback}");
-        AppendLogLine($"Actual backend last used: {_runtimeStatus.Snapshot.CaptureBackend}");
+        AppendLogLine($"Actual backend last used: {_runtimeStatus.Snapshot.ActualCaptureBackend}");
         if (configCaptureBackend != selectedCaptureOptions.Backend)
         {
-            AppendLogLine("GUI override active.");
+            AppendLogLine("GUI capture backend override active.");
         }
 
         _commandService.PrintEffectiveConfig(
@@ -299,6 +293,7 @@ public partial class MainWindow : Window
         LogGuiSelectedCaptureBackend(captureBackendOptions);
         ApplyRuntimeSnapshot(_runtimeStatus.SetCaptureBackend(
             captureBackendOptions.Backend.ToString(),
+            captureBackendOptions.Backend == CaptureBackend.WindowsGraphicsCapture ? "(pending)" : captureBackendOptions.Backend.ToString(),
             FormatSelectedCaptureBackendStatus(captureBackendOptions.Backend)));
         if (captureBackendOptions.Backend == CaptureBackend.WindowsGraphicsCapture)
         {
@@ -495,6 +490,7 @@ public partial class MainWindow : Window
         LogGuiSelectedCaptureBackend(launch.TuningOptions.CaptureBackendOptions);
         ApplyRuntimeSnapshot(_runtimeStatus.SetCaptureBackend(
             launch.TuningOptions.CaptureBackendOptions.Backend.ToString(),
+            launch.TuningOptions.CaptureBackendOptions.Backend == CaptureBackend.WindowsGraphicsCapture ? "(pending)" : launch.TuningOptions.CaptureBackendOptions.Backend.ToString(),
             FormatSelectedCaptureBackendStatus(launch.TuningOptions.CaptureBackendOptions.Backend)));
 
         if (!GuiForegroundActivationPolicy.ShouldUseForegroundStartup(
@@ -872,6 +868,17 @@ public partial class MainWindow : Window
             ApplyUiState(_stateController.FailOperation());
             ApplyRuntimeSnapshot(_runtimeStatus.MarkCaptureLost());
         }
+        catch (CaptureBackendException exception)
+        {
+            AppendLogLine($"Capture backend error: {exception.Message}");
+            AppendLogLine($"Requested capture backend: {exception.Backend}");
+            AppendLogLine("Actual capture backend: (none)");
+            ApplyUiState(_stateController.FailOperation());
+            ApplyRuntimeSnapshot(_runtimeStatus.SetCaptureBackend(
+                exception.Backend.ToString(),
+                "(none)",
+                $"Error: {exception.Reason}"));
+        }
         catch (Exception exception)
         {
             AppendLogLine($"Error: {exception.Message}");
@@ -956,7 +963,6 @@ public partial class MainWindow : Window
             MatchThresholdTextBox,
             MissThresholdTextBox,
             EnableInputForegroundFallbackCheckBox,
-            DockEnableInputForegroundFallbackCheckBox,
             StartDryRunButton,
             OverviewStartDryRunButton,
             StartSimulatedAudioButton,
@@ -985,7 +991,7 @@ public partial class MainWindow : Window
         RunStateStatusTextBlock.Text = snapshot.RunState.ToString();
         OverviewRunStateTextBlock.Text = $"Run state: {snapshot.RunState}";
         DockAudioStateTextBlock.Text = snapshot.AudioState.ToString();
-        DockCaptureBackendTextBlock.Text = snapshot.CaptureBackend;
+        DockCaptureBackendTextBlock.Text = $"Requested: {snapshot.RequestedCaptureBackend}; actual: {snapshot.ActualCaptureBackend}";
         DockCaptureStatusTextBlock.Text = snapshot.CaptureStatus;
         DockLastOcrTextBlock.Text = snapshot.LastOcrText;
         DockLastDetectedSpeakerTextBlock.Text = snapshot.LastDetectedSpeaker;
@@ -1025,8 +1031,6 @@ public partial class MainWindow : Window
         {
             TargetProcessStatusTextBlock.Text = "(config error)";
             TargetSpeakersStatusTextBlock.Text = "(config error)";
-            DockTargetProcessTextBlock.Text = "(config error)";
-            DockTargetSpeakersTextBlock.Text = "(config error)";
             RegionSourceSummaryTextBlock.Text = "OCR region source: unavailable until config loads.";
             OverviewTargetProcessTextBlock.Text = "Target process: (config error)";
             OverviewTargetSpeakersTextBlock.Text = "Target speakers: (config error)";
@@ -1038,8 +1042,6 @@ public partial class MainWindow : Window
             string regionSource = FormatRegionSource(settings.Ocr.GetOcrRegionSourceOptions());
             TargetProcessStatusTextBlock.Text = settings.TargetProcessName;
             TargetSpeakersStatusTextBlock.Text = speakers;
-            DockTargetProcessTextBlock.Text = settings.TargetProcessName;
-            DockTargetSpeakersTextBlock.Text = speakers;
             RegionSourceSummaryTextBlock.Text = $"OCR region source: {regionSource}";
             OverviewTargetProcessTextBlock.Text = $"Target process: {settings.TargetProcessName}";
             OverviewTargetSpeakersTextBlock.Text = $"Target speakers: {speakers}";
@@ -1049,7 +1051,6 @@ public partial class MainWindow : Window
         RealAudioStatusTextBlock.Text = IsGuardedRealAudioEnabled()
             ? "Armed, confirmation required"
             : "Disabled";
-        DockRealAudioStatusTextBlock.Text = RealAudioStatusTextBlock.Text;
         OverviewRealAudioTextBlock.Text = $"Real audio: {RealAudioStatusTextBlock.Text}";
         RefreshOcrBackendStatusCore();
         RefreshCaptureBackendStatusCore();
@@ -1190,61 +1191,20 @@ public partial class MainWindow : Window
         {
             AppSettings? settings = TryLoadSettings();
             CaptureBackend backend = settings?.Capture.Backend ?? CaptureBackend.VisiblePixels;
-            SetCaptureBackendSelection(backend, settings?.Capture.AllowBackendFallback ?? false);
+            CaptureBackendComboBox.SelectedItem = backend.ToString();
+            AllowCaptureBackendFallbackCheckBox.IsChecked = settings?.Capture.AllowBackendFallback ?? false;
             RefreshCaptureBackendStatusCore();
         });
     }
 
     private void CaptureBackendSelectionChanged(object? sender, SelectionChangedEventArgs eventArgs)
     {
-        if (_syncingCaptureBackendControls)
-        {
-            return;
-        }
-
-        SetCaptureBackendSelection(GetSelectedCaptureBackend(), AllowCaptureBackendFallbackCheckBox.IsChecked == true);
-        RefreshCaptureBackendStatus();
-        RefreshStatus();
-    }
-
-    private void DockCaptureBackendSelectionChanged(object? sender, SelectionChangedEventArgs eventArgs)
-    {
-        if (_syncingCaptureBackendControls)
-        {
-            return;
-        }
-
-        string value = DockCaptureBackendComboBox.SelectedItem?.ToString() ?? CaptureBackend.VisiblePixels.ToString();
-        if (!TryParseCaptureBackend(value, out CaptureBackend backend))
-        {
-            backend = CaptureBackend.VisiblePixels;
-        }
-
-        SetCaptureBackendSelection(backend, DockAllowCaptureBackendFallbackCheckBox.IsChecked == true);
         RefreshCaptureBackendStatus();
         RefreshStatus();
     }
 
     private void CaptureFallbackChanged(object? sender, RoutedEventArgs eventArgs)
     {
-        if (_syncingCaptureBackendControls)
-        {
-            return;
-        }
-
-        SetCaptureBackendSelection(GetSelectedCaptureBackend(), AllowCaptureBackendFallbackCheckBox.IsChecked == true);
-        RefreshCaptureBackendStatus();
-        RefreshStatus();
-    }
-
-    private void DockCaptureFallbackChanged(object? sender, RoutedEventArgs eventArgs)
-    {
-        if (_syncingCaptureBackendControls)
-        {
-            return;
-        }
-
-        SetCaptureBackendSelection(GetSelectedCaptureBackend(), DockAllowCaptureBackendFallbackCheckBox.IsChecked == true);
         RefreshCaptureBackendStatus();
         RefreshStatus();
     }
@@ -1316,6 +1276,7 @@ public partial class MainWindow : Window
                 $"Capture backend: {options.Backend}; fallback: {options.AllowBackendFallback}. Status: {status}. {availability.Message}";
             ApplyRuntimeSnapshot(_runtimeStatus.SetCaptureBackend(
                 options.Backend.ToString(),
+                availability.Available ? options.Backend.ToString() : "(none)",
                 $"{status}. {FormatSelectedCaptureBackendStatus(options.Backend)}"));
         }
         catch (Exception exception)
@@ -1354,34 +1315,12 @@ public partial class MainWindow : Window
         return false;
     }
 
-    private void SetCaptureBackendSelection(CaptureBackend backend, bool allowFallback)
-    {
-        RunOnUiThread(() =>
-        {
-            _syncingCaptureBackendControls = true;
-            try
-            {
-                string value = backend.ToString();
-                CaptureBackendComboBox.SelectedItem = value;
-                DockCaptureBackendComboBox.SelectedItem = value;
-                AllowCaptureBackendFallbackCheckBox.IsChecked = allowFallback;
-                DockAllowCaptureBackendFallbackCheckBox.IsChecked = allowFallback;
-            }
-            finally
-            {
-                _syncingCaptureBackendControls = false;
-            }
-        });
-    }
-
     private CaptureBackendOptions GetSelectedCaptureBackendOptions()
     {
         return RunOnUiThread(() => new CaptureBackendOptions
         {
             Backend = GetSelectedCaptureBackend(),
-            AllowBackendFallback =
-                AllowCaptureBackendFallbackCheckBox.IsChecked == true ||
-                DockAllowCaptureBackendFallbackCheckBox.IsChecked == true
+            AllowBackendFallback = AllowCaptureBackendFallbackCheckBox.IsChecked == true
         });
     }
 
@@ -1454,31 +1393,6 @@ public partial class MainWindow : Window
         });
     }
 
-    private void SyncInputForegroundFallbackEnablement(bool fromDock)
-    {
-        if (_syncingInputForegroundFallbackCheckBoxes)
-        {
-            return;
-        }
-
-        RunOnUiThread(() =>
-        {
-            _syncingInputForegroundFallbackCheckBoxes = true;
-            try
-            {
-                bool value = fromDock
-                    ? DockEnableInputForegroundFallbackCheckBox.IsChecked == true
-                    : EnableInputForegroundFallbackCheckBox.IsChecked == true;
-                DockEnableInputForegroundFallbackCheckBox.IsChecked = value;
-                EnableInputForegroundFallbackCheckBox.IsChecked = value;
-            }
-            finally
-            {
-                _syncingInputForegroundFallbackCheckBoxes = false;
-            }
-        });
-    }
-
     private GuiDetectionTuningOptions ParseGuiDetectionTuning()
     {
         GuiDetectionTuningInput input = GetDetectionTuningInput();
@@ -1517,17 +1431,14 @@ public partial class MainWindow : Window
             MissThresholdTextBox.Text,
             SaveDebugImagesCheckBox.IsChecked == true,
             SaveOcrFailureSamplesCheckBox.IsChecked == true,
-            EnableInputForegroundFallbackCheckBox.IsChecked == true ||
-            DockEnableInputForegroundFallbackCheckBox.IsChecked == true,
+            EnableInputForegroundFallbackCheckBox.IsChecked == true,
             GetSelectedCaptureBackend(),
             AllowCaptureBackendFallbackCheckBox.IsChecked == true));
     }
 
     private bool GetInputForegroundFallbackEnabled()
     {
-        return RunOnUiThread(() =>
-            EnableInputForegroundFallbackCheckBox.IsChecked == true ||
-            DockEnableInputForegroundFallbackCheckBox.IsChecked == true);
+        return RunOnUiThread(() => EnableInputForegroundFallbackCheckBox.IsChecked == true);
     }
 
     private int GetCaptureDelayMsForActivation()
@@ -1571,6 +1482,59 @@ public partial class MainWindow : Window
         LogTextBox.AppendText(text);
         LogTextBox.CaretIndex = LogTextBox.Text.Length;
         LogTextBox.ScrollToEnd();
+        UpdateCaptureBackendStatusFromLog(text);
+    }
+
+    private void UpdateCaptureBackendStatusFromLog(string text)
+    {
+        using StringReader reader = new(text);
+        string? line;
+        while ((line = reader.ReadLine()) is not null)
+        {
+            if (line.StartsWith("Requested capture backend: ", StringComparison.OrdinalIgnoreCase))
+            {
+                string requested = line["Requested capture backend: ".Length..].Trim();
+                ApplyRuntimeSnapshot(_runtimeStatus.SetCaptureBackend(
+                    requested,
+                    _runtimeStatus.Snapshot.ActualCaptureBackend,
+                    _runtimeStatus.Snapshot.CaptureStatus));
+                continue;
+            }
+
+            if (line.StartsWith("Actual capture backend: ", StringComparison.OrdinalIgnoreCase))
+            {
+                string actual = line["Actual capture backend: ".Length..].Trim();
+                string status = _runtimeStatus.Snapshot.CaptureStatus.StartsWith("Fallback", StringComparison.OrdinalIgnoreCase)
+                    ? _runtimeStatus.Snapshot.CaptureStatus
+                    : actual.Equals("(none)", StringComparison.OrdinalIgnoreCase)
+                        ? "Error"
+                        : "Ready";
+                ApplyRuntimeSnapshot(_runtimeStatus.SetCaptureBackend(
+                    _runtimeStatus.Snapshot.RequestedCaptureBackend,
+                    actual,
+                    status));
+                continue;
+            }
+
+            if (line.StartsWith("Fallback reason: ", StringComparison.OrdinalIgnoreCase))
+            {
+                string reason = line["Fallback reason: ".Length..].Trim();
+                ApplyRuntimeSnapshot(_runtimeStatus.SetCaptureBackend(
+                    _runtimeStatus.Snapshot.RequestedCaptureBackend,
+                    _runtimeStatus.Snapshot.ActualCaptureBackend,
+                    $"Fallback to VisiblePixels: {reason}"));
+                continue;
+            }
+
+            if (line.StartsWith("WGC failed: ", StringComparison.OrdinalIgnoreCase))
+            {
+                string reason = line["WGC failed: ".Length..].Trim();
+                ApplyRuntimeSnapshot(_runtimeStatus.SetCaptureBackend(
+                    _runtimeStatus.Snapshot.RequestedCaptureBackend,
+                    "(none)",
+                    $"WGC unavailable: {reason}"));
+            }
+        }
     }
 
     private void RunOnUiThread(Action action)

@@ -108,7 +108,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <UniformGrid Grid.Column="0" Columns="4" Rows="3" Margin="0,0,12,0">
+                    <UniformGrid Grid.Column="0" Columns="3" Rows="3" Margin="0,0,12,0">
                         <StackPanel Margin="0,0,12,8">
                             <TextBlock Text="Audio state" Foreground="{DynamicResource MutedForegroundBrush}" />
                             <TextBlock x:Name="DockAudioStateTextBlock" FontWeight="SemiBold" />
@@ -124,31 +124,10 @@
                         <StackPanel Margin="0,0,12,8">
                             <TextBlock Text="Capture backend" Foreground="{DynamicResource MutedForegroundBrush}" />
                             <TextBlock x:Name="DockCaptureBackendTextBlock" FontWeight="SemiBold" />
-                            <ComboBox x:Name="DockCaptureBackendComboBox"
-                                      MinWidth="150"
-                                      Margin="0,4,0,0"
-                                      SelectionChanged="DockCaptureBackendSelectionChanged" />
                         </StackPanel>
                         <StackPanel Margin="0,0,12,8">
                             <TextBlock Text="Capture status" Foreground="{DynamicResource MutedForegroundBrush}" />
                             <TextBlock x:Name="DockCaptureStatusTextBlock" FontWeight="SemiBold" />
-                            <CheckBox x:Name="DockAllowCaptureBackendFallbackCheckBox"
-                                      Content="Allow backend fallback"
-                                      Margin="0,4,0,0"
-                                      Checked="DockCaptureFallbackChanged"
-                                      Unchecked="DockCaptureFallbackChanged" />
-                        </StackPanel>
-                        <StackPanel Margin="0,0,12,8">
-                            <TextBlock Text="Target process" Foreground="{DynamicResource MutedForegroundBrush}" />
-                            <TextBlock x:Name="DockTargetProcessTextBlock" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                        <StackPanel Margin="0,0,12,8">
-                            <TextBlock Text="Target speakers" Foreground="{DynamicResource MutedForegroundBrush}" />
-                            <TextBlock x:Name="DockTargetSpeakersTextBlock" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
-                        <StackPanel Margin="0,0,12,8">
-                            <TextBlock Text="Real audio" Foreground="{DynamicResource MutedForegroundBrush}" />
-                            <TextBlock x:Name="DockRealAudioStatusTextBlock" FontWeight="SemiBold" />
                         </StackPanel>
                         <StackPanel Margin="0,0,12,0">
                             <TextBlock Text="Last OCR text" Foreground="{DynamicResource MutedForegroundBrush}" />
@@ -179,19 +158,9 @@
                             <TextBlock x:Name="DockGuardedReadinessTextBlock"
                                        Foreground="{DynamicResource DangerForegroundBrush}"
                                        Margin="0,2,0,4" />
-                            <TextBlock Text="Audio filter"
-                                       Foreground="{DynamicResource DangerForegroundBrush}" />
                             <TextBlock x:Name="DockAudioFilterTextBlock"
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource DangerForegroundBrush}" />
-                            <CheckBox x:Name="DockEnableInputForegroundFallbackCheckBox"
-                                      Content="Enable Alt+Tab / SendInput foreground fallback"
-                                      Foreground="{DynamicResource DangerForegroundBrush}"
-                                      Margin="0,8,0,0" />
-                            <TextBlock Text="Window switch only; no gameplay keys."
-                                       Foreground="{DynamicResource DangerForegroundBrush}"
-                                       FontSize="11"
-                                       Margin="0,2,0,0" />
                         </StackPanel>
                     </Border>
 
@@ -319,7 +288,6 @@
                                     <Button x:Name="BrowseOcrImageButton" Grid.Column="1" Content="Browse OCR Image" Margin="10,0,0,0" Click="BrowseOcrInput" />
                                 </Grid>
                                 <CheckBox x:Name="UseFixedImageForDetectionCheckBox" Content="Use fixed image for detection loop (debug only)" Margin="0,14,0,0" />
-                                <CheckBox x:Name="EnableInputForegroundFallbackCheckBox" Content="Enable Alt+Tab / SendInput foreground fallback (window switch only; no gameplay keys)" />
                                 <CheckBox x:Name="SaveDebugImagesCheckBox" Content="Save debug images" />
                                 <CheckBox x:Name="SaveOcrFailureSamplesCheckBox" Content="Save OCR failure samples" />
                                 <TextBlock x:Name="RegionSourceSummaryTextBlock"
@@ -339,7 +307,6 @@
                         <TextBlock Text="Detection" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,14" />
                         <Border Style="{StaticResource CardBorderStyle}">
                             <StackPanel>
-                                <TextBlock Text="Runtime tuning" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
                                 <TextBlock Text="Capture backend" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
                                 <Grid Margin="0,0,0,14">
                                     <Grid.ColumnDefinitions>
@@ -357,6 +324,9 @@
                                 <TextBlock x:Name="CaptureBackendStatusTextBlock"
                                            Foreground="{DynamicResource MutedForegroundBrush}"
                                            Margin="0,0,0,14" />
+                                <CheckBox x:Name="EnableInputForegroundFallbackCheckBox"
+                                          Content="Enable Alt+Tab / SendInput foreground fallback for VisiblePixels only (window switch only; no gameplay keys)"
+                                          Margin="0,0,0,12" />
                                 <TextBlock Text="Runtime tuning" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
                                 <CheckBox x:Name="RunUntilStopCheckBox" Content="Run until Stop" />
                                 <UniformGrid Columns="2" Margin="0,8,0,14">
