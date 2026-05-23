@@ -20,9 +20,9 @@ The agent should prioritize:
 
 ## Current milestone
 
-The current milestone is **v0.20 Capture Backend Spike / BetterGI-style Capture Backend Evaluation**.
+The current milestone is **v0.20.2 BetterGI-like Game Activation Flow**.
 
-The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, **v0.5 Speaker Detection from OCR Text Prototype**, **v0.6 OCR-driven Detection Dry Run**, **v0.7 Detection Stability Gate**, **v0.8 Simulated Audio Integration**, **v0.9 Guarded Real Audio Integration**, **v0.9.1 Partial Audio Apply Restore Fix**, **v0.10 Manual OCR Region Calibration**, **v0.11 OCR Region Source Resolution**, **v0.12 Configuration Integration**, **v0.13 Usability Hardening**, **v0.14 Minimal WinForms Control Panel**, **v0.15 GUI Hardening**, **v0.16 GUI Guarded Real Audio Page**, **v0.17 WPF Modern GUI Shell**, **v0.18 OCR Backend Replacement / Low-latency OCR Spike**, **v0.18.1 OCR Backend Diagnostic Stabilization**, **v0.19 WPF Persistent Control Dock / Interaction Layout**, **v0.19.1 CaptureLost UI Recovery**, and **v0.19.2 Foreground UX / Resume Flow** are considered implemented or stage-complete where applicable:
+The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Window Capture Prototype**, **v0.4 OCR Text Extraction Prototype**, **v0.5 Speaker Detection from OCR Text Prototype**, **v0.6 OCR-driven Detection Dry Run**, **v0.7 Detection Stability Gate**, **v0.8 Simulated Audio Integration**, **v0.9 Guarded Real Audio Integration**, **v0.9.1 Partial Audio Apply Restore Fix**, **v0.10 Manual OCR Region Calibration**, **v0.11 OCR Region Source Resolution**, **v0.12 Configuration Integration**, **v0.13 Usability Hardening**, **v0.14 Minimal WinForms Control Panel**, **v0.15 GUI Hardening**, **v0.16 GUI Guarded Real Audio Page**, **v0.17 WPF Modern GUI Shell**, **v0.18 OCR Backend Replacement / Low-latency OCR Spike**, **v0.18.1 OCR Backend Diagnostic Stabilization**, **v0.19 WPF Persistent Control Dock / Interaction Layout**, **v0.19.1 CaptureLost UI Recovery**, **v0.19.2 Foreground UX / Resume Flow**, **v0.20 Capture Backend Spike / BetterGI-style Capture Backend Evaluation**, and **v0.20.1 WGC-first GUI Run Mode Bugfix** are considered implemented or stage-complete where applicable:
 
 - simulated speaker input works;
 - mute coordination works;
@@ -117,11 +117,13 @@ The previous **v0.1 Audio MVP**, **v0.2 Local JSON Configuration**, **v0.3 Windo
 - v0.19 persistent control dock is implemented and keeps guarded real-audio controls visible across pages;
 - v0.19.1 treats foreground capture lost as a recoverable UI state and keeps the WPF UI usable after capture loss;
 - v0.19.2 implemented foreground activation, optional explicit input-based foreground fallback, calibration selector foreground improvements, and basic Resume/Reconnect without changing real audio safety gates;
-- user testing still shows foreground switching can be unreliable, including `StillMinimized` and `SendInput error: 87`, so v0.20 shifts focus from more foreground switching patches to capture backend abstraction and a Windows.Graphics.Capture spike;
+- v0.20 added capture backend abstraction and a Windows.Graphics.Capture spike, and that work may remain available as one capture option;
+- v0.20.1 made WPF prefer WindowsGraphicsCapture for GUI testing, but user testing still showed WGC unavailable paths could make the main flow unusable;
+- user testing still shows the primary usability gap is the lack of a reliable BetterGI-like "switch to game, then start" flow before calibration or detection;
 - real audio safety gates remain unchanged;
 - default target speakers are `流浪者` and `Wanderer`.
 
-Scope for v0.20:
+Scope for v0.20.2:
 
 - Console app remains supported.
 - GUI remains explicit via `--gui`.
@@ -130,22 +132,26 @@ Scope for v0.20:
 - Keep Paddle OCR backend behavior.
 - Keep TesseractCli fallback.
 - Keep guarded real audio safety gates unchanged.
-- Preserve existing `VisiblePixels` / foreground-region-only capture behavior.
-- Add capture backend abstraction.
-- Add capture backend selection in config and GUI.
-- Add a Windows.Graphics.Capture backend spike.
-- Allow fallback from `WindowsGraphicsCapture` to `VisiblePixels` only when explicitly configured.
-- Log selected capture backend and capture mode.
-- Make capture backend status visible in WPF where practical.
-- Support capture backend selection for:
-  - Calibrate OCR Region;
-  - Test OCR Once from live capture;
-  - Dry-run Detection;
-  - Simulated Detection Audio;
-  - Guarded Real Audio.
-- Keep fixed-image OCR mode independent from live capture backend.
-- Keep detection loop independent from concrete capture backend.
-- Keep capture backend failures diagnosable and non-blocking for WPF UI.
+- Preserve the v0.20 capture backend abstraction and Windows.Graphics.Capture work, but do not let WGC unavailability make the main GUI flow unusable.
+- Shift the active focus to a BetterGI-like game activation/start flow.
+- Add a first-class `SwitchToGame` service.
+- Start, Calibrate, and Resume must call `SwitchToGame` before live capture.
+- `SwitchToGame` must:
+  - locate the YuanShen main window;
+  - restore it if minimized;
+  - try Win32 foreground activation;
+  - try `AttachThreadInput`, `SetForegroundWindow`, and `BringWindowToTop` where appropriate;
+  - use explicit `SendInput` / `Alt+Tab` fallback if enabled;
+  - verify the foreground HWND belongs to YuanShen / `TargetProcessName`;
+  - return structured success/failure.
+- Fix `SendInput error: 87` by correcting interop definitions and the input sequence.
+- If `SwitchToGame` fails, do not silently enter manual foreground fallback as the primary UX.
+- If `SwitchToGame` fails, show a clear structured error and keep WPF usable.
+- Detection must not start, and real audio must not be touched, unless target window activation and capture preflight succeed.
+- Stop, CaptureLost, and Error paths must restore audio if audio may have been applied.
+- Paddle OCR should auto warm up in WPF; manual warmup remains available only as retry/diagnostic.
+- Do not default back to `VisiblePixels` as the main solution.
+- Windows.Graphics.Capture, DXGI, GDI, and other capture backend work remains allowed, but capture backend work is not the only solution for this milestone.
 - Do not control real audio by default.
 - The persistent control dock should continue to show:
   - run state;
@@ -188,6 +194,8 @@ Scope for v0.20:
 - Existing v0.19 persistent control dock behavior must remain stable.
 - Existing v0.19.1 CaptureLost UI recovery behavior must remain stable.
 - Existing v0.19.2 foreground UX / Resume Flow behavior must remain stable where it still applies.
+- Existing v0.20 capture backend behavior should remain available where practical, but it is not the sole main path for v0.20.2.
+- Existing v0.20.1 WGC-first GUI behavior may be adjusted so the BetterGI-like `SwitchToGame` flow is the primary GUI start path.
 - .NET 8.
 - Windows x64.
 - VS Code / Codex / Visual Studio friendly workflow.
@@ -202,7 +210,7 @@ Out of scope for the current milestone:
 - Always-on-top mini status window.
 - Changing OCR backend architecture.
 - Removing Tesseract CLI fallback.
-- New feature work outside capture backend abstraction and WGC evaluation.
+- New feature work outside the BetterGI-like game activation/start flow.
 - New major features.
 - Real audio enabled by default.
 - Bypassing `--real-audio` / `--allow-real-audio-from-detection` semantics conceptually.
@@ -218,7 +226,12 @@ Out of scope for the current milestone:
 - OpenCV.
 - Automatic real audio without existing guarded real-audio flags.
 - Gameplay automation remains out of scope.
+- No gameplay automation.
 - Auto-clicking, auto-dialogue skipping, combat automation, task automation, macro loops, or game-control input automation remain out of scope.
+- Sending gameplay commands remains out of scope.
+- Automating dialogue, combat, daily tasks, quests, movement, or other gameplay decisions remains out of scope.
+- `SendInput` / `Alt+Tab` for foreground switching is allowed when explicitly scoped, user-visible/configurable, and limited to bringing the target window to the foreground.
+- `SendInput` / `Alt+Tab` foreground switching is not gameplay automation when it does not send gameplay commands.
 - Automatic gameplay decision-making.
 - DXGI / BitBlt implementation unless explicitly scoped as a separate later backend.
 - DirectX hooks.
@@ -239,15 +252,15 @@ Done when:
 - The persistent dock shows run state, target process, target speakers, OCR engine, backend warm/status, last OCR text, last detected speaker, last audio action, and current audio state.
 - Start Guarded Real Audio, Stop, and Restore where applicable are available from the persistent dock without hiding them only in the Audio page.
 - Logs remain readable, large enough, and copyable.
-- `VisiblePixels` backend still works as before.
-- `WindowsGraphicsCapture` backend exists as an isolated spike.
-- GUI/config can select capture backend.
-- Logs show selected capture backend and capture mode.
-- WPF persistent dock or status area shows capture backend/status where practical.
-- Calibrate OCR Region can use the selected live capture backend.
-- Dry-run / simulated / guarded real audio detection can use the selected live capture backend.
-- WGC failures produce clear diagnostics.
-- If WGC cannot capture minimized windows, error text says so clearly.
+- `SwitchToGame` exists as a first-class service.
+- Calibrate OCR Region calls `SwitchToGame` before live capture.
+- Dry-run, simulated detection audio, guarded real audio, and Resume/Reconnect call `SwitchToGame` before live detection.
+- `SwitchToGame` can locate, restore, activate, and verify the target YuanShen window, returning structured success/failure.
+- Win32 activation, `AttachThreadInput`, `SetForegroundWindow`, `BringWindowToTop`, and explicit `SendInput` / `Alt+Tab` fallback are handled as foreground switching only.
+- `SendInput error: 87` is addressed by corrected interop and input sequencing.
+- If `SwitchToGame` fails, the GUI remains usable, detection does not start, and real audio is not touched.
+- WGC backend work remains available where practical, but WGC unavailability does not make the main GUI flow unusable.
+- Paddle OCR auto warm-up is attempted in WPF before detection; manual warm-up remains a diagnostic/retry action.
 - Guarded real audio cannot start without an explicit checkbox, visible warning, and confirmation dialog.
 - Guarded real audio cannot start without valid config/preflight, a valid OCR region source, and a target process from config or UI.
 - GUI real audio uses existing guarded real audio paths and safety rules.
@@ -293,7 +306,7 @@ Do not implement later roadmap phases until this milestone works.
 
 Do not assume administrator privileges unless explicitly required and explained.
 
-Do not introduce a GUI config editor, config saving, global hotkeys, tray icon, always-on-top mini window, overlay, gameplay automation, new OCR backend architecture, image-processing dependency, or model-inference dependency during the v0.20 Capture Backend Spike milestone. WPF remains a thin shell over existing services. Windows.Graphics.Capture / DirectX capture backend work is allowed as a non-invasive capture backend spike; DirectX hooks remain prohibited unless explicitly discussed and approved. Avoid OpenCV, ONNX, WinUI, and third-party UI dependencies for this milestone.
+Do not introduce a GUI config editor, config saving, global hotkeys, tray icon, always-on-top mini window, overlay, gameplay automation, new OCR backend architecture, image-processing dependency, or model-inference dependency during the v0.20.2 BetterGI-like Game Activation Flow milestone. WPF remains a thin shell over existing services. Windows.Graphics.Capture / DirectX capture backend work is allowed as a non-invasive capture backend spike; DirectX hooks remain prohibited unless explicitly discussed and approved. `SendInput` / `Alt+Tab` foreground switching is allowed only when explicitly scoped to `SwitchToGame`, user-visible/configurable, and limited to bringing the target window to the foreground. Avoid OpenCV, ONNX, WinUI, and third-party UI dependencies for this milestone.
 
 ## Tooling workflow
 
@@ -360,10 +373,12 @@ Follow this order unless the user explicitly changes the roadmap:
 21. v0.19.1 CaptureLost UI recovery.
 22. v0.19.2 Foreground UX / Resume Flow.
 23. v0.20 Capture Backend Spike / Windows.Graphics.Capture evaluation.
-24. Future global hotkey / tray / status mini-window.
-25. Future optional DXGI / BitBlt backend evaluation if WGC is insufficient.
-26. Stable mute/unmute coordination with debounce and recovery.
-27. Optional masking.
+24. v0.20.1 WGC-first GUI run mode bugfix.
+25. v0.20.2 BetterGI-like Game Activation Flow.
+26. Future global hotkey / tray / status mini-window.
+27. Future optional DXGI / BitBlt backend evaluation if WGC is insufficient.
+28. Stable mute/unmute coordination with debounce and recovery.
+29. Optional masking.
 
 Do not implement later-phase functionality prematurely.
 
@@ -379,6 +394,9 @@ Use these module boundaries unless the user asks for a different design:
 - `IGameCaptureBackend` or equivalent: encapsulates concrete live-capture backend implementation.
 - `IGameWindowCaptureSessionFactory`: upper-level factory used by calibration and detection to create capture sessions from configured backend options.
 - `WindowsGraphicsCaptureBackend` or equivalent: isolated WGC spike implementation.
+- `SwitchToGame` service or equivalent: first-class game activation/start-flow service used before live calibration, detection, guarded real audio, and Resume/Reconnect.
+- `SwitchToGameResult` / structured activation result: reports success, target not found, still minimized, foreground mismatch, activation denied, `SendInput` failure, timeout, or unknown error.
+- `TargetWindowActivator` / Win32 activation helper: locates the target process window, restores it, attempts foreground activation, and verifies the foreground owner without leaking UI concerns into detection/audio logic.
 - `IOcrService`: extracts text from a specific screen region.
 - `ISpeakerDetector`: determines the current speaker from OCR text or simulated input.
 - `IAudioMuteService`: mutes, reduces, and restores the target game process or audio session according to configured audio filtering behavior.
@@ -407,16 +425,17 @@ Use these module boundaries unless the user asks for a different design:
 - WPF modern shell: presents the existing config, OCR, detection, simulated audio, guarded real audio, and logging flows without duplicating core behavior.
 - Theme service or equivalent: detects startup light/dark theme and applies readable palettes if needed.
 
-For v0.20, expected work is limited to:
+For v0.20.2, expected work is limited to:
 
 - preserving the v0.19 WPF persistent control/status dock and left navigation behavior;
 - preserving the v0.19.1 CaptureLost UI recovery behavior;
 - preserving v0.19.2 foreground UX behavior where still applicable;
-- adding capture backend abstraction and selection;
-- adding an isolated Windows.Graphics.Capture backend spike;
-- keeping `VisiblePixels` as the default backend and preserving existing foreground-region-only capture behavior;
-- allowing fallback from `WindowsGraphicsCapture` to `VisiblePixels` only when explicitly configured;
-- making calibration, live test capture, dry-run, simulated audio, and guarded real audio use the selected live capture backend;
+- preserving v0.20 capture backend abstraction and Windows.Graphics.Capture behavior where practical;
+- adding a first-class BetterGI-like `SwitchToGame` flow before live calibration/detection starts;
+- making calibration, dry-run, simulated audio, guarded real audio, and Resume/Reconnect call `SwitchToGame` before live capture;
+- fixing explicit `SendInput` / `Alt+Tab` foreground fallback for window switching only;
+- preventing detection startup and real audio creation when `SwitchToGame` or capture preflight fails;
+- keeping `VisiblePixels` available but not treating it as the main solution for v0.20.2;
 - keeping fixed-image OCR mode independent from live capture backend;
 - ensuring `DetectionDryRunLoop` depends only on capture abstractions such as `IGameWindowCaptureSession`, not concrete backend types;
 - using existing core services and `GuiCommandService` or an equivalent shared application service;
@@ -426,13 +445,13 @@ For v0.20, expected work is limited to:
 - preserving guarded real audio safety gates;
 - preserving existing simulated audio GUI mode;
 - preserving existing guarded real audio GUI mode;
-- adding tests for UI-independent capture backend selection, fake backends, fallback policy, and status helpers where practical.
+- adding tests for `SwitchToGame`, activation fallback, foreground verification, safe failure, and status helpers where practical.
 
-Do not create a GUI config editor, save edited config, add global hotkeys, add a tray icon, add an always-on-top mini status window, enable real audio by default, change OCR backend architecture, remove Tesseract CLI fallback, detect regions automatically, fabricate preset coordinates, implement DirectX hooks, or weaken existing real-audio guard flags during v0.20.
+Do not create a GUI config editor, save edited config, add global hotkeys, add a tray icon, add an always-on-top mini status window, enable real audio by default, change OCR backend architecture, remove Tesseract CLI fallback, detect regions automatically, fabricate preset coordinates, implement DirectX hooks, send gameplay commands, automate gameplay, or weaken existing real-audio guard flags during v0.20.2.
 
 ## OCR region source rules
 
-For v0.20 Capture Backend Spike / BetterGI-style Capture Backend Evaluation, preserve these rules:
+For v0.20.2 BetterGI-like Game Activation Flow, preserve these rules:
 
 - OCR region source priority:
   1. `--ocr-region` absolute pixels.
@@ -455,7 +474,7 @@ For v0.20 Capture Backend Spike / BetterGI-style Capture Backend Evaluation, pre
 
 ## Speaker matching rules
 
-For v0.20 Capture Backend Spike / BetterGI-style Capture Backend Evaluation, preserve these rules:
+For v0.20.2 BetterGI-like Game Activation Flow, preserve these rules:
 
 - Trim whitespace.
 - Handle newlines around text.
@@ -591,6 +610,9 @@ For v0.20:
 - Windows.Graphics.Capture / DirectX capture backend and DirectX hooks are not the same thing.
 - Do not implement behavior that automates gameplay decisions.
 - Do not add auto-clicking, auto-dialogue skipping, combat automation, task automation, macro loops, or game-control input automation.
+- Foreground switching is allowed when explicitly scoped to `SwitchToGame`.
+- `SendInput` / `Alt+Tab` foreground switching is allowed only when user-visible/configurable and only for bringing the target window to the foreground.
+- `SendInput` / `Alt+Tab` foreground switching must never send gameplay commands and must not become gameplay automation.
 - Prefer screen capture, OCR, and OS-level audio session control over invasive game modification.
 - If a requested feature requires invasive game modification, explain the risk and propose non-invasive alternatives instead.
 - Do not store sensitive user data, credentials, cookies, tokens, or game login information.
@@ -603,10 +625,10 @@ For v0.20:
 
 Store user configuration in a local JSON file unless the project already uses another configuration format.
 
-For v0.20:
+For v0.20.2:
 
 - Local JSON configuration is implemented and should now cover common OCR, detection loop, stability threshold, audio filter, and OCR region source defaults.
-- The WPF shell may select and validate config files, display effective runtime status, select capture backend for current runs, and provide a persistent control dock, but it must not become a persistent settings editor.
+- The WPF shell may select and validate config files, display effective runtime status, run `SwitchToGame`, select capture backend for current runs, and provide a persistent control dock, but it must not become a persistent settings editor.
 - The WPF shell milestone must not add full config editing or saving behavior.
 - Do not store sensitive information.
 - Do not include credentials, cookies, tokens, or game login data.
@@ -762,7 +784,7 @@ Do not add heavy OCR, image-processing, model-inference, overlay, or UI dependen
 
 Do not replace the project framework or UI stack without explicit approval.
 
-For v0.20:
+For v0.20.2:
 
 - Use built-in .NET JSON support where practical.
 - Existing NAudio dependency for real Windows audio control may remain.
@@ -788,6 +810,7 @@ For v0.20:
 - Existing WinForms code may remain as calibration selector or fallback while WPF shell evolves.
 - Use built-in WPF styling, templates, resources, and Windows APIs where practical instead of external UI dependencies.
 - Do not add external GUI dependencies.
+- Win32 foreground activation and `SendInput` / `Alt+Tab` fallback should use in-project interop or existing platform APIs; do not add a dependency only to send foreground-switching input unless explicitly justified.
 - Preserve the existing OCR provider abstraction and Paddle/Tesseract selection behavior.
 - Do not change OCR backend architecture or add heavy OCR/model dependencies without explicit approval.
 - If using Tesseract CLI, do not vendor traineddata files into the repository.
@@ -833,16 +856,22 @@ Use fake implementations for:
 - `IGameWindowCapture`
 - `IOcrService`
 
-For v0.20, prioritize tests for:
+For v0.20.2, prioritize tests for:
 
 - existing CLI tests continuing to pass;
 - parsing `--gui` without changing default console behavior;
-- capture backend enum/config parsing;
-- invalid capture backend validation;
-- capture backend factory behavior with fake backends;
-- WGC unavailable + fallback allowed -> fallback behavior;
-- WGC unavailable + fallback disabled -> clear error;
-- detection loop logging selected capture backend;
+- `SwitchToGame` success path;
+- minimized target restore path;
+- Win32 activation failure -> explicit `SendInput` / `Alt+Tab` fallback path;
+- `SendInput` failure producing a structured error;
+- foreground verification rejecting the wrong foreground window;
+- Calibrate OCR Region calling `SwitchToGame` before live capture;
+- guarded real audio calling `SwitchToGame` before detection;
+- detection not starting if `SwitchToGame` fails;
+- real audio not being created or touched if `SwitchToGame` fails;
+- Stop, Error, and CaptureLost restoring audio if audio may have been applied;
+- WPF remaining responsive after activation failure;
+- Paddle OCR auto warm-up path in WPF, with manual warmup remaining diagnostic;
 - fixed-image mode not using live capture backend;
 - capture backend failure not hanging the loop;
 - capture backend failure attempting safe restore through fake audio if audio may have been applied;
@@ -860,7 +889,7 @@ For v0.20, prioritize tests for:
 - no automated test requiring real WGC availability;
 - no test controlling real audio, requiring real Tesseract, requiring real Paddle OCR execution, or requiring a real game window.
 
-Manual verification for v0.20 must be explicit and local. Default GUI launch must not run real audio. Guarded real audio manual verification may only be done intentionally with explicit UI confirmation and must preserve restore behavior. Visual verification should include capture backend selection, selected backend/status display, WGC diagnostics, VisiblePixels fallback behavior when explicitly configured, persistent dock readability, and status updates for OCR/detection/audio/capture state.
+Manual verification for v0.20.2 must be explicit and local. Default GUI launch must not run real audio. Guarded real audio manual verification may only be done intentionally with explicit UI confirmation and must preserve restore behavior. Visual verification should include `SwitchToGame` attempts, Win32 activation logs, optional `SendInput` / `Alt+Tab` fallback logs, foreground HWND/process verification, calibration startup, guarded real audio startup preflight, persistent dock readability, and status updates for OCR/detection/audio/capture state.
 
 Existing v0.5 speaker matching tests should continue covering:
 
@@ -910,9 +939,9 @@ For early prototypes:
   4. restore audio;
   5. log state changes.
 
-The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, v0.6 OCR-driven detection dry-run, v0.7 detection stability gate, v0.8 simulated audio integration, v0.9 guarded real audio integration, v0.10 manual OCR region calibration, v0.11 OCR region source resolution, v0.12 configuration integration, v0.13 usability hardening, v0.14 minimal WinForms control panel, v0.15 GUI hardening, v0.16 GUI guarded real audio page, v0.17 WPF modern shell, v0.18 OCR backend replacement, v0.18.1 OCR backend diagnostic stabilization, v0.19 WPF persistent control dock, v0.19.1 CaptureLost UI recovery, and v0.19.2 Foreground UX / Resume Flow are implemented or stage-complete; v0.20 should preserve them while evaluating capture backend abstraction and Windows.Graphics.Capture.
+The v0.1 audio MVP, v0.2 local JSON configuration, v0.3 window capture prototype, v0.4 OCR text extraction prototype, v0.5 speaker detection prototype, v0.6 OCR-driven detection dry-run, v0.7 detection stability gate, v0.8 simulated audio integration, v0.9 guarded real audio integration, v0.10 manual OCR region calibration, v0.11 OCR region source resolution, v0.12 configuration integration, v0.13 usability hardening, v0.14 minimal WinForms control panel, v0.15 GUI hardening, v0.16 GUI guarded real audio page, v0.17 WPF modern shell, v0.18 OCR backend replacement, v0.18.1 OCR backend diagnostic stabilization, v0.19 WPF persistent control dock, v0.19.1 CaptureLost UI recovery, v0.19.2 Foreground UX / Resume Flow, v0.20 Capture Backend Spike, and v0.20.1 WGC-first GUI Run Mode are implemented or stage-complete; v0.20.2 should preserve them while adding a BetterGI-like `SwitchToGame` activation flow.
 
-Do not add masking, persistent settings UI, GUI settings editor, config editing/saving, global hotkeys, tray icon, always-on-top mini status window, new OCR backend architecture, model inference, speaker recognition from image, automatic region detection, fabricated preset coordinates, default real audio behavior, unguarded `WindowsAudioMuteService` integration, DirectX hooks, or gameplay automation during v0.20. Windows.Graphics.Capture / DirectX capture backend is not prohibited as a non-invasive capture backend spike, but hook/injection/game memory/gameplay automation remain prohibited.
+Do not add masking, persistent settings UI, GUI settings editor, config editing/saving, global hotkeys, tray icon, always-on-top mini status window, new OCR backend architecture, model inference, speaker recognition from image, automatic region detection, fabricated preset coordinates, default real audio behavior, unguarded `WindowsAudioMuteService` integration, DirectX hooks, gameplay commands, or gameplay automation during v0.20.2. Windows.Graphics.Capture / DirectX capture backend is not prohibited as a non-invasive capture backend spike, but hook/injection/game memory/gameplay automation remain prohibited. `SendInput` / `Alt+Tab` foreground switching is allowed only for `SwitchToGame` and must never send gameplay commands.
 
 Do not optimize prematurely.
 
@@ -1010,7 +1039,7 @@ For meaningful behavior changes, update `README.md` or relevant docs.
 
 For important architectural choices, update `docs/DECISIONS.md`.
 
-For v0.20 implementation tasks, `README.md` should later document capture backend selection, Windows.Graphics.Capture behavior, fallback policy, and WGC limitations. `docs/DECISIONS.md` should later record why foreground switching was insufficient and why capture backend abstraction was introduced. `docs/ROADMAP.md` should later update v0.20 and include future DXGI / BitBlt evaluation if WGC is insufficient. Do not update those files during an AGENTS-only milestone update task.
+For v0.20.2 implementation tasks, `README.md` should later document the `SwitchToGame` flow, Win32 activation, explicit `SendInput` / `Alt+Tab` foreground fallback, failure diagnostics, and unchanged real audio safety gates. `docs/DECISIONS.md` should later record why WGC alone was insufficient for the main GUI UX and why a BetterGI-like activation/start flow was introduced. `docs/ROADMAP.md` should later update v0.20.2 and keep future DXGI / BitBlt evaluation if WGC is insufficient. Do not update those files during an AGENTS-only milestone update task.
 
 Do not add excessive documentation for trivial changes.
 
